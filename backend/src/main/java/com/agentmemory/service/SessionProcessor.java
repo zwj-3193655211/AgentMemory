@@ -8,6 +8,9 @@ import org.slf4j.LoggerFactory;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -34,12 +37,16 @@ public class SessionProcessor {
     // 会话级锁映射：每个会话独立的锁
     private final ConcurrentHashMap<String, ReentrantLock> sessionLocks;
     
-    // LRU 队列：用于缓存淘汰
-    private final LinkedList<String> lruQueue;
+    // LRU 队列：使用 LinkedHashSet 实现 O(1) 的查找和删除，同时保持插入顺序
+    private final LinkedHashSet<String> lruQueue;
     private final Object lruLock = new Object();
     
     // 当前缓存大小
     private final AtomicInteger cacheSize = new AtomicInteger(0);
+    
+    // 定时清理任务
+    private ScheduledExecutorService cleanupScheduler;
+    private static final long DEFAULT_MAX_IDLE_HOURS = 1;  // 默认最大空闲时间1小时
 
     public SessionProcessor(MemoryService memoryService, ApplicationConfig config) {
         this.memoryService = memoryService;
@@ -49,12 +56,68 @@ public class SessionProcessor {
         // 使用 ConcurrentHashMap 支持高并发
         this.sessionCache = new ConcurrentHashMap<>(MAX_CACHE_SIZE);
         this.sessionLocks = new ConcurrentHashMap<>();
-        this.lruQueue = new LinkedList<>();
+        this.lruQueue = new LinkedHashSet<>();
 
         this.completionDetector = new CompletionDetector();
         this.keyNodeExtractor = new KeyNodeExtractor();
         this.memoryClassifier = new MemoryClassifier();
         this.memoryExtractor = new MemoryExtractor();
+    }
+    
+    /**
+     * 启动定时清理任务
+     * @param checkIntervalHours 检查间隔（小时）
+     */
+    public void startCleanupTask(int checkIntervalHours) {
+        if (cleanupScheduler != null) {
+            log.warn("清理任务已在运行");
+            return;
+        }
+        
+        cleanupScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "SessionProcessor-Cleanup");
+            t.setDaemon(true);
+            return t;
+        });
+        
+        long intervalMillis = TimeUnit.HOURS.toMillis(checkIntervalHours);
+        long maxIdleMillis = TimeUnit.HOURS.toMillis(DEFAULT_MAX_IDLE_HOURS);
+        
+        cleanupScheduler.scheduleAtFixedRate(() -> {
+            try {
+                cleanupStaleSessions(maxIdleMillis);
+            } catch (Exception e) {
+                log.error("清理过期会话失败", e);
+            }
+        }, intervalMillis, intervalMillis, TimeUnit.MILLISECONDS);
+        
+        log.info("已启动会话清理任务，间隔 {} 小时", checkIntervalHours);
+    }
+    
+    /**
+     * 启动定时清理任务（使用默认间隔）
+     */
+    public void startCleanupTask() {
+        startCleanupTask(1);  // 默认每小时检查一次
+    }
+    
+    /**
+     * 停止定时清理任务
+     */
+    public void stopCleanupTask() {
+        if (cleanupScheduler != null) {
+            cleanupScheduler.shutdown();
+            try {
+                if (!cleanupScheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+                    cleanupScheduler.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                cleanupScheduler.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+            cleanupScheduler = null;
+            log.info("已停止会话清理任务");
+        }
     }
 
     // 配置参数（从配置读取，提供默认值）
@@ -81,10 +144,12 @@ public class SessionProcessor {
                 SessionContext newCtx = new SessionContext(id);
                 // 更新 LRU
                 synchronized (lruLock) {
-                    lruQueue.addLast(id);
+                    lruQueue.add(id);
                     // 检查是否需要淘汰
                     while (lruQueue.size() > MAX_CACHE_SIZE) {
-                        String oldest = lruQueue.removeFirst();
+                        // LinkedHashSet: 获取并移除第一个元素（最旧）
+                        String oldest = lruQueue.iterator().next();
+                        lruQueue.remove(oldest);
                         SessionContext removed = sessionCache.remove(oldest);
                         sessionLocks.remove(oldest);
                         if (removed != null) {
@@ -96,10 +161,10 @@ public class SessionProcessor {
                 return newCtx;
             });
             
-            // 更新 LRU 访问顺序
+            // 更新 LRU 访问顺序：先删除再添加，移动到末尾
             synchronized (lruLock) {
-                lruQueue.remove(sessionId);
-                lruQueue.addLast(sessionId);
+                lruQueue.remove(sessionId);  // O(1) 操作
+                lruQueue.add(sessionId);
             }
             
             ctx.addMessage(message);
@@ -288,6 +353,60 @@ public class SessionProcessor {
             .map(id -> id.substring(0, 8) + "...")
             .toList());
         return stats;
+    }
+    
+    /**
+     * 清理过期的会话锁和缓存
+     * 应定期调用以防止内存泄漏
+     * @param maxIdleMillis 最大空闲时间（毫秒），超过此时间的会话将被清理
+     * @return 清理的会话数量
+     */
+    public int cleanupStaleSessions(long maxIdleMillis) {
+        long now = System.currentTimeMillis();
+        int cleaned = 0;
+        
+        // 遍历所有会话，检查最后活动时间
+        for (Map.Entry<String, SessionContext> entry : sessionCache.entrySet()) {
+            String sessionId = entry.getKey();
+            SessionContext ctx = entry.getValue();
+            
+            if (ctx == null) {
+                // 会话上下文为空，清理锁
+                sessionLocks.remove(sessionId);
+                synchronized (lruLock) {
+                    lruQueue.remove(sessionId);
+                }
+                cleaned++;
+                continue;
+            }
+            
+            long idleTime = now - ctx.getLastActivityTime().toEpochMilli();
+            if (idleTime > maxIdleMillis) {
+                // 会话已过期，尝试清理
+                ReentrantLock lock = sessionLocks.get(sessionId);
+                if (lock != null && lock.tryLock()) {
+                    try {
+                        // 获取锁成功，可以安全清理
+                        sessionCache.remove(sessionId);
+                        sessionLocks.remove(sessionId);
+                        synchronized (lruLock) {
+                            lruQueue.remove(sessionId);
+                        }
+                        log.debug("清理过期会话: {} (空闲 {}分钟)", 
+                            sessionId.substring(0, 8), idleTime / 60000);
+                        cleaned++;
+                    } finally {
+                        lock.unlock();
+                    }
+                }
+                // 如果无法获取锁，说明会话正在被处理，跳过
+            }
+        }
+        
+        if (cleaned > 0) {
+            log.info("清理了 {} 个过期会话", cleaned);
+        }
+        return cleaned;
     }
     
     // ========== 内部类 ==========

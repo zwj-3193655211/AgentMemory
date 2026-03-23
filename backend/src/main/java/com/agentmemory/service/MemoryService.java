@@ -22,6 +22,15 @@ import java.util.concurrent.ConcurrentHashMap;
 public class MemoryService {
 
     private static final Logger log = LoggerFactory.getLogger(MemoryService.class);
+    
+    // 允许的表名白名单（防止 SQL 注入）
+    private static final Set<String> ALLOWED_TABLES = Set.of(
+        "error_corrections",
+        "user_profiles",
+        "best_practices",
+        "project_contexts",
+        "skills"
+    );
 
     private final DatabaseService databaseService;
     private final EmbeddingClient embeddingClient;
@@ -36,6 +45,13 @@ public class MemoryService {
     
     // 正在处理的标题集合（用于并发去重）
     private final Set<String> processingTitles = ConcurrentHashMap.newKeySet();
+    
+    /**
+     * 验证表名是否在白名单中（防止 SQL 注入）
+     */
+    private boolean isValidTableName(String tableName) {
+        return tableName != null && ALLOWED_TABLES.contains(tableName);
+    }
 
     public MemoryService(DatabaseService databaseService) {
         this.databaseService = databaseService;
@@ -215,18 +231,26 @@ public class MemoryService {
             if (queryEmbedding == null) {
                 return false;
             }
+            
+            // 获取表名并验证（防止 SQL 注入）
+            String tableName = type.getTableName();
+            if (!isValidTableName(tableName)) {
+                log.error("非法表名: {}", tableName);
+                return false;
+            }
 
             try (Connection conn = databaseService.getConnection()) {
                 String vecStr = toArrayString(queryEmbedding);
 
                 // 使用数据库的向量相似度计算（比API调用更快）
+                // 表名已通过白名单验证，可以安全使用
                 String sql = String.format("""
                     SELECT title, 1 - (embedding <=> '%s'::vector) as similarity
                     FROM %s
                     WHERE embedding IS NOT NULL AND (deleted = false OR deleted IS NULL)
                     ORDER BY similarity DESC
                     LIMIT 10
-                    """, vecStr, type.getTableName());
+                    """, vecStr, tableName);
 
                 try (PreparedStatement stmt = conn.prepareStatement(sql);
                      ResultSet rs = stmt.executeQuery()) {
@@ -259,7 +283,10 @@ public class MemoryService {
     private void saveMemory(ExtractedMemory memory, MemoryType type, 
                            String sessionId, String agentType, float[] embedding) {
         String tableName = type.getTableName();
-        if (tableName == null) {
+        
+        // 验证表名（防止 SQL 注入）
+        if (!isValidTableName(tableName)) {
+            log.error("非法表名: {}", tableName);
             return;
         }
         
@@ -482,6 +509,13 @@ public class MemoryService {
     public List<String> searchSimilar(String query, MemoryType type, int limit) {
         List<String> results = new ArrayList<>();
         
+        // 验证表名（防止 SQL 注入）
+        String tableName = type.getTableName();
+        if (!isValidTableName(tableName)) {
+            log.error("非法表名: {}", tableName);
+            return results;
+        }
+        
         if (!embeddingClient.isHealthy()) {
             return results;
         }
@@ -493,13 +527,14 @@ public class MemoryService {
         }
         
         try (Connection conn = databaseService.getConnection()) {
+            // 表名已通过白名单验证，可以安全使用
             String sql = """
                 SELECT title, 1 - (embedding <=> ?::vector) as similarity
                 FROM %s
                 WHERE deleted = false
                 ORDER BY similarity DESC
                 LIMIT ?
-                """.formatted(type.getTableName());
+                """.formatted(tableName);
             
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                 stmt.setString(1, toArrayString(queryEmbedding));

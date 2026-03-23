@@ -18,6 +18,16 @@ public class ApplicationConfig {
     private final int apiPort;
     private final String userHome;
     
+    // 会话处理配置
+    private final int incrementalThreshold;
+    private final int maxCacheSize;
+    
+    // 会话压缩配置
+    private final int compressionWindowSize;
+    private final int compressionSummaryThreshold;
+    private final boolean compressionAutoCompress;
+    private final int compressionCheckIntervalHours;
+    
     private ApplicationConfig(Config config) {
         this.userHome = System.getProperty("user.home");
 
@@ -49,6 +59,22 @@ public class ApplicationConfig {
         // API 端口（默认8080）
         this.apiPort = config.hasPath("api.port")
             ? config.getInt("api.port") : 8080;
+        
+        // 会话处理配置
+        this.incrementalThreshold = config.hasPath("session.incrementalThreshold")
+            ? config.getInt("session.incrementalThreshold") : 30;
+        this.maxCacheSize = config.hasPath("session.maxCacheSize")
+            ? config.getInt("session.maxCacheSize") : 100;
+        
+        // 会话压缩配置
+        this.compressionWindowSize = config.hasPath("compression.windowSize")
+            ? config.getInt("compression.windowSize") : 50;
+        this.compressionSummaryThreshold = config.hasPath("compression.summaryThreshold")
+            ? config.getInt("compression.summaryThreshold") : 100;
+        this.compressionAutoCompress = config.hasPath("compression.autoCompress")
+            ? config.getBoolean("compression.autoCompress") : true;
+        this.compressionCheckIntervalHours = config.hasPath("compression.checkIntervalHours")
+            ? config.getInt("compression.checkIntervalHours") : 2;
     }
     
     public static ApplicationConfig load() {
@@ -66,14 +92,15 @@ public class ApplicationConfig {
     public int getApiPort() { return apiPort; }
     public String getUserHome() { return userHome; }
 
-    // 会话处理配置（默认值）
-    public int getIncrementalThreshold() {
-        return 30;
-    }
-
-    public int getMaxCacheSize() {
-        return 100;
-    }
+    // 会话处理配置
+    public int getIncrementalThreshold() { return incrementalThreshold; }
+    public int getMaxCacheSize() { return maxCacheSize; }
+    
+    // 会话压缩配置
+    public int getCompressionWindowSize() { return compressionWindowSize; }
+    public int getCompressionSummaryThreshold() { return compressionSummaryThreshold; }
+    public boolean isCompressionAutoCompress() { return compressionAutoCompress; }
+    public int getCompressionCheckIntervalHours() { return compressionCheckIntervalHours; }
     
     /**
      * 是否使用 SQLite

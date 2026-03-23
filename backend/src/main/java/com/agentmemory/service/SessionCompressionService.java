@@ -1,5 +1,6 @@
 package com.agentmemory.service;
 
+import com.agentmemory.config.ApplicationConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,17 +21,26 @@ public class SessionCompressionService extends ScheduledServiceBase {
     private final LLMClient llmClient;
     private final Logger log = LoggerFactory.getLogger(SessionCompressionService.class);
 
-    // 压缩配置
-    private int windowSize = 50;           // 滑动窗口大小
-    private int summaryThreshold = 100;     // 触发压缩的阈值
-    private boolean autoCompress = true;    // 是否自动压缩
+    // 压缩配置（从配置读取）
+    private final int windowSize;
+    private final int summaryThreshold;
+    private final boolean autoCompress;
+    private final int checkIntervalHours;
 
-    // 每2小时检查一次
-    private static final int CHECK_INTERVAL_HOURS = 2;
-
-    public SessionCompressionService(DatabaseService databaseService) {
+    public SessionCompressionService(DatabaseService databaseService, ApplicationConfig config) {
         this.databaseService = databaseService;
         this.llmClient = new LLMClient();
+        
+        // 从配置读取参数
+        this.windowSize = config != null ? config.getCompressionWindowSize() : 50;
+        this.summaryThreshold = config != null ? config.getCompressionSummaryThreshold() : 100;
+        this.autoCompress = config != null ? config.isCompressionAutoCompress() : true;
+        this.checkIntervalHours = config != null ? config.getCompressionCheckIntervalHours() : 2;
+    }
+    
+    // 兼容旧构造函数
+    public SessionCompressionService(DatabaseService databaseService) {
+        this(databaseService, null);
     }
     
     @Override
@@ -45,7 +55,7 @@ public class SessionCompressionService extends ScheduledServiceBase {
     
     @Override
     protected long getPeriodSeconds() {
-        return TimeUnit.HOURS.toSeconds(CHECK_INTERVAL_HOURS);
+        return TimeUnit.HOURS.toSeconds(checkIntervalHours);
     }
     
     @Override
