@@ -785,7 +785,7 @@
                       size="small" 
                       type="warning"
                     >
-                      下载中...
+                      下载中 {{ downloadProgress[model.id]?.percent || 0 }}%
                     </el-tag>
                     <el-tag 
                       v-else-if="model.downloaded" 
@@ -803,6 +803,31 @@
                     </el-tag>
                   </div>
                   <div class="model-desc">{{ model.description }}</div>
+                  
+                  <!-- 下载进度条 -->
+                  <div v-if="model.status === 'downloading'" class="download-progress">
+                    <el-progress 
+                      :percentage="downloadProgress[model.id]?.percent || 0" 
+                      :stroke-width="10"
+                      :show-text="true"
+                    />
+                    <div class="progress-info">
+                      <span v-if="downloadProgress[model.id]?.downloaded_mb">
+                        {{ downloadProgress[model.id].downloaded_mb?.toFixed(1) }} / 
+                        {{ downloadProgress[model.id].total_mb?.toFixed(1) }} MB
+                      </span>
+                      <span v-if="downloadProgress[model.id]?.speed_mbps > 0" class="speed">
+                        {{ downloadProgress[model.id].speed_mbps?.toFixed(2) }} MB/s
+                      </span>
+                      <span v-if="downloadProgress[model.id]?.eta_seconds" class="eta">
+                        剩余 {{ formatEta(downloadProgress[model.id].eta_seconds) }}
+                      </span>
+                      <span v-if="downloadProgress[model.id]?.current_file" class="file">
+                        {{ downloadProgress[model.id].current_file }}
+                      </span>
+                    </div>
+                  </div>
+                  
                   <div class="model-actions">
                     <el-button 
                       v-if="!model.downloaded && model.status !== 'downloading'"
@@ -1278,6 +1303,7 @@ const loadingEmbeddingModels = ref(false)
 const switchingEmbeddingModel = ref(false)
 const downloadingModel = ref('')
 const downloadPollingInterval = ref<any>(null)
+const downloadProgress = ref<any>({})  // 下载进度 { modelId: { percent, speed_mbps, current_file, ... } }
 
 // 自定义 Agent 状态
 const showAddAgentDialog = ref(false)
@@ -1732,17 +1758,27 @@ const startDownloadPolling = () => {
       // 检查是否所有下载都完成了
       let hasDownloading = false
       for (const [modelId, status] of Object.entries(statuses)) {
-        if ((status as any).status === 'downloading') {
+        const statusObj = status as any
+        
+        // 更新进度信息
+        if (statusObj.progress) {
+          downloadProgress.value[modelId] = statusObj.progress
+        }
+        
+        if (statusObj.status === 'downloading') {
           hasDownloading = true
         }
-        if ((status as any).status === 'ready' && downloadingModel.value === modelId) {
+        if (statusObj.status === 'ready' && downloadingModel.value === modelId) {
           // 下载完成
           ElMessage.success('模型下载完成！')
           downloadingModel.value = ''
+          delete downloadProgress.value[modelId]
         }
-        if ((status as any).status === 'error' && downloadingModel.value === modelId) {
-          ElMessage.error('模型下载失败，请检查网络连接')
+        if (statusObj.status === 'error' && downloadingModel.value === modelId) {
+          const errorMsg = statusObj.progress?.error || '请检查网络连接'
+          ElMessage.error(`模型下载失败: ${errorMsg}`)
           downloadingModel.value = ''
+          delete downloadProgress.value[modelId]
         }
       }
       
@@ -1757,7 +1793,15 @@ const startDownloadPolling = () => {
     } catch (e) {
       console.error('检查下载状态失败', e)
     }
-  }, 3000)  // 每3秒检查一次
+  }, 2000)  // 每2秒检查一次，更频繁以显示进度
+}
+
+// 格式化剩余时间
+const formatEta = (seconds: number): string => {
+  if (!seconds || seconds <= 0) return ''
+  if (seconds < 60) return `${seconds}秒`
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}分${seconds % 60}秒`
+  return `${Math.floor(seconds / 3600)}时${Math.floor((seconds % 3600) / 60)}分`
 }
 
 // 选择并切换模型（已下载的模型）
@@ -2659,6 +2703,39 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.embedding-model-item .download-progress {
+  margin: 10px 0;
+  padding: 12px;
+  background: #f5f7fa;
+  border-radius: 6px;
+}
+
+.embedding-model-item .download-progress .progress-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #606266;
+}
+
+.embedding-model-item .download-progress .progress-info .speed {
+  color: #409eff;
+  font-weight: 500;
+}
+
+.embedding-model-item .download-progress .progress-info .eta {
+  color: #e6a23c;
+}
+
+.embedding-model-item .download-progress .progress-info .file {
+  color: #909399;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .embedding-model-option {

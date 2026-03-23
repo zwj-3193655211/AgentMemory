@@ -91,6 +91,9 @@ EMBEDDING_MODELS = {
 # 模型下载状态缓存
 _model_download_status = {}  # {model_id: 'downloading' | 'ready' | 'error' | 'not_downloaded'}
 
+# 模型下载进度缓存
+_model_download_progress = {}  # {model_id: {'downloaded_mb': float, 'total_mb': float, 'percent': int, 'speed_mbps': float, 'current_file': str, 'files_done': int, 'files_total': int, 'error': str, 'start_time': float}}
+
 # 配置文件路径
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
 
@@ -173,7 +176,7 @@ _current_embedding_model_id = None  # 当前加载的 embedding 模型 ID
 
 
 def check_model_exists(model_id: str) -> bool:
-    """检查模型是否已下载到本地缓存"""
+    """检查模型是否已下载到本地缓存（包括模型权重文件）"""
     from pathlib import Path
     
     # 确保路径正确展开
@@ -200,15 +203,27 @@ def check_model_exists(model_id: str) -> bool:
         logger.debug(f"没有找到快照")
         return False
     
-    # 检查是否有必要的模型文件
+    # 检查是否有必要的模型文件（配置文件 + 模型权重）
     for snapshot in snapshots:
         config_path = snapshot / "config.json"
         st_config_path = snapshot / "config_sentence_transformers.json"
-        if config_path.exists() or st_config_path.exists():
-            logger.info(f"模型已存在: {model_id}, 快照: {snapshot.name}")
+        
+        # 必须有配置文件
+        if not (config_path.exists() or st_config_path.exists()):
+            continue
+        
+        # 检查模型权重文件是否存在（.safetensors 或 .bin）
+        model_files = list(snapshot.glob("*.safetensors")) + list(snapshot.glob("pytorch_model*.bin"))
+        # 过滤掉不完整的文件（.incomplete 在 blobs 目录，但这里检查 snapshot）
+        valid_model_files = [f for f in model_files if f.stat().st_size > 0]
+        
+        if valid_model_files:
+            logger.info(f"模型已存在: {model_id}, 快照: {snapshot.name}, 权重文件: {[f.name for f in valid_model_files]}")
             return True
+        else:
+            logger.debug(f"快照 {snapshot.name} 有配置文件但缺少模型权重")
     
-    logger.debug(f"快照中没有找到配置文件")
+    logger.debug(f"快照中没有找到完整的模型文件")
     return False
 
 
@@ -1031,7 +1046,7 @@ def set_embedding_model():
 
 @app.route('/embedding/model/download', methods=['POST'])
 def download_embedding_model():
-    """下载指定的 embedding 模型（后台任务）"""
+    """下载指定的 embedding 模型（后台任务，支持进度追踪）"""
     data = request.get_json()
     model_id = data.get('model_id')
     
@@ -1047,10 +1062,89 @@ def download_embedding_model():
     
     # 检查是否正在下载
     if _model_download_status.get(model_id) == 'downloading':
-        return jsonify({'status': 'downloading', 'message': '模型正在下载中'})
+        return jsonify({'status': 'downloading', 'message': '模型正在下载中', 'progress': _model_download_progress.get(model_id, {})})
     
-    # 在后台线程中下载
+    # 初始化进度
+    import time
+    _model_download_progress[model_id] = {
+        'downloaded_mb': 0,
+        'total_mb': EMBEDDING_MODELS[model_id].get('download_size_mb', 0),
+        'percent': 0,
+        'speed_mbps': 0,
+        'current_file': '准备中...',
+        'files_done': 0,
+        'files_total': 0,
+        'error': None,
+        'start_time': time.time()
+    }
+    
+    # 在后台线程中下载（带进度追踪）
     def download_task():
+        import time
+        from pathlib import Path
+        
+        progress_ref = _model_download_progress[model_id]
+        cache_path = Path(MODEL_CACHE) / f"models--{model_id.replace('/', '--')}"
+        
+        # 后台进度监控线程
+        stop_monitor = [False]
+        
+        def monitor_progress():
+            """轮询文件大小来计算下载进度"""
+            last_size = 0
+            last_time = time.time()
+            logger.info(f"[Monitor] 启动进度监控, cache_path={cache_path}")
+            
+            while not stop_monitor[0]:
+                try:
+                    # 计算缓存目录总大小
+                    total_size = 0
+                    current_file = ""
+                    path_exists = cache_path.exists()
+                    
+                    if path_exists:
+                        for f in cache_path.rglob('*'):
+                            if f.is_file():
+                                total_size += f.stat().st_size
+                                # 找到正在下载的文件（.incomplete 或最大的文件）
+                                if '.incomplete' in str(f):
+                                    current_file = f.name.replace('.incomplete', '')
+                    
+                    # 更新进度
+                    progress_ref['downloaded_mb'] = round(total_size / (1024 * 1024), 2)
+                    
+                    # 计算百分比（使用预设总大小）
+                    expected_mb = EMBEDDING_MODELS[model_id].get('download_size_mb', 1200)
+                    progress_ref['total_mb'] = expected_mb
+                    percent = min(99, int(total_size * 100 / (expected_mb * 1024 * 1024)))
+                    progress_ref['percent'] = percent
+                    
+                    # 计算下载速度
+                    now = time.time()
+                    elapsed = now - last_time
+                    if elapsed >= 1.0:
+                        size_diff = total_size - last_size
+                        speed = size_diff / elapsed / (1024 * 1024) if elapsed > 0 else 0
+                        progress_ref['speed_mbps'] = round(speed, 2)
+                        last_size = total_size
+                        last_time = now
+                    
+                    if current_file:
+                        progress_ref['current_file'] = current_file[:50]
+                    
+                    # 每秒输出一次进度日志
+                    logger.info(f"[Monitor] {percent}% | {progress_ref['downloaded_mb']:.1f}MB | {progress_ref['speed_mbps']:.2f}MB/s | {current_file[:30]}")
+                    
+                except Exception as e:
+                    logger.error(f"监控进度出错: {e}")
+                
+                time.sleep(1)  # 每秒更新一次
+        
+        # 启动监控线程
+        monitor_thread = threading.Thread(target=monitor_progress)
+        monitor_thread.daemon = True
+        monitor_thread.start()
+        
         try:
             _model_download_status[model_id] = 'downloading'
             logger.info(f"开始下载模型: {model_id}")
@@ -1060,13 +1154,27 @@ def download_embedding_model():
             os.environ.pop('TRANSFORMERS_OFFLINE', None)
             os.environ['HF_ENDPOINT'] = HF_MIRROR
             
-            from sentence_transformers import SentenceTransformer
-            SentenceTransformer(model_id, cache_folder=MODEL_CACHE)
+            # 执行下载
+            from huggingface_hub import snapshot_download
+            snapshot_download(
+                repo_id=model_id,
+                cache_dir=MODEL_CACHE,
+                etag_timeout=30,
+                resume_download=True
+            )
+            
+            # 停止监控
+            stop_monitor[0] = True
+            monitor_thread.join(timeout=2)
             
             _model_download_status[model_id] = 'ready'
+            progress_ref['percent'] = 100
+            progress_ref['current_file'] = '下载完成'
             logger.info(f"模型下载完成: {model_id}")
+            
         except Exception as e:
             _model_download_status[model_id] = 'error'
+            _model_download_progress[model_id]['error'] = str(e)
             logger.error(f"模型下载失败: {model_id}, 错误: {e}")
     
     thread = threading.Thread(target=download_task)
@@ -1077,23 +1185,34 @@ def download_embedding_model():
     return jsonify({
         'status': 'downloading',
         'message': f'开始下载 {info["name"]}（约 {info.get("download_size_mb", "?")}MB）',
-        'model_id': model_id
+        'model_id': model_id,
+        'progress': _model_download_progress[model_id]
     })
 
 
 @app.route('/embedding/model/download/status', methods=['GET'])
 def get_download_status():
-    """获取模型下载状态"""
+    """获取模型下载状态（含详细进度）"""
     model_id = request.args.get('model_id')
     
     if model_id:
         if model_id not in EMBEDDING_MODELS:
             return jsonify({'error': f'不支持的模型: {model_id}'}), 400
         downloaded = check_model_exists(model_id)
+        status = _model_download_status.get(model_id, 'ready' if downloaded else 'not_downloaded')
+        progress = _model_download_progress.get(model_id, {})
+        
+        # 计算预估剩余时间
+        if status == 'downloading' and progress.get('speed_mbps', 0) > 0:
+            remaining_mb = progress.get('total_mb', 0) - progress.get('downloaded_mb', 0)
+            eta_seconds = remaining_mb / progress['speed_mbps']
+            progress['eta_seconds'] = int(eta_seconds)
+        
         return jsonify({
             'model_id': model_id,
             'downloaded': downloaded,
-            'status': _model_download_status.get(model_id, 'ready' if downloaded else 'not_downloaded')
+            'status': status,
+            'progress': progress
         })
     else:
         # 返回所有模型的状态
@@ -1102,7 +1221,8 @@ def get_download_status():
             downloaded = check_model_exists(mid)
             statuses[mid] = {
                 'downloaded': downloaded,
-                'status': _model_download_status.get(mid, 'ready' if downloaded else 'not_downloaded')
+                'status': _model_download_status.get(mid, 'ready' if downloaded else 'not_downloaded'),
+                'progress': _model_download_progress.get(mid, {})
             }
         return jsonify({'models': statuses})
 
@@ -1204,5 +1324,13 @@ def chat_completions():
 
 if __name__ == '__main__':
     port = int(os.environ.get('EMBED_PORT', 8100))
+    
+    # 启动时初始化模型状态
+    logger.info("初始化模型下载状态...")
+    for model_id in EMBEDDING_MODELS:
+        downloaded = check_model_exists(model_id)
+        _model_download_status[model_id] = 'ready' if downloaded else 'not_downloaded'
+        logger.info(f"  {model_id}: {'已下载' if downloaded else '未下载'}")
+    
     logger.info(f"服务启动在端口 {port}, 模式: {LLM_MODE}")
     app.run(host='127.0.0.1', threaded=True, port=port)
