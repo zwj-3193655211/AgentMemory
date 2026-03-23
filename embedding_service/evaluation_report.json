@@ -1,0 +1,1522 @@
+[
+  {
+    "name": "规则匹配(基准)",
+    "type": "rule",
+    "startup_time_s": 0.0,
+    "memory_mb": 0.01,
+    "test_results": [
+      {
+        "case_id": "error_fix_1",
+        "inference_time_ms": 2.34,
+        "type_correct": true,
+        "extracted_type": "ERROR_CORRECTION",
+        "expected_type": "ERROR_CORRECTION",
+        "result": {
+          "type": "ERROR_CORRECTION",
+          "title": "找不到 server.js，请确保此脚本与 server 文件夹在同一目录。后来发现是路径问题，移到",
+          "tags": [
+            "error",
+            "fix"
+          ],
+          "extracted": {
+            "problem": "找不到 server.js，请确保此脚本与 server 文件夹在同一目录。后来发现是路径问题，移到正确目录就好了",
+            "cause": "",
+            "solution": "来发现是路径问题，移到正确目录就好了"
+          }
+        }
+      },
+      {
+        "case_id": "error_fix_2",
+        "inference_time_ms": 0.03,
+        "type_correct": true,
+        "extracted_type": "ERROR_CORRECTION",
+        "expected_type": "ERROR_CORRECTION",
+        "result": {
+          "type": "ERROR_CORRECTION",
+          "title": "双击bat会闪退请修复",
+          "tags": [
+            "error",
+            "fix"
+          ],
+          "extracted": {
+            "problem": "双击bat会闪退请修复",
+            "cause": "",
+            "solution": ""
+          }
+        }
+      },
+      {
+        "case_id": "error_fix_3",
+        "inference_time_ms": 0.01,
+        "type_correct": true,
+        "extracted_type": "ERROR_CORRECTION",
+        "expected_type": "ERROR_CORRECTION",
+        "result": {
+          "type": "ERROR_CORRECTION",
+          "title": "'node' 不是内部或外部命令，也不是可运行的程序或批处理文件。解决方法是配置环境变量",
+          "tags": [
+            "error",
+            "fix"
+          ],
+          "extracted": {
+            "problem": "'node' 不是内部或外部命令，也不是可运行",
+            "cause": "",
+            "solution": "方法是配置环境变量"
+          }
+        }
+      },
+      {
+        "case_id": "user_pref_1",
+        "inference_time_ms": 0.28,
+        "type_correct": false,
+        "extracted_type": "SKIP",
+        "expected_type": "USER_PROFILE",
+        "result": {
+          "type": "SKIP",
+          "reason": "未能识别"
+        }
+      },
+      {
+        "case_id": "user_pref_2",
+        "inference_time_ms": 0.02,
+        "type_correct": false,
+        "extracted_type": "SKILL",
+        "expected_type": "USER_PROFILE",
+        "result": {
+          "type": "SKILL",
+          "title": "搜索引擎：优先使用必应，拒绝百度",
+          "tags": [
+            "skill"
+          ],
+          "extracted": {
+            "skill_name": "搜索引擎：优先使用必应，拒绝百度",
+            "steps": [
+              "搜索引擎：优先使用必应，拒绝百度"
+            ],
+            "prerequisites": []
+          }
+        }
+      },
+      {
+        "case_id": "project_ctx_1",
+        "inference_time_ms": 0.2,
+        "type_correct": true,
+        "extracted_type": "PROJECT_CONTEXT",
+        "expected_type": "PROJECT_CONTEXT",
+        "result": {
+          "type": "PROJECT_CONTEXT",
+          "title": "项目上下文",
+          "tags": [
+            "Vue",
+            "Python"
+          ],
+          "extracted": {
+            "project_name": "",
+            "tech_stack": [
+              "Vue",
+              "Python"
+            ],
+            "key_info": "这个项目技术栈：Python + Django 4.x，前端Vue 3 + Element Plus，数据库MySQL 8.0"
+          }
+        }
+      },
+      {
+        "case_id": "project_ctx_2",
+        "inference_time_ms": 0.03,
+        "type_correct": false,
+        "extracted_type": "SKIP",
+        "expected_type": "PROJECT_CONTEXT",
+        "result": {
+          "type": "SKIP",
+          "reason": "未能识别"
+        }
+      },
+      {
+        "case_id": "skill_1",
+        "inference_time_ms": 0.02,
+        "type_correct": true,
+        "extracted_type": "SKILL",
+        "expected_type": "SKILL",
+        "result": {
+          "type": "SKILL",
+          "title": "docker部署其实就三步：先写Dockerfile，然后docker build打个镜像，最后do",
+          "tags": [
+            "skill"
+          ],
+          "extracted": {
+            "skill_name": "docker部署其实就三步：先写Dockerfile，然后docker build打个镜像，最后do",
+            "steps": [
+              "docker部署其实就三步：先写Dockerfile，然后docker build打个镜像，最后docker run跑起来就行"
+            ],
+            "prerequisites": []
+          }
+        }
+      },
+      {
+        "case_id": "skill_2",
+        "inference_time_ms": 0.04,
+        "type_correct": false,
+        "extracted_type": "SKIP",
+        "expected_type": "SKILL",
+        "result": {
+          "type": "SKIP",
+          "reason": "未能识别"
+        }
+      },
+      {
+        "case_id": "best_practice_1",
+        "inference_time_ms": 0.02,
+        "type_correct": false,
+        "extracted_type": "USER_PROFILE",
+        "expected_type": "BEST_PRACTICE",
+        "result": {
+          "type": "USER_PROFILE",
+          "title": "用户偏好: 的文件删掉，然后给我一个最终的部署方案",
+          "tags": [
+            "preference"
+          ],
+          "extracted": {
+            "preference": "要的文件删掉，然后给我一个最终的部署方案",
+            "category": "general"
+          }
+        }
+      },
+      {
+        "case_id": "best_practice_2",
+        "inference_time_ms": 1.56,
+        "type_correct": false,
+        "extracted_type": "PROJECT_EXPERIENCE",
+        "expected_type": "BEST_PRACTICE",
+        "result": {
+          "type": "PROJECT_EXPERIENCE",
+          "title": "Windows下用PyInstaller打包有个坑，它默认用的是系统Python不是你激活的那个环境",
+          "tags": [
+            "conda",
+            "pyinstaller",
+            "python",
+            "experience"
+          ],
+          "extracted": {
+            "experience": "Windows下用PyInstaller打包有个坑，它默认用的是系统Python不是你激活的那个环境，所以要用conda run -n env_name pyinstaller这样才行",
+            "lessons": [
+              "它默认用的是系统Python不是你激活"
+            ],
+            "related_technologies": [
+              "Pyinstaller",
+              "Conda",
+              "Python"
+            ]
+          }
+        }
+      },
+      {
+        "case_id": "skip_1",
+        "inference_time_ms": 0.04,
+        "type_correct": true,
+        "extracted_type": "SKIP",
+        "expected_type": "SKIP",
+        "result": {
+          "type": "SKIP",
+          "reason": "未能识别"
+        }
+      },
+      {
+        "case_id": "skip_2",
+        "inference_time_ms": 0.01,
+        "type_correct": true,
+        "extracted_type": "SKIP",
+        "expected_type": "SKIP",
+        "result": {
+          "type": "SKIP",
+          "reason": "未能识别"
+        }
+      },
+      {
+        "case_id": "skip_3",
+        "inference_time_ms": 0.01,
+        "type_correct": true,
+        "extracted_type": "SKIP",
+        "expected_type": "SKIP",
+        "result": {
+          "type": "SKIP",
+          "reason": "未能识别"
+        }
+      },
+      {
+        "case_id": "skip_4",
+        "inference_time_ms": 0.02,
+        "type_correct": true,
+        "extracted_type": "SKIP",
+        "expected_type": "SKIP",
+        "result": {
+          "type": "SKIP",
+          "reason": "未能识别"
+        }
+      },
+      {
+        "case_id": "skip_5",
+        "inference_time_ms": 0.01,
+        "type_correct": false,
+        "extracted_type": "SKILL",
+        "expected_type": "SKIP",
+        "result": {
+          "type": "SKILL",
+          "title": "然后你",
+          "tags": [
+            "skill"
+          ],
+          "extracted": {
+            "skill_name": "然后你",
+            "steps": [
+              "然后你"
+            ],
+            "prerequisites": []
+          }
+        }
+      },
+      {
+        "case_id": "project_exp_1",
+        "inference_time_ms": 0.03,
+        "type_correct": true,
+        "extracted_type": "PROJECT_EXPERIENCE",
+        "expected_type": "PROJECT_EXPERIENCE",
+        "result": {
+          "type": "PROJECT_EXPERIENCE",
+          "title": "踩坑记录：打包exe的时候遇到过几个问题，一个是conda环境的问题要用conda run指定，还有",
+          "tags": [
+            "conda",
+            "experience"
+          ],
+          "extracted": {
+            "experience": "踩坑记录：打包exe的时候遇到过几个问题，一个是conda环境的问题要用conda run指定，还有那些modelscope之类的库得加--collect-all不然会缺文件",
+            "lessons": [
+              "一个是conda环境的问",
+              "还有那些modelscope之类"
+            ],
+            "related_technologies": [
+              "Conda"
+            ]
+          }
+        }
+      },
+      {
+        "case_id": "project_exp_2",
+        "inference_time_ms": 0.01,
+        "type_correct": false,
+        "extracted_type": "SKIP",
+        "expected_type": "PROJECT_EXPERIENCE",
+        "result": {
+          "type": "SKIP",
+          "reason": "未能识别"
+        }
+      }
+    ],
+    "success": true,
+    "error": null
+  },
+  {
+    "name": "Qwen2.5-0.5B",
+    "type": "llm",
+    "startup_time_s": 22.04,
+    "memory_mb": 2338.93,
+    "test_results": [
+      {
+        "case_id": "error_fix_1",
+        "inference_time_ms": 33980.16,
+        "type_correct": false,
+        "extracted_type": "BEST_PRACTICE",
+        "expected_type": "ERROR_CORRECTION",
+        "result": {
+          "type": "BEST_PRACTICE",
+          "title": "服务器文件夹在项目中应位于同一目录内",
+          "tags": [
+            "项目信息",
+            "技术栈"
+          ],
+          "extracted": {
+            "解决办法": "将 server.js 移动到项目中的 correct 目录下"
+          }
+        }
+      },
+      {
+        "case_id": "error_fix_2",
+        "inference_time_ms": 36848.12,
+        "type_correct": true,
+        "extracted_type": "ERROR_CORRECTION",
+        "expected_type": "ERROR_CORRECTION",
+        "result": {
+          "type": "ERROR_CORRECTION",
+          "title": "双击bat会闪退，请修复",
+          "tags": [
+            "错误",
+            "解决办法"
+          ],
+          "extracted": {
+            "建议": "尝试重启计算机，或者使用不同的文件扩展名来打开文件。如果问题仍然存在，考虑更新操作系统或软件。",
+            "解决方案": "修复可能导致闪退的任何已知错误"
+          }
+        }
+      },
+      {
+        "case_id": "error_fix_3",
+        "inference_time_ms": 14996.88,
+        "type_correct": true,
+        "extracted_type": "ERROR_CORRECTION",
+        "expected_type": "ERROR_CORRECTION",
+        "result": {
+          "type": "ERROR_CORRECTION",
+          "title": "错误/问题及其解决方案",
+          "tags": [],
+          "extracted": {
+            "solution": "配置环境变量"
+          }
+        }
+      },
+      {
+        "case_id": "user_pref_1",
+        "inference_time_ms": 5819.28,
+        "type_correct": false,
+        "extracted_type": "BEST_PRACTICE",
+        "expected_type": "USER_PROFILE",
+        "result": {
+          "type": "BEST_PRACTICE",
+          "title": "无需解析"
+        }
+      },
+      {
+        "case_id": "user_pref_2",
+        "inference_time_ms": 11755.42,
+        "type_correct": false,
+        "extracted_type": "BEST_PRACTICE",
+        "expected_type": "USER_PROFILE",
+        "result": {
+          "type": "BEST_PRACTICE",
+          "title": "搜索策略",
+          "tags": [],
+          "extracted": {
+            "搜索引擎": [
+              "必应",
+              "拒绝百度"
+            ]
+          }
+        }
+      },
+      {
+        "case_id": "project_ctx_1",
+        "inference_time_ms": 33288.41,
+        "type_correct": false,
+        "extracted_type": "PROJECT_EXPERIENCE",
+        "expected_type": "PROJECT_CONTEXT",
+        "result": {
+          "type": "PROJECT_EXPERIENCE",
+          "title": "项目技术栈",
+          "tags": [
+            "技术栈"
+          ],
+          "extracted": {
+            "Python": "",
+            "Django": "4.x",
+            "Vue": "3",
+            "Element Plus": "Element Plus",
+            "MySQL": "8.0"
+          }
+        }
+      },
+      {
+        "case_id": "project_ctx_2",
+        "inference_time_ms": 25146.58,
+        "type_correct": false,
+        "extracted_type": "PROJECT_EXPERIENCE",
+        "expected_type": "PROJECT_CONTEXT",
+        "result": {
+          "type": "PROJECT_EXPERIENCE",
+          "title": "早期项目",
+          "tags": [
+            "GitHub"
+          ],
+          "extracted": {
+            "project_name": "HeroBattle",
+            "description": "我早期的一个创意项目，希望实现联网功能和可视化界面。",
+            "source_url": "https://github.com/xxx/HeroBattle"
+          }
+        }
+      },
+      {
+        "case_id": "skill_1",
+        "inference_time_ms": 36511.82,
+        "type_correct": false,
+        "extracted_type": "BEST_PRACTICE",
+        "expected_type": "SKILL",
+        "result": {
+          "type": "BEST_PRACTICE",
+          "title": "docker部署流程",
+          "tags": [
+            "best_practice"
+          ],
+          "extracted": {
+            "第一步": "首先需要编写Dockerfile",
+            "第二步": "使用docker build命令将文件打包成一个镜像",
+            "第三步": "最后在运行时使用docker run命令启动服务"
+          }
+        }
+      },
+      {
+        "case_id": "skill_2",
+        "inference_time_ms": 6138.2,
+        "type_correct": false,
+        "extracted_type": "PROJECT_EXPERIENCE",
+        "expected_type": "SKILL",
+        "result": {
+          "type": "PROJECT_EXPERIENCE",
+          "reason": "技能和能力"
+        }
+      },
+      {
+        "case_id": "best_practice_1",
+        "inference_time_ms": 30170.96,
+        "type_correct": false,
+        "extracted_type": "PROJECT_EXPERIENCE",
+        "expected_type": "BEST_PRACTICE",
+        "result": {
+          "type": "PROJECT_EXPERIENCE",
+          "title": "重命名和优化文件",
+          "tags": [
+            "project",
+            "reorganization"
+          ],
+          "extracted": {
+            "title": "删除不必要的文件",
+            "tags": [
+              "deletion",
+              "unwanted_files"
+            ]
+          }
+        }
+      },
+      {
+        "case_id": "best_practice_2",
+        "inference_time_ms": 28138.48,
+        "type_correct": false,
+        "extracted_type": "PROJECT_CONTEXT",
+        "expected_type": "BEST_PRACTICE",
+        "result": {
+          "type": "PROJECT_CONTEXT",
+          "title": "如何在Windows上使用PyInstaller打包",
+          "tags": [
+            "项目信息",
+            "技术栈",
+            "架构"
+          ],
+          "extracted": {
+            "conda_run_env": "conda run -n env_name pyinstaller"
+          }
+        }
+      },
+      {
+        "case_id": "skip_1",
+        "inference_time_ms": 9628.34,
+        "type_correct": false,
+        "extracted_type": "USER_PROFILE",
+        "expected_type": "SKIP",
+        "result": {
+          "type": "USER_PROFILE",
+          "title": "问候语",
+          "tags": [],
+          "extracted": {
+            "问候语": "你好"
+          }
+        }
+      },
+      {
+        "case_id": "skip_2",
+        "inference_time_ms": 8481.83,
+        "type_correct": false,
+        "extracted_type": "BEST_PRACTICE",
+        "expected_type": "SKIP",
+        "result": {
+          "type": "BEST_PRACTICE",
+          "title": "继续",
+          "tags": [],
+          "extracted": {}
+        }
+      },
+      {
+        "case_id": "skip_3",
+        "inference_time_ms": 10509.39,
+        "type_correct": false,
+        "extracted_type": "ERROR_CORRECTION",
+        "expected_type": "SKIP",
+        "result": {
+          "type": "ERROR_CORRECTION",
+          "title": "输入为空或不匹配格式",
+          "tags": [],
+          "extracted": {}
+        }
+      },
+      {
+        "case_id": "skip_4",
+        "inference_time_ms": 10354.91,
+        "type_correct": false,
+        "extracted_type": "BEST_PRACTICE",
+        "expected_type": "SKIP",
+        "result": {
+          "type": "BEST_PRACTICE",
+          "title": "分析内容",
+          "tags": [],
+          "extracted": {
+            "分析内容": "好的"
+          }
+        }
+      },
+      {
+        "case_id": "skip_5",
+        "inference_time_ms": 6245.37,
+        "type_correct": false,
+        "extracted_type": "PROJECT_EXPERIENCE",
+        "expected_type": "SKIP",
+        "result": {
+          "type": "PROJECT_EXPERIENCE",
+          "reason": "没有实质内容"
+        }
+      },
+      {
+        "case_id": "project_exp_1",
+        "inference_time_ms": 37553.21,
+        "type_correct": true,
+        "extracted_type": "PROJECT_EXPERIENCE",
+        "expected_type": "PROJECT_EXPERIENCE",
+        "result": {
+          "type": "PROJECT_EXPERIENCE",
+          "title": "包管理与依赖项管理",
+          "tags": [
+            "conda",
+            "modelscope"
+          ],
+          "extracted": {
+            "conda环境设置": "使用conda run指定conda环境以避免安装缺失的模型模块",
+            "模型模块收集所有": "需要在conda运行时添加--collect-all选项来确保安装的所有模型模块"
+          }
+        }
+      },
+      {
+        "case_id": "project_exp_2",
+        "inference_time_ms": 7427.39,
+        "type_correct": false,
+        "extracted_type": "BEST_PRACTICE",
+        "expected_type": "PROJECT_EXPERIENCE",
+        "result": {
+          "type": "BEST_PRACTICE",
+          "title": "成功完成任务的方法和建议"
+        }
+      }
+    ],
+    "success": true,
+    "error": null
+  },
+  {
+    "name": "Qwen3-0.6B",
+    "type": "llm",
+    "startup_time_s": 8.61,
+    "memory_mb": 1107.98,
+    "test_results": [
+      {
+        "case_id": "error_fix_1",
+        "inference_time_ms": 15871.61,
+        "type_correct": false,
+        "extracted_type": "PROJECT_CONTEXT",
+        "expected_type": "ERROR_CORRECTION",
+        "result": {
+          "type": "PROJECT_CONTEXT",
+          "title": "路径问题",
+          "tags": [
+            "路径问题"
+          ],
+          "extracted": {
+            "reason": "后来发现是路径问题，移到正确目录就好了"
+          }
+        }
+      },
+      {
+        "case_id": "error_fix_2",
+        "inference_time_ms": 18194.81,
+        "type_correct": false,
+        "extracted_type": "SKIP",
+        "expected_type": "ERROR_CORRECTION",
+        "result": {
+          "type": "SKIP",
+          "reason": "JSON解析失败: Extra data: line 1 column 101 (char 100)",
+          "raw": "{\"type\":\"ERROR_CORRECTION\",\"title\":\"双击bat会闪退请修复\",\"tags\":[\"bat\"],\"extracted\":{\"error\":\"双击bat会闪退请修复\"}}}"
+        }
+      },
+      {
+        "case_id": "error_fix_3",
+        "inference_time_ms": 25361.61,
+        "type_correct": true,
+        "extracted_type": "ERROR_CORRECTION",
+        "expected_type": "ERROR_CORRECTION",
+        "result": {
+          "type": "ERROR_CORRECTION",
+          "title": "环境变量配置",
+          "tags": [
+            "environment",
+            "error",
+            "solution"
+          ],
+          "extracted": {
+            "error": "node' 不是内部或外部命令，也不是可运行的程序或批处理文件。",
+            "solution": "配置环境变量"
+          }
+        }
+      },
+      {
+        "case_id": "user_pref_1",
+        "inference_time_ms": 16291.9,
+        "type_correct": true,
+        "extracted_type": "USER_PROFILE",
+        "expected_type": "USER_PROFILE",
+        "result": {
+          "type": "USER_PROFILE",
+          "title": "用户偏好、习惯、要求",
+          "tags": [
+            "中文"
+          ],
+          "extracted": {
+            "中文": "中文"
+          }
+        }
+      },
+      {
+        "case_id": "user_pref_2",
+        "inference_time_ms": 13576.81,
+        "type_correct": false,
+        "extracted_type": "PROJECT_CONTEXT",
+        "expected_type": "USER_PROFILE",
+        "result": {
+          "type": "PROJECT_CONTEXT",
+          "title": "搜索引擎相关配置",
+          "tags": [
+            "技术栈",
+            "搜索引擎"
+          ],
+          "extracted": {
+            "engine": "必应"
+          }
+        }
+      },
+      {
+        "case_id": "project_ctx_1",
+        "inference_time_ms": 20869.29,
+        "type_correct": true,
+        "extracted_type": "PROJECT_CONTEXT",
+        "expected_type": "PROJECT_CONTEXT",
+        "result": {
+          "type": "PROJECT_CONTEXT",
+          "title": "项目技术栈",
+          "tags": [
+            "技术栈"
+          ],
+          "extracted": {
+            "技术栈": [
+              "Python + Django 4.x",
+              "Vue 3 + Element Plus",
+              "MySQL 8.0"
+            ]
+          }
+        }
+      },
+      {
+        "case_id": "project_ctx_2",
+        "inference_time_ms": 22219.86,
+        "type_correct": true,
+        "extracted_type": "PROJECT_CONTEXT",
+        "expected_type": "PROJECT_CONTEXT",
+        "result": {
+          "type": "PROJECT_CONTEXT",
+          "title": "HeroBattle项目",
+          "tags": [
+            "project",
+            "github"
+          ],
+          "extracted": {
+            "project": "HeroBattle",
+            "github": "https://github.com/xxx/HeroBattle"
+          }
+        }
+      },
+      {
+        "case_id": "skill_1",
+        "inference_time_ms": 21118.41,
+        "type_correct": false,
+        "extracted_type": "PROJECT_CONTEXT",
+        "expected_type": "SKILL",
+        "result": {
+          "type": "PROJECT_CONTEXT",
+          "title": "docker部署步骤",
+          "tags": [
+            "docker",
+            "build",
+            "run"
+          ],
+          "extracted": {
+            "steps": [
+              "1. 写Dockerfile\n2. docker build\n3. docker run"
+            ]
+          }
+        }
+      },
+      {
+        "case_id": "skill_2",
+        "inference_time_ms": 11345.41,
+        "type_correct": false,
+        "extracted_type": "USER_PROFILE",
+        "expected_type": "SKILL",
+        "result": {
+          "type": "USER_PROFILE",
+          "title": "用户偏好",
+          "tags": [
+            "",
+            ""
+          ],
+          "extracted": {
+            "skill": "skill"
+          }
+        }
+      },
+      {
+        "case_id": "best_practice_1",
+        "inference_time_ms": 20123.23,
+        "type_correct": false,
+        "extracted_type": "SKIP",
+        "expected_type": "BEST_PRACTICE",
+        "result": {
+          "type": "SKIP",
+          "reason": "JSON解析失败: Invalid \\escape: line 1 column 110 (char 109)",
+          "raw": "{\"type\":\"PROJECT_CONTEXT\",\"title\":\"项目信息\",\"tags\":[\"项目信息\"],\"extracted\":{\"project\":\"HeroBattle项目\",\"location\":\"C:\\Users\\xxx\",\"purpose\":\"删除不需要文件并制定部署方案\"}}"
+        }
+      },
+      {
+        "case_id": "best_practice_2",
+        "inference_time_ms": 27237.67,
+        "type_correct": true,
+        "extracted_type": "BEST_PRACTICE",
+        "expected_type": "BEST_PRACTICE",
+        "result": {
+          "type": "BEST_PRACTICE",
+          "title": "使用conda run -n env_name pyinstaller打包",
+          "tags": [
+            "最佳实践"
+          ],
+          "extracted": {
+            "type": "BEST_PRACTICE",
+            "title": "使用conda run -n env_name pyinstaller打包",
+            "tags": [
+              "最佳实践"
+            ],
+            "extracted": {
+              "type": "BEST_PRACTICE",
+              "title": "使用conda run -n env_name pyinstaller打包"
+            }
+          }
+        }
+      },
+      {
+        "case_id": "skip_1",
+        "inference_time_ms": 7265.51,
+        "type_correct": true,
+        "extracted_type": "SKIP",
+        "expected_type": "SKIP",
+        "result": {
+          "type": "SKIP",
+          "reason": "JSON解析失败: Expecting ',' delimiter: line 1 column 29 (char 28",
+          "raw": "{\"type\":\"SKIP\",\"reason\":\"原因\":\"用户输入是问候语，未包含实质性内容\"}"
+        }
+      },
+      {
+        "case_id": "skip_2",
+        "inference_time_ms": 5268.26,
+        "type_correct": true,
+        "extracted_type": "SKIP",
+        "expected_type": "SKIP",
+        "result": {
+          "type": "SKIP",
+          "reason": "无实质内容"
+        }
+      },
+      {
+        "case_id": "skip_3",
+        "inference_time_ms": 6426.04,
+        "type_correct": true,
+        "extracted_type": "SKIP",
+        "expected_type": "SKIP",
+        "result": {
+          "type": "SKIP",
+          "reason": "原因：输入为空或未提供有效内容"
+        }
+      },
+      {
+        "case_id": "skip_4",
+        "inference_time_ms": 5330.05,
+        "type_correct": true,
+        "extracted_type": "SKIP",
+        "expected_type": "SKIP",
+        "result": {
+          "type": "SKIP",
+          "reason": "无实质内容"
+        }
+      },
+      {
+        "case_id": "skip_5",
+        "inference_time_ms": 5144.86,
+        "type_correct": true,
+        "extracted_type": "SKIP",
+        "expected_type": "SKIP",
+        "result": {
+          "type": "SKIP",
+          "reason": "JSON解析失败: Expecting ',' delimiter: line 1 column 29 (char 28",
+          "raw": "{\"type\":\"SKIP\",\"reason\":\"原因\":\"内容无实质内容\"}"
+        }
+      },
+      {
+        "case_id": "project_exp_1",
+        "inference_time_ms": 25181.75,
+        "type_correct": true,
+        "extracted_type": "PROJECT_EXPERIENCE",
+        "expected_type": "PROJECT_EXPERIENCE",
+        "result": {
+          "type": "PROJECT_EXPERIENCE",
+          "title": "踩坑记录：打包exe的时候遇到过几个问题",
+          "tags": [
+            "踩坑经验"
+          ],
+          "extracted": {
+            "reason": "踩坑记录：打包exe的时候遇到过几个问题，一个是conda环境的问题要用conda run指定，还有那些modelscope之类的库得加--collect-all不然会缺文件"
+          }
+        }
+      },
+      {
+        "case_id": "project_exp_2",
+        "inference_time_ms": 9162.46,
+        "type_correct": false,
+        "extracted_type": "ERROR_CORRECTION",
+        "expected_type": "PROJECT_EXPERIENCE",
+        "result": {
+          "type": "ERROR_CORRECTION",
+          "title": "运行成功了",
+          "tags": [
+            "",
+            ""
+          ],
+          "extracted": {
+            "status": "success"
+          }
+        }
+      }
+    ],
+    "success": true,
+    "error": null
+  },
+  {
+    "name": "Qwen3.5-0.8B",
+    "type": "llm",
+    "startup_time_s": 10.68,
+    "memory_mb": 2583.74,
+    "test_results": [
+      {
+        "case_id": "error_fix_1",
+        "inference_time_ms": 30094.03,
+        "type_correct": false,
+        "extracted_type": "SKILL",
+        "expected_type": "ERROR_CORRECTION",
+        "result": {
+          "type": "SKILL",
+          "title": "错误修复",
+          "tags": [
+            "路径问题",
+            "目录结构"
+          ],
+          "extracted": {
+            "issue": "找不到 server.js，路径问题",
+            "solution": "将脚本移动到正确的目录"
+          }
+        }
+      },
+      {
+        "case_id": "error_fix_2",
+        "inference_time_ms": 27800.81,
+        "type_correct": false,
+        "extracted_type": "PROJECT_CONTEXT",
+        "expected_type": "ERROR_CORRECTION",
+        "result": {
+          "type": "PROJECT_CONTEXT",
+          "title": "修复闪退错误",
+          "tags": [
+            "技术",
+            "操作"
+          ],
+          "extracted": {
+            "error": "双击bat会闪退",
+            "solution": "请修复"
+          }
+        }
+      },
+      {
+        "case_id": "error_fix_3",
+        "inference_time_ms": 35960.46,
+        "type_correct": true,
+        "extracted_type": "ERROR_CORRECTION",
+        "expected_type": "ERROR_CORRECTION",
+        "result": {
+          "type": "ERROR_CORRECTION",
+          "title": "环境配置错误",
+          "tags": [
+            "环境变量",
+            "命令解析"
+          ],
+          "extracted": {
+            "message": "node 不是内部或外部命令，也不是可运行的程序或批处理文件。",
+            "solution": "配置环境变量以正确识别 node 进程"
+          }
+        }
+      },
+      {
+        "case_id": "user_pref_1",
+        "inference_time_ms": 18162.32,
+        "type_correct": false,
+        "extracted_type": "SKIP",
+        "expected_type": "USER_PROFILE",
+        "result": {
+          "type": "SKIP",
+          "title": "无实质内容",
+          "tags": [],
+          "extracted": {}
+        }
+      },
+      {
+        "case_id": "user_pref_2",
+        "inference_time_ms": 27504.49,
+        "type_correct": false,
+        "extracted_type": "PROJECT_CONTEXT",
+        "expected_type": "USER_PROFILE",
+        "result": {
+          "type": "PROJECT_CONTEXT",
+          "title": "搜索策略建议",
+          "tags": [
+            "搜索优化",
+            "技术选型"
+          ],
+          "extracted": {
+            "priority": "必应",
+            "action": "拒绝百度",
+            "context": "搜索引擎选择策略"
+          }
+        }
+      },
+      {
+        "case_id": "project_ctx_1",
+        "inference_time_ms": 19748.71,
+        "type_correct": true,
+        "extracted_type": "PROJECT_CONTEXT",
+        "expected_type": "PROJECT_CONTEXT",
+        "result": {
+          "type": "PROJECT_CONTEXT",
+          "title": "技术栈信息",
+          "tags": [
+            "Python",
+            "Django",
+            "Vue3",
+            "Element Plus",
+            "MySQL 8.0"
+          ],
+          "extracted": {}
+        }
+      },
+      {
+        "case_id": "project_ctx_2",
+        "inference_time_ms": 39702.67,
+        "type_correct": true,
+        "extracted_type": "PROJECT_CONTEXT",
+        "expected_type": "PROJECT_CONTEXT",
+        "result": {
+          "type": "PROJECT_CONTEXT",
+          "title": "项目信息",
+          "tags": [
+            "GitHub",
+            "HeroBattle",
+            "联网功能",
+            "可视化界面"
+          ],
+          "extracted": {
+            "project_name": "HeroBattle",
+            "source_url": "https://github.com/xxx/HeroBattle",
+            "description": "早期创意项目，包含联网功能和可视化界面"
+          }
+        }
+      },
+      {
+        "case_id": "skill_1",
+        "inference_time_ms": 35851.59,
+        "type_correct": true,
+        "extracted_type": "SKILL",
+        "expected_type": "SKILL",
+        "result": {
+          "type": "SKILL",
+          "title": "Docker 部署流程",
+          "tags": [
+            "命令",
+            "步骤",
+            "Docker"
+          ],
+          "extracted": {
+            "steps": [
+              "1. 创建 Dockerfile 文件",
+              "2. 使用 docker build 构建镜像",
+              "3. 使用 docker run 运行容器"
+            ]
+          }
+        }
+      },
+      {
+        "case_id": "skill_2",
+        "inference_time_ms": 35409.2,
+        "type_correct": false,
+        "extracted_type": "USER_PROFILE",
+        "expected_type": "SKILL",
+        "result": {
+          "type": "USER_PROFILE",
+          "title": "技能询问",
+          "tags": [
+            "技能",
+            "自我介绍"
+          ],
+          "extracted": {
+            "question": "你现在有哪些skill",
+            "type": "USER_PROFILE",
+            "reason": "这是一个用户关于自身技能水平的询问，属于用户偏好/习惯类型"
+          }
+        }
+      },
+      {
+        "case_id": "best_practice_1",
+        "inference_time_ms": 36346.41,
+        "type_correct": false,
+        "extracted_type": "PROJECT_CONTEXT",
+        "expected_type": "BEST_PRACTICE",
+        "result": {
+          "type": "PROJECT_CONTEXT",
+          "title": "文件清理与部署方案规划",
+          "tags": [
+            "系统维护",
+            "部署流程"
+          ],
+          "extracted": {
+            "target_location": "C:\\Users\\xx\\HeroBattle",
+            "action": "删除不需要的文件",
+            "next_step": "制定最终部署方案"
+          }
+        }
+      },
+      {
+        "case_id": "best_practice_2",
+        "inference_time_ms": 41444.16,
+        "type_correct": false,
+        "extracted_type": "SKILL",
+        "expected_type": "BEST_PRACTICE",
+        "result": {
+          "type": "SKILL",
+          "title": "环境配置步骤",
+          "tags": [
+            "Python",
+            "PyInstaller",
+            "conda"
+          ],
+          "extracted": {
+            "action": "提供具体操作命令",
+            "content": "Windows下用PyInstaller打包有个坑，它默认用的是系统Python不是你激活的那个环境，所以要用conda run -n env_name pyinstaller这样才行"
+          }
+        }
+      },
+      {
+        "case_id": "skip_1",
+        "inference_time_ms": 25266.02,
+        "type_correct": false,
+        "extracted_type": "USER_PROFILE",
+        "expected_type": "SKIP",
+        "result": {
+          "type": "USER_PROFILE",
+          "title": "问候",
+          "tags": [
+            "问候语",
+            "社交"
+          ],
+          "extracted": {
+            "content": "你好",
+            "intent": "问候"
+          }
+        }
+      },
+      {
+        "case_id": "skip_2",
+        "inference_time_ms": 15662.91,
+        "type_correct": true,
+        "extracted_type": "SKIP",
+        "expected_type": "SKIP",
+        "result": {
+          "type": "SKIP",
+          "title": "无实质内容",
+          "tags": [],
+          "extracted": {}
+        }
+      },
+      {
+        "case_id": "skip_3",
+        "inference_time_ms": 16195.03,
+        "type_correct": true,
+        "extracted_type": "SKIP",
+        "expected_type": "SKIP",
+        "result": {
+          "type": "SKIP",
+          "reason": "输入内容为'？'，无实际信息可分析，属于无实质内容的简单确认"
+        }
+      },
+      {
+        "case_id": "skip_4",
+        "inference_time_ms": 19836.11,
+        "type_correct": true,
+        "extracted_type": "SKIP",
+        "expected_type": "SKIP",
+        "result": {
+          "type": "SKIP",
+          "title": "无实质内容确认",
+          "tags": [],
+          "extracted": {}
+        }
+      },
+      {
+        "case_id": "skip_5",
+        "inference_time_ms": 10596.7,
+        "type_correct": true,
+        "extracted_type": "SKIP",
+        "expected_type": "SKIP",
+        "result": {
+          "type": "SKIP",
+          "reason": "无实质内容"
+        }
+      },
+      {
+        "case_id": "project_exp_1",
+        "inference_time_ms": 38604.19,
+        "type_correct": false,
+        "extracted_type": "SKILL",
+        "expected_type": "PROJECT_EXPERIENCE",
+        "result": {
+          "type": "SKILL",
+          "title": "使用步骤",
+          "tags": [
+            "打包工具",
+            "conda",
+            "模型库"
+          ],
+          "extracted": {
+            "steps": [
+              "使用conda run指定环境",
+              "添加--collect-all参数以收集缺失文件"
+            ]
+          }
+        }
+      },
+      {
+        "case_id": "project_exp_2",
+        "inference_time_ms": 26521.36,
+        "type_correct": false,
+        "extracted_type": "ERROR_CORRECTION",
+        "expected_type": "PROJECT_EXPERIENCE",
+        "result": {
+          "type": "ERROR_CORRECTION",
+          "title": "操作成功",
+          "tags": [
+            "成功",
+            "操作"
+          ],
+          "extracted": {
+            "message": "运行成功了",
+            "status": "success",
+            "action": "完成"
+          }
+        }
+      }
+    ],
+    "success": true,
+    "error": null
+  },
+  {
+    "name": "SmolLM2-360M",
+    "type": "llm",
+    "startup_time_s": 4.41,
+    "memory_mb": -585.0,
+    "test_results": [
+      {
+        "case_id": "error_fix_1",
+        "inference_time_ms": 9800.34,
+        "type_correct": true,
+        "extracted_type": "ERROR_CORRECTION",
+        "expected_type": "ERROR_CORRECTION",
+        "result": {
+          "type": "ERROR_CORRECTION",
+          "title": "Error: Server.js not found",
+          "tags": [
+            "server"
+          ],
+          "extracted": {
+            "reason": "Server.js not found"
+          }
+        }
+      },
+      {
+        "case_id": "error_fix_2",
+        "inference_time_ms": 51529.56,
+        "type_correct": false,
+        "extracted_type": "SKIP",
+        "expected_type": "ERROR_CORRECTION",
+        "result": {
+          "type": "SKIP",
+          "reason": "JSON解析失败: Unterminated string starting at: line 1 column 80 ",
+          "raw": "{\"type\":\"ERROR_CORRECTION\",\"title\":\"双击会闪退请修复\",\"tags\":[\"error_correcting\",\"bat\",\"bat_bat_bat_bat_bat_bat_bat_bat_bat_bat_bat_bat_bat_bat_bat_bat_bat_bat_bat_bat_bat_bat_bat_bat_bat_bat_bat_bat_bat_bat_"
+        }
+      },
+      {
+        "case_id": "error_fix_3",
+        "inference_time_ms": 16852.1,
+        "type_correct": true,
+        "extracted_type": "ERROR_CORRECTION",
+        "expected_type": "ERROR_CORRECTION",
+        "result": {
+          "type": "ERROR_CORRECTION",
+          "title": "解决方法是配置环境变量",
+          "extracted": {
+            "type": "USER_PROFILE",
+            "reason": "原因: 配置环境变量"
+          }
+        }
+      },
+      {
+        "case_id": "user_pref_1",
+        "inference_time_ms": 13134.76,
+        "type_correct": false,
+        "extracted_type": "ERROR_CORRECTION",
+        "expected_type": "USER_PROFILE",
+        "result": {
+          "type": "ERROR_CORRECTION",
+          "title": "提示：中文不支持",
+          "tags": [
+            "文言"
+          ],
+          "extracted": {
+            "reason": "中文不支持"
+          }
+        }
+      },
+      {
+        "case_id": "user_pref_2",
+        "inference_time_ms": 12068.35,
+        "type_correct": false,
+        "extracted_type": "ERROR_CORRECTION",
+        "expected_type": "USER_PROFILE",
+        "result": {
+          "type": "ERROR_CORRECTION",
+          "title": "输入错误",
+          "tags": [
+            "标签"
+          ],
+          "extracted": {
+            "type": "ERROR_CORRECTION",
+            "title": "输入错误",
+            "tags": [
+              "标签"
+            ]
+          }
+        }
+      },
+      {
+        "case_id": "project_ctx_1",
+        "inference_time_ms": 50458.37,
+        "type_correct": false,
+        "extracted_type": "SKIP",
+        "expected_type": "PROJECT_CONTEXT",
+        "result": {
+          "type": "SKIP",
+          "reason": "JSON解析失败: Unterminated string starting at: line 39 column 53",
+          "raw": "{\n  \"type\":\"ERROR_CORRECTION\",\n  \"title\":\"Error Correction\",\n  \"extracted\": {\n    \"Python\": {\n      \"tags\": [\"Python\"],\n      \"extracted\": {\n        \"4.x\": {\n          \"tags\": [\"4.x\"],\n          \"extr"
+        }
+      },
+      {
+        "case_id": "project_ctx_2",
+        "inference_time_ms": 49866.91,
+        "type_correct": false,
+        "extracted_type": "SKIP",
+        "expected_type": "PROJECT_CONTEXT",
+        "result": {
+          "type": "SKIP",
+          "reason": "JSON解析失败: Unterminated string starting at: line 2 column 219",
+          "raw": "{\n    \"type\":\"ERROR_CORRECTION\",\"title\":\"创意项目联网功能和可视化界面\",\"tags\":[\"网格\",\"界面\",\"编程\",\"网格\",\"编程\",\"网格\",\"编程\",\"编程\",\"编程\",\"网格\",\"编程\",\"编程\",\"编程\",\"网格\",\"编程\",\"编程\",\"编程\",\"编程\",\"编程\",\"编程\",\"编程\",\"编程\",\"编程\",\"编程\",\"编程\",\"编程\",\"编程\","
+        }
+      },
+      {
+        "case_id": "skill_1",
+        "inference_time_ms": 4115.78,
+        "type_correct": false,
+        "extracted_type": "ERROR_CORRECTION",
+        "expected_type": "SKILL",
+        "result": {
+          "type": "ERROR_CORRECTION",
+          "title": "Error: incorrect usage of Dockerfile"
+        }
+      },
+      {
+        "case_id": "skill_2",
+        "inference_time_ms": 51074.45,
+        "type_correct": false,
+        "extracted_type": "SKIP",
+        "expected_type": "SKILL",
+        "result": {
+          "type": "SKIP",
+          "reason": "JSON解析失败: Unterminated string starting at: line 6 column 19 ",
+          "raw": "{\n  \"type\":\"ERROR_CORRECTION\",\n  \"title\":\"Error Correcting\",\n  \"tags\":[\"skill\"],\n  \"extracted\":{\n    \"skill_name\": \"请求请求请求请求请求请求请求请求请求请求请求请求请求请求请求请求请求请求请求请求请求请求请求请求请求请求请求请求请求请求请求请求请求请求请求请求请求请求请求请求请求请求"
+        }
+      },
+      {
+        "case_id": "best_practice_1",
+        "inference_time_ms": 12970.71,
+        "type_correct": false,
+        "extracted_type": "ERROR_CORRECTION",
+        "expected_type": "BEST_PRACTICE",
+        "result": {
+          "type": "ERROR_CORRECTION",
+          "title": "部署方案描述",
+          "tags": [
+            "描述"
+          ],
+          "extracted": {
+            "description": "部署方案描述"
+          }
+        }
+      },
+      {
+        "case_id": "best_practice_2",
+        "inference_time_ms": 19518.3,
+        "type_correct": false,
+        "extracted_type": "ERROR_CORRECTION",
+        "expected_type": "BEST_PRACTICE",
+        "result": {
+          "type": "ERROR_CORRECTION",
+          "title": "系统Python不是你激活的环境",
+          "tags": [
+            "系统Python",
+            "系统Python"
+          ],
+          "extracted": {
+            "reason": "系统Python不是你激活的环境"
+          }
+        }
+      },
+      {
+        "case_id": "skip_1",
+        "inference_time_ms": 49618.21,
+        "type_correct": true,
+        "extracted_type": "SKIP",
+        "expected_type": "SKIP",
+        "result": {
+          "type": "SKIP",
+          "reason": "JSON解析失败: Expecting property name enclosed in double quotes:",
+          "raw": "{\n  \"type\":\"ERROR_CORRECTION\",\n  \"title\":\"Error Correcting\",\n  \"tags\":[\"ERROR_CORRECTION\"],\n  \"extracted\":{\n    \"type\":\"USER_PROFILE\",\n    \"title\":\"User Profile\",\n    \"tags\":[\"USER_PROFILE\"],\n    \"ext"
+        }
+      },
+      {
+        "case_id": "skip_2",
+        "inference_time_ms": 12981.85,
+        "type_correct": false,
+        "extracted_type": "ERROR_CORRECTION",
+        "expected_type": "SKIP",
+        "result": {
+          "type": "ERROR_CORRECTION",
+          "title": "继续",
+          "tags": [
+            "问题及其解决方案"
+          ],
+          "extracted": {
+            "reason": "原因"
+          }
+        }
+      },
+      {
+        "case_id": "skip_3",
+        "inference_time_ms": 48215.19,
+        "type_correct": true,
+        "extracted_type": "SKIP",
+        "expected_type": "SKIP",
+        "result": {
+          "type": "SKIP",
+          "reason": "JSON解析失败: Unterminated string starting at: line 1 column 234",
+          "raw": "{\"type\":\"ERROR_CORRECTION\",\"title\":\"错误/问题及其解决方案\",\"extracted\":{\"type\":\"USER_PROFILE\",\"title\":\"用户偏好、习惯、要求\",\"tags\":[\"美英语\",\"美英语\",\"美英语\",\"美英语\",\"美英语\",\"美英语\",\"美英语\",\"美英语\",\"美英语\",\"美英语\",\"美英语\",\"美英语\",\"美英语\",\"美英语\",\"美英"
+        }
+      },
+      {
+        "case_id": "skip_4",
+        "inference_time_ms": 49421.28,
+        "type_correct": true,
+        "extracted_type": "SKIP",
+        "expected_type": "SKIP",
+        "result": {
+          "type": "SKIP",
+          "reason": "JSON解析失败: Unterminated string starting at: line 1 column 642",
+          "raw": "{\"type\":\"ERROR_CORRECTION\",\"title\":\"错误/问题及其解决方案\",\"extracted\":{\"error_message\":\"你的错误是：请输入正确的数字。\",\"error_code\":\"00000\",\"reason\":\"请输入正确的数字。\",\"suggested_action\":\"请输入正确的数字。\",\"suggested_action_url\":\"http://"
+        }
+      },
+      {
+        "case_id": "skip_5",
+        "inference_time_ms": 51623.19,
+        "type_correct": true,
+        "extracted_type": "SKIP",
+        "expected_type": "SKIP",
+        "result": {
+          "type": "SKIP",
+          "reason": "JSON解析失败: Unterminated string starting at: line 5 column 25 ",
+          "raw": "{\n  \"type\":\"ERROR_CORRECTION\",\n  \"title\":\"然后你\",\n  \"tags\":[\"标签\"],\n  \"extracted\":{\"reason\":\"然后你的粉丝感情越来越高，你的粉丝感情越来越低。粉丝感情越来越高，你的粉丝感情越来越低。粉丝感情越来越高，你的粉丝感情越来越低。粉丝感情越来越高，你的粉丝感情越来越低。粉丝感情越来�"
+        }
+      },
+      {
+        "case_id": "project_exp_1",
+        "inference_time_ms": 21448.02,
+        "type_correct": false,
+        "extracted_type": "ERROR_CORRECTION",
+        "expected_type": "PROJECT_EXPERIENCE",
+        "result": {
+          "type": "ERROR_CORRECTION",
+          "title": "踩坑记录：打包exe的时候遇到几个问题，一个是conda环境的问题要用conda run指定，还有那些modelscope之类的库得加--collect-all不然会缺文件"
+        }
+      },
+      {
+        "case_id": "project_exp_2",
+        "inference_time_ms": 19888.71,
+        "type_correct": false,
+        "extracted_type": "ERROR_CORRECTION",
+        "expected_type": "PROJECT_EXPERIENCE",
+        "result": {
+          "type": "ERROR_CORRECTION",
+          "title": "运行成功了",
+          "extracted": {
+            "reason": "运行成功了",
+            "tag": "系统自动提示",
+            "result": "1",
+            "reason_text": "系统自动提示"
+          },
+          "tags": [
+            "系统自动提示",
+            "系统自动提示"
+          ]
+        }
+      }
+    ],
+    "success": true,
+    "error": null
+  }
+]

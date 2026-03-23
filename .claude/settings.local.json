@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(psql:*)",
+      "Bash(where psql:*)",
+      "mcp__playwright__browser_screenshot",
+      "mcp__playwright__browser_click",
+      "Bash(curl:*)",
+      "Bash(mvn exec:java:*)",
+      "mcp__playwright__browser_close",
+      "Bash(netstat:*)",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_snapshot",
+      "mcp__playwright__browser_console_messages",
+      "Bash(npm run:*)",
+      "mcp__playwright__browser_hover",
+      "Bash(start.bat:*)",
+      "Bash(ls:*)",
+      "Bash(rm:*)",
+      "Bash(wc:*)",
+      "Bash(grep:*)"
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: agentmemory-db
+    environment:
+      POSTGRES_DB: agentmemory
+      POSTGRES_USER: agentmemory
+      POSTGRES_PASSWORD: agentmemory123
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5500:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentmemory -d agentmemory"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+networks:
+  default:
+    name: agentmemory-network
