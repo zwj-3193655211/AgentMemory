@@ -1,5 +1,11 @@
 import sqlite3
-conn = sqlite3.connect(r'C:\Users\31936\.agentmemory\data\agentmemory.db')
+import os
+
+# 使用环境变量或默认用户目录
+sqlite_path = os.environ.get('SQLITE_PATH', 
+    os.path.expanduser('~/.agentmemory/data/agentmemory.db'))
+
+conn = sqlite3.connect(sqlite_path)
 c = conn.cursor()
 c.execute("SELECT COUNT(*) FROM messages WHERE session_id LIKE '%2d6abd80%'")
 print(f'SQLite 当前会话消息数: {c.fetchone()[0]}')

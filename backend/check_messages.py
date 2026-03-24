@@ -1,7 +1,12 @@
 import sqlite3
 import json
+import os
 
-conn = sqlite3.connect(r'C:\Users\31936\.agentmemory\data\agentmemory.db')
+# 使用环境变量或默认用户目录
+sqlite_path = os.environ.get('SQLITE_PATH', 
+    os.path.expanduser('~/.agentmemory/data/agentmemory.db'))
+
+conn = sqlite3.connect(sqlite_path)
 c = conn.cursor()
 
 # 查找有内容的用户/AI消息

@@ -7,14 +7,14 @@ import psycopg2
 from datetime import datetime
 from pathlib import Path
 
-# 数据库连接
+# 数据库连接 - 使用环境变量
 def get_db_conn():
     return psycopg2.connect(
-        host='localhost',
-        port=5500,
-        database='agentmemory',
-        user='agentmemory',
-        password='agentmemory123'
+        host=os.environ.get('DATABASE_HOST', 'localhost'),
+        port=int(os.environ.get('DATABASE_PORT', 5500)),
+        database=os.environ.get('DATABASE_NAME', 'agentmemory'),
+        user=os.environ.get('DATABASE_USER', 'agentmemory'),
+        password=os.environ.get('DATABASE_PASSWORD', 'agentmemory123')
     )
 
 def ensure_agent(cur, agent_type):
@@ -198,8 +198,14 @@ def scan_and_import():
     """扫描并导入所有历史"""
     conn = get_db_conn()
     
+    # 使用环境变量配置路径
+    qwen_path_str = os.environ.get('QWEN_PROJECTS_PATH', '~/.qwen/projects')
+    claude_path_str = os.environ.get('CLAUDE_PROJECTS_PATH', '~/.claude/projects')
+    
+    qwen_path = Path(os.path.expanduser(qwen_path_str))
+    claude_path = Path(os.path.expanduser(claude_path_str))
+    
     # Qwen CLI
-    qwen_path = Path(r'C:\Users\31936\.qwen\projects')
     qwen_count = 0
     if qwen_path.exists():
         print("=== 导入 Qwen CLI 历史 ===")
@@ -215,7 +221,6 @@ def scan_and_import():
                     print(f"  错误: {jsonl_file.name} - {e}")
     
     # Claude CLI
-    claude_path = Path(r'C:\Users\31936\.claude\projects')
     claude_count = 0
     if claude_path.exists():
         print("\n=== 导入 Claude CLI 历史 ===")

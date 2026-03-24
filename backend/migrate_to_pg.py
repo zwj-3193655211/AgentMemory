@@ -3,19 +3,22 @@ SQLite 数据迁移到 PostgreSQL
 """
 import sqlite3
 import psycopg2
+import os
 from datetime import datetime
 
-# SQLite 连接
-sqlite_conn = sqlite3.connect(r'C:\Users\31936\.agentmemory\data\agentmemory.db')
+# SQLite 连接 - 使用环境变量或默认用户目录
+sqlite_path = os.environ.get('SQLITE_PATH', 
+    os.path.expanduser('~/.agentmemory/data/agentmemory.db'))
+sqlite_conn = sqlite3.connect(sqlite_path)
 sqlite_c = sqlite_conn.cursor()
 
-# PostgreSQL 连接
+# PostgreSQL 连接 - 使用环境变量
 pg_conn = psycopg2.connect(
-    host='localhost',
-    port=5500,
-    database='agentmemory',
-    user='agentmemory',
-    password='agentmemory123'
+    host=os.environ.get('DATABASE_HOST', 'localhost'),
+    port=int(os.environ.get('DATABASE_PORT', 5500)),
+    database=os.environ.get('DATABASE_NAME', 'agentmemory'),
+    user=os.environ.get('DATABASE_USER', 'agentmemory'),
+    password=os.environ.get('DATABASE_PASSWORD', 'agentmemory123')
 )
 pg_c = pg_conn.cursor()
 

@@ -2,71 +2,73 @@
   <div class="app-container">
     <!-- 顶部导航 -->
     <header class="app-header">
-      <div class="logo">
-        <el-icon :size="24"><Box /></el-icon>
-        <span>AgentMemory</span>
-      </div>
-      
-      <!-- 搜索框 -->
-      <div class="search-box">
-        <el-input
-          v-model="searchQuery"
-          placeholder="搜索..."
-          :prefix-icon="Search"
-          clearable
-          @keyup.enter="handleSearch"
-          style="width: 150px"
-          size="small"
-        />
-      </div>
+      <div class="app-header-inner">
+        <div class="logo">
+          <el-icon :size="24"><Box /></el-icon>
+          <span>AgentMemory</span>
+        </div>
+        
+        <!-- 搜索框 -->
+        <div class="search-box">
+          <el-input
+            v-model="searchQuery"
+            placeholder="搜索..."
+            :prefix-icon="Search"
+            clearable
+            @keyup.enter="handleSearch"
+            style="width: 150px"
+            size="small"
+          />
+        </div>
 
-      <el-menu mode="horizontal" :default-active="activeMenu" @select="handleMenuSelect" class="main-menu">
-        <el-menu-item index="dashboard">
-          <el-tooltip content="仪表盘" placement="bottom">
-            <el-icon><Odometer /></el-icon>
-          </el-tooltip>
-        </el-menu-item>
-        <el-menu-item index="sessions">
-          <el-tooltip content="对话记录" placement="bottom">
-            <el-icon><ChatDotRound /></el-icon>
-          </el-tooltip>
-        </el-menu-item>
-        <el-menu-item index="errors">
-          <el-tooltip content="错误纠正" placement="bottom">
-            <el-icon><WarningFilled /></el-icon>
-          </el-tooltip>
-        </el-menu-item>
-        <el-menu-item index="profiles">
-          <el-tooltip content="用户画像" placement="bottom">
-            <el-icon><User /></el-icon>
-          </el-tooltip>
-        </el-menu-item>
-        <el-menu-item index="practices">
-          <el-tooltip content="实践经验" placement="bottom">
-            <el-icon><DocumentChecked /></el-icon>
-          </el-tooltip>
-        </el-menu-item>
-        <el-menu-item index="contexts">
-          <el-tooltip content="项目上下文" placement="bottom">
-            <el-icon><FolderOpened /></el-icon>
-          </el-tooltip>
-        </el-menu-item>
-        <el-menu-item index="skills">
-          <el-tooltip content="技能沉淀" placement="bottom">
-            <el-icon><Reading /></el-icon>
-          </el-tooltip>
-        </el-menu-item>
-        <el-menu-item index="compression">
-          <el-tooltip content="会话摘要" placement="bottom">
-            <el-icon><Connection /></el-icon>
-          </el-tooltip>
-        </el-menu-item>
-        <el-menu-item index="settings">
-          <el-tooltip content="设置" placement="bottom">
-            <el-icon><Setting /></el-icon>
-          </el-tooltip>
-        </el-menu-item>
-      </el-menu>
+        <el-menu mode="horizontal" :default-active="activeMenu" @select="handleMenuSelect" class="main-menu">
+          <el-menu-item index="dashboard">
+            <el-tooltip content="仪表盘" placement="bottom">
+              <el-icon><Odometer /></el-icon>
+            </el-tooltip>
+          </el-menu-item>
+          <el-menu-item index="sessions">
+            <el-tooltip content="对话记录" placement="bottom">
+              <el-icon><ChatDotRound /></el-icon>
+            </el-tooltip>
+          </el-menu-item>
+          <el-menu-item index="errors">
+            <el-tooltip content="错误纠正" placement="bottom">
+              <el-icon><WarningFilled /></el-icon>
+            </el-tooltip>
+          </el-menu-item>
+          <el-menu-item index="profiles">
+            <el-tooltip content="用户画像" placement="bottom">
+              <el-icon><User /></el-icon>
+            </el-tooltip>
+          </el-menu-item>
+          <el-menu-item index="practices">
+            <el-tooltip content="实践经验" placement="bottom">
+              <el-icon><DocumentChecked /></el-icon>
+            </el-tooltip>
+          </el-menu-item>
+          <el-menu-item index="contexts">
+            <el-tooltip content="项目上下文" placement="bottom">
+              <el-icon><FolderOpened /></el-icon>
+            </el-tooltip>
+          </el-menu-item>
+          <el-menu-item index="skills">
+            <el-tooltip content="技能沉淀" placement="bottom">
+              <el-icon><Reading /></el-icon>
+            </el-tooltip>
+          </el-menu-item>
+          <el-menu-item index="compression">
+            <el-tooltip content="会话摘要" placement="bottom">
+              <el-icon><Connection /></el-icon>
+            </el-tooltip>
+          </el-menu-item>
+          <el-menu-item index="settings">
+            <el-tooltip content="设置" placement="bottom">
+              <el-icon><Setting /></el-icon>
+            </el-tooltip>
+          </el-menu-item>
+        </el-menu>
+      </div>
     </header>
 
     <!-- 主内容区 -->
@@ -236,156 +238,19 @@
       </div>
 
       <!-- 错误纠正库 -->
-      <div v-if="activeMenu === 'errors'" class="content-panel full">
-        <div class="panel-header">
-          <h2>错误纠正库</h2>
-          <div style="display: flex; gap: 10px;">
-            <el-button type="primary" @click="openErrorDialog">
-              <el-icon><Plus /></el-icon> 新增
-            </el-button>
-            <el-button @click="exportErrors">
-              <el-icon><Download /></el-icon> 导出
-            </el-button>
-          </div>
-        </div>
-        <el-table :data="errors" stripe>
-          <el-table-column prop="title" label="标题" min-width="200" />
-          <el-table-column prop="problem" label="问题" min-width="200" show-overflow-tooltip />
-          <el-table-column prop="solution" label="解决方案" min-width="200" show-overflow-tooltip />
-          <el-table-column prop="createdAt" label="创建时间" width="180">
-            <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
-          </el-table-column>
-          <el-table-column label="操作" width="150" fixed="right">
-            <template #default="{ row }">
-              <el-button size="small" @click="editError(row)">编辑</el-button>
-              <el-button size="small" type="danger" @click="deleteError(row)">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
+      <Errors v-if="activeMenu === 'errors'" ref="errorsRef" />
 
       <!-- 用户画像 -->
-      <div v-if="activeMenu === 'profiles'" class="content-panel full">
-        <div class="panel-header">
-          <h2>用户画像库</h2>
-          <div style="display: flex; gap: 10px;">
-            <el-button type="primary" @click="openProfileDialog">
-              <el-icon><Plus /></el-icon> 新增
-            </el-button>
-            <el-button @click="exportProfiles">
-              <el-icon><Download /></el-icon> 导出
-            </el-button>
-          </div>
-        </div>
-        <el-table :data="profiles" stripe>
-          <el-table-column prop="title" label="标题" min-width="200" />
-          <el-table-column prop="category" label="类别" width="120" />
-          <el-table-column prop="items" label="内容" min-width="300">
-            <template #default="{ row }">
-              <el-tag v-for="(item, idx) in parseItems(row.items)" :key="idx" class="item-tag">
-                {{ item.key }}: {{ item.value }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="150" fixed="right">
-            <template #default="{ row }">
-              <el-button size="small" @click="editProfile(row)">编辑</el-button>
-              <el-button size="small" type="danger" @click="deleteProfile(row)">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
+      <Profiles v-if="activeMenu === 'profiles'" ref="profilesRef" />
 
       <!-- 实践经验 -->
-      <div v-if="activeMenu === 'practices'" class="content-panel full">
-        <div class="panel-header">
-          <h2>实践经验库</h2>
-          <div style="display: flex; gap: 10px;">
-            <el-button type="primary" @click="openPracticeDialog">
-              <el-icon><Plus /></el-icon> 新增
-            </el-button>
-            <el-button @click="exportPractices">
-              <el-icon><Download /></el-icon> 导出
-            </el-button>
-          </div>
-        </div>
-        <el-table :data="practices" stripe>
-          <el-table-column prop="title" label="标题" min-width="200" />
-          <el-table-column prop="scenario" label="场景" min-width="200" />
-          <el-table-column prop="practice" label="实践" min-width="200" show-overflow-tooltip />
-          <el-table-column prop="createdAt" label="创建时间" width="180">
-            <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
-          </el-table-column>
-          <el-table-column label="操作" width="150" fixed="right">
-            <template #default="{ row }">
-              <el-button size="small" @click="editPractice(row)">编辑</el-button>
-              <el-button size="small" type="danger" @click="deletePractice(row)">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
+      <Practices v-if="activeMenu === 'practices'" ref="practicesRef" />
 
       <!-- 项目上下文 -->
-      <div v-if="activeMenu === 'contexts'" class="content-panel full">
-        <div class="panel-header">
-          <h2>项目上下文库</h2>
-          <div style="display: flex; gap: 10px;">
-            <el-button type="primary" @click="openContextDialog">
-              <el-icon><Plus /></el-icon> 新增
-            </el-button>
-            <el-button @click="exportContexts">
-              <el-icon><Download /></el-icon> 导出
-            </el-button>
-          </div>
-        </div>
-        <el-table :data="contexts" stripe>
-          <el-table-column prop="title" label="标题" min-width="200" />
-          <el-table-column prop="projectPath" label="项目路径" min-width="250" show-overflow-tooltip />
-          <el-table-column prop="techStack" label="技术栈" min-width="200">
-            <template #default="{ row }">
-              <el-tag v-for="tech in row.techStack" :key="tech" size="small" class="tech-tag">{{ tech }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="updatedAt" label="更新时间" width="180">
-            <template #default="{ row }">{{ formatTime(row.updatedAt) }}</template>
-          </el-table-column>
-          <el-table-column label="操作" width="150" fixed="right">
-            <template #default="{ row }">
-              <el-button size="small" @click="editContext(row)">编辑</el-button>
-              <el-button size="small" type="danger" @click="deleteContext(row)">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
+      <Contexts v-if="activeMenu === 'contexts'" ref="contextsRef" />
 
       <!-- 技能沉淀 -->
-      <div v-if="activeMenu === 'skills'" class="content-panel full">
-        <div class="panel-header">
-          <h2>技能沉淀库</h2>
-          <div style="display: flex; gap: 10px;">
-            <el-button type="primary" @click="openSkillDialog">
-              <el-icon><Plus /></el-icon> 新增
-            </el-button>
-            <el-button @click="exportSkills">
-              <el-icon><Download /></el-icon> 导出
-            </el-button>
-          </div>
-        </div>
-        <el-table :data="skills" stripe>
-          <el-table-column prop="title" label="标题" min-width="200" />
-          <el-table-column prop="skillType" label="类型" width="120" />
-          <el-table-column prop="description" label="描述" min-width="300" show-overflow-tooltip />
-          <el-table-column prop="createdAt" label="创建时间" width="180">
-            <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
-          </el-table-column>
-          <el-table-column label="操作" width="150" fixed="right">
-            <template #default="{ row }">
-              <el-button size="small" @click="editSkill(row)">编辑</el-button>
-              <el-button size="small" type="danger" @click="deleteSkill(row)">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
+      <Skills v-if="activeMenu === 'skills'" ref="skillsRef" />
       
       <!-- 搜索结果 -->
       <div v-if="activeMenu === 'search'" class="content-panel full">
@@ -600,7 +465,7 @@
               <span>会话摘要列表</span>
             </div>
           </template>
-          <el-table :data="sessionSummaries" stripe>
+          <el-table :data="sessionSummaries" stripe @row-click="openSummaryDetail">
             <el-table-column prop="sessionId" label="会话ID" width="200" show-overflow-tooltip />
             <el-table-column prop="summary" label="摘要内容" min-width="300" show-overflow-tooltip />
             <el-table-column prop="compressionType" label="压缩类型" width="120" />
@@ -608,6 +473,49 @@
             <el-table-column prop="compressedAt" label="压缩时间" width="180" />
           </el-table>
         </el-card>
+        
+        <!-- 摘要详情对话框 -->
+        <el-dialog v-model="summaryDetail.visible" title="会话摘要详情" width="600px">
+          <el-descriptions :column="1" border>
+            <el-descriptions-item label="会话ID">{{ summaryDetail.data.sessionId }}</el-descriptions-item>
+            <el-descriptions-item label="压缩类型">
+              <el-tag size="small">{{ summaryDetail.data.compressionType }}</el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="原消息数">{{ summaryDetail.data.messageCount }}</el-descriptions-item>
+            <el-descriptions-item label="压缩时间">{{ summaryDetail.data.compressedAt }}</el-descriptions-item>
+            <el-descriptions-item label="摘要内容">
+              <div style="white-space: pre-wrap; word-break: break-word;">{{ summaryDetail.data.summary }}</div>
+            </el-descriptions-item>
+          </el-descriptions>
+          <template #footer>
+            <el-button @click="summaryDetail.visible = false">关闭</el-button>
+            <el-button type="primary" @click="viewSessionMessages(summaryDetail.data.sessionId)">查看原消息</el-button>
+          </template>
+        </el-dialog>
+        
+        <!-- 会话消息查看对话框 -->
+        <el-dialog v-model="sessionMessages.visible" :title="`会话消息 - ${sessionMessages.sessionId.slice(0, 8)}...`" width="800px">
+          <el-table :data="sessionMessages.messages" stripe max-height="500">
+            <el-table-column prop="role" label="角色" width="80">
+              <template #default="{ row }">
+                <el-tag :type="row.role === 'user' ? 'primary' : 'success'" size="small">
+                  {{ row.role === 'user' ? '用户' : '助手' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="content" label="内容" show-overflow-tooltip>
+              <template #default="{ row }">
+                <div style="max-height: 60px; overflow: hidden; text-overflow: ellipsis;">{{ row.content }}</div>
+              </template>
+            </el-table-column>
+            <el-table-column prop="timestamp" label="时间" width="160">
+              <template #default="{ row }">{{ row.timestamp ? new Date(row.timestamp).toLocaleString('zh-CN') : '' }}</template>
+            </el-table-column>
+          </el-table>
+          <template #footer>
+            <el-button @click="sessionMessages.visible = false">关闭</el-button>
+          </template>
+        </el-dialog>
       </div>
       
       <!-- 设置页面 -->
@@ -710,14 +618,12 @@
             
             <template v-if="llmConfig.mode === 'local'">
               <el-form-item label="内置模型">
-                <el-input v-model="llmConfig.localModel" placeholder="Qwen/Qwen3-0.6B" style="width: 400px" />
-                <div class="form-tip">HuggingFace 模型 ID，首次使用会自动下载（如 Qwen/Qwen2.5-1.5B）</div>
-                <div class="form-tip" style="color: #e6a23c;">⚠️ 如需使用 Ollama 模型，请切换到"API 模式"</div>
+                <el-input v-model="llmConfig.localModel" disabled style="width: 400px" />
+                <div class="form-tip">系统内置模型，无需配置</div>
               </el-form-item>
               
               <el-form-item>
-                <el-button type="warning" @click="testLocalModel" :loading="testingConnection">测试模型</el-button>
-                <el-button type="primary" @click="saveLLMConfig" :loading="savingConfig" :disabled="!connectionTestSuccess">保存配置</el-button>
+                <el-button type="primary" @click="saveLLMConfig" :loading="savingConfig">保存配置</el-button>
                 <el-button type="success" @click="showSavePresetDialog = true">保存为预设</el-button>
               </el-form-item>
             </template>
@@ -900,141 +806,6 @@
       </template>
     </el-dialog>
 
-    <!-- 错误纠正库对话框 -->
-    <el-dialog v-model="errorDialogVisible" :title="errorIsEdit ? '编辑错误纠正' : '新增错误纠正'" width="600px">
-      <el-form :model="errorFormData" :rules="errorRules" ref="errorFormRef" label-width="100px">
-        <el-form-item label="标题" prop="title">
-          <el-input v-model="errorFormData.title" placeholder="请输入标题" />
-        </el-form-item>
-        <el-form-item label="问题描述" prop="problem">
-          <el-input v-model="errorFormData.problem" type="textarea" :rows="3" placeholder="请描述问题" />
-        </el-form-item>
-        <el-form-item label="原因分析" prop="cause">
-          <el-input v-model="errorFormData.cause" type="textarea" :rows="2" placeholder="请分析原因" />
-        </el-form-item>
-        <el-form-item label="解决方案" prop="solution">
-          <el-input v-model="errorFormData.solution" type="textarea" :rows="3" placeholder="请提供解决方案" />
-        </el-form-item>
-        <el-form-item label="示例代码" prop="example">
-          <el-input v-model="errorFormData.example" type="textarea" :rows="3" placeholder="可选：示例代码" />
-        </el-form-item>
-        <el-form-item label="标签" prop="tags">
-          <el-input v-model="errorFormData.tags" placeholder="逗号分隔，如：bug,fix,python" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="errorDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitErrorForm">{{ errorIsEdit ? '更新' : '创建' }}</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 实践经验库对话框 -->
-    <el-dialog v-model="practiceDialogVisible" :title="practiceIsEdit ? '编辑实践经验' : '新增实践经验'" width="600px">
-      <el-form :model="practiceFormData" :rules="practiceRules" ref="practiceFormRef" label-width="100px">
-        <el-form-item label="标题" prop="title">
-          <el-input v-model="practiceFormData.title" placeholder="请输入标题" />
-        </el-form-item>
-        <el-form-item label="适用场景" prop="scenario">
-          <el-input v-model="practiceFormData.scenario" type="textarea" :rows="2" placeholder="请描述适用场景" />
-        </el-form-item>
-        <el-form-item label="实践经验" prop="practice">
-          <el-input v-model="practiceFormData.practice" type="textarea" :rows="3" placeholder="请提供实践经验" />
-        </el-form-item>
-        <el-form-item label="原理说明" prop="rationale">
-          <el-input v-model="practiceFormData.rationale" type="textarea" :rows="2" placeholder="可选：原理说明" />
-        </el-form-item>
-        <el-form-item label="标签" prop="tags">
-          <el-input v-model="practiceFormData.tags" placeholder="逗号分隔，如：performance,optimization" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="practiceDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitPracticeForm">{{ practiceIsEdit ? '更新' : '创建' }}</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 用户画像库对话框 -->
-    <el-dialog v-model="profileDialogVisible" :title="profileIsEdit ? '编辑用户画像' : '新增用户画像'" width="600px">
-      <el-form :model="profileFormData" :rules="profileRules" ref="profileFormRef" label-width="100px">
-        <el-form-item label="标题" prop="title">
-          <el-input v-model="profileFormData.title" placeholder="请输入标题" />
-        </el-form-item>
-        <el-form-item label="类别" prop="category">
-          <el-select v-model="profileFormData.category" placeholder="请选择类别">
-            <el-option label="偏好设置" value="preference" />
-            <el-option label="行为模式" value="behavior" />
-            <el-option label="技术栈" value="techstack" />
-            <el-option label="工作习惯" value="workhabit" />
-            <el-option label="其他" value="other" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="内容" prop="items">
-          <el-input v-model="profileFormData.items" type="textarea" :rows="4" placeholder='JSON格式，例如：[{"key": "语言", "value": "Python"}]' />
-          <div style="font-size: 12px; color: #909399; margin-top: 4px;">必须是有效的JSON数组格式</div>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="profileDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitProfileForm">{{ profileIsEdit ? '更新' : '创建' }}</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 项目上下文库对话框 -->
-    <el-dialog v-model="contextDialogVisible" :title="contextIsEdit ? '编辑项目上下文' : '新增项目上下文'" width="600px">
-      <el-form :model="contextFormData" :rules="contextRules" ref="contextFormRef" label-width="100px">
-        <el-form-item label="标题" prop="title">
-          <el-input v-model="contextFormData.title" placeholder="请输入标题" />
-        </el-form-item>
-        <el-form-item label="项目路径" prop="projectPath">
-          <el-input v-model="contextFormData.projectPath" placeholder="例如：/home/user/project" />
-        </el-form-item>
-        <el-form-item label="技术栈" prop="techStack">
-          <el-input v-model="contextFormData.techStack" placeholder="逗号分隔，如：React,TypeScript,Node.js" />
-        </el-form-item>
-        <el-form-item label="关键决策" prop="keyDecisions">
-          <el-input v-model="contextFormData.keyDecisions" type="textarea" :rows="2" placeholder="可选：项目中的关键决策" />
-        </el-form-item>
-        <el-form-item label="项目结构" prop="structure">
-          <el-input v-model="contextFormData.structure" type="textarea" :rows="3" placeholder="可选：项目结构说明" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="contextDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitContextForm">{{ contextIsEdit ? '更新' : '创建' }}</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 技能沉淀库对话框 -->
-    <el-dialog v-model="skillDialogVisible" :title="skillIsEdit ? '编辑技能沉淀' : '新增技能沉淀'" width="600px">
-      <el-form :model="skillFormData" :rules="skillRules" ref="skillFormRef" label-width="100px">
-        <el-form-item label="标题" prop="title">
-          <el-input v-model="skillFormData.title" placeholder="请输入标题" />
-        </el-form-item>
-        <el-form-item label="技能类型" prop="skillType">
-          <el-select v-model="skillFormData.skillType" placeholder="请选择技能类型">
-            <el-option label="技术" value="technique" />
-            <el-option label="方法" value="method" />
-            <el-option label="工具" value="tool" />
-            <el-option label="模式" value="pattern" />
-            <el-option label="最佳实践" value="bestpractice" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="描述" prop="description">
-          <el-input v-model="skillFormData.description" type="textarea" :rows="3" placeholder="请描述技能" />
-        </el-form-item>
-        <el-form-item label="步骤" prop="steps">
-          <el-input v-model="skillFormData.steps" type="textarea" :rows="4" placeholder="可选：详细步骤说明" />
-        </el-form-item>
-        <el-form-item label="标签" prop="tags">
-          <el-input v-model="skillFormData.tags" placeholder="逗号分隔，如：debugging,performance" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="skillDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitSkillForm">{{ skillIsEdit ? '更新' : '创建' }}</el-button>
-      </template>
-    </el-dialog>
-
     <!-- 添加自定义 Agent 对话框 -->
     <el-dialog v-model="showAddAgentDialog" title="添加自定义 Agent" width="450px">
       <el-form :model="newAgent" label-width="100px">
@@ -1060,13 +831,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, reactive } from 'vue'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Setting, ChatDotRound, WarningFilled, User, DocumentChecked, FolderOpened, Reading, Odometer, Box, Delete, Plus, Download, Close, Connection, InfoFilled } from '@element-plus/icons-vue'
 
-const API_BASE = 'http://localhost:8080/api'
-const EMBED_BASE = 'http://localhost:8100'
+// 导入记忆库组件
+import Errors from './views/Errors.vue'
+import Profiles from './views/Profiles.vue'
+import Practices from './views/Practices.vue'
+import Contexts from './views/Contexts.vue'
+import Skills from './views/Skills.vue'
+
+// 使用 Vite 环境变量，支持运行时配置
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8080/api'
+const EMBED_BASE = import.meta.env.VITE_EMBED_BASE || 'http://localhost:8100'
 
 // 数据
 const activeMenu = ref('dashboard')
@@ -1081,60 +860,6 @@ const skills = ref<any[]>([])
 const stats = ref({ sessions: 0, messages: 0, errors: 0, profiles: 0, practices: 0, contexts: 0, skills: 0 })
 const selectedAgent = ref('')
 const selectedSession = ref<any>(null)
-
-// 错误纠正库 CRUD 状态
-const errorDialogVisible = ref(false)
-const errorIsEdit = ref(false)
-const errorFormData = ref<any>({})
-const errorFormRef = ref()
-const errorRules = {
-  title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
-  problem: [{ required: true, message: '请描述问题', trigger: 'blur' }],
-  solution: [{ required: true, message: '请提供解决方案', trigger: 'blur' }]
-}
-
-// 实践经验库 CRUD 状态
-const practiceDialogVisible = ref(false)
-const practiceIsEdit = ref(false)
-const practiceFormData = ref<any>({})
-const practiceFormRef = ref()
-const practiceRules = {
-  title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
-  scenario: [{ required: true, message: '请描述场景', trigger: 'blur' }],
-  practice: [{ required: true, message: '请提供实践经验', trigger: 'blur' }]
-}
-
-// 用户画像库 CRUD 状态
-const profileDialogVisible = ref(false)
-const profileIsEdit = ref(false)
-const profileFormData = ref<any>({})
-const profileFormRef = ref()
-const profileRules = {
-  title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
-  category: [{ required: true, message: '请选择类别', trigger: 'change' }],
-  items: [{ required: true, message: '请输入内容（JSON格式）', trigger: 'blur' }]
-}
-
-// 项目上下文库 CRUD 状态
-const contextDialogVisible = ref(false)
-const contextIsEdit = ref(false)
-const contextFormData = ref<any>({})
-const contextFormRef = ref()
-const contextRules = {
-  title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
-  projectPath: [{ required: true, message: '请输入项目路径', trigger: 'blur' }]
-}
-
-// 技能沉淀库 CRUD 状态
-const skillDialogVisible = ref(false)
-const skillIsEdit = ref(false)
-const skillFormData = ref<any>({})
-const skillFormRef = ref()
-const skillRules = {
-  title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
-  skillType: [{ required: true, message: '请选择技能类型', trigger: 'change' }],
-  description: [{ required: true, message: '请输入描述', trigger: 'blur' }]
-}
 
 // 搜索
 const searchQuery = ref('')
@@ -1169,6 +894,39 @@ const compressionConfig = ref({
 })
 
 const sessionSummaries = ref<any[]>([])
+
+// 摘要详情对话框
+const summaryDetail = reactive({
+  visible: false,
+  data: {} as { sessionId: string; summary: string; compressionType: string; messageCount: number; compressedAt: string }
+})
+
+// 打开摘要详情
+const openSummaryDetail = (row: any) => {
+  summaryDetail.data = row
+  summaryDetail.visible = true
+}
+
+// 查看会话原消息
+const viewSessionMessages = async (sessionId: string) => {
+  summaryDetail.visible = false
+  try {
+    const res = await axios.get(`${API_BASE}/messages/${sessionId}`)
+    // 显示消息列表对话框
+    sessionMessages.messages = res.data || []
+    sessionMessages.sessionId = sessionId
+    sessionMessages.visible = true
+  } catch (e: any) {
+    ElMessage.error('加载消息失败: ' + e.message)
+  }
+}
+
+// 会话消息对话框
+const sessionMessages = reactive({
+  visible: false,
+  sessionId: '',
+  messages: [] as any[]
+})
 
 // LLM Provider 配置
 const llmProviders = ref<any[]>([])
@@ -1687,7 +1445,7 @@ const loadEmbeddingStatus = async () => {
         llmConfig.value.baseUrl = res.data.llm.base || ''
         llmConfig.value.apiKey = '' // 不返回 key
       } else if (res.data.llm.mode === 'local') {
-        llmConfig.value.localModel = res.data.llm.model || ''
+        llmConfig.value.localModel = res.data.llm.model || 'Qwen/Qwen3-0.6B'
       }
     }
   } catch (e) {
@@ -1876,7 +1634,17 @@ const saveLLMConfig = async () => {
       model = llmConfig.value.model
     }
     
-    // 保存到数据库
+    // 1. 同步保存到 Embedding 服务
+    await axios.post(`${EMBED_BASE}/config`, {
+      llm_mode: llmConfig.value.mode,
+      llm_api_provider: providerName,
+      llm_api_base: baseUrl,
+      llm_api_key: llmConfig.value.apiKey,
+      llm_api_model: model,
+      llm_local_model: llmConfig.value.localModel
+    })
+    
+    // 2. 保存到数据库
     await axios.post(`${API_BASE}/llm-providers`, {
       providerName: providerName,
       displayName: `${providerName} (设置)`,
@@ -1890,7 +1658,9 @@ const saveLLMConfig = async () => {
     
     // 重新加载预设列表
     await loadPresets()
-    connectionTestResult.value = '配置已保存到数据库'
+    // 重新加载 Embedding 状态以同步显示
+    await loadEmbeddingStatus()
+    connectionTestResult.value = '配置已保存'
     connectionTestSuccess.value = true
   } catch (e: any) {
     console.error('保存配置失败', e)
@@ -1995,397 +1765,6 @@ const cleanupNow = async () => {
   }
 }
 
-// ===== 错误纠正库 CRUD 方法 =====
-
-// 打开新增对话框
-const openErrorDialog = () => {
-  errorIsEdit.value = false
-  errorFormData.value = { title: '', problem: '', cause: '', solution: '', example: '', tags: '' }
-  errorDialogVisible.value = true
-}
-
-// 打开编辑对话框
-const editError = (row: any) => {
-  errorIsEdit.value = true
-  errorFormData.value = { ...row }
-  if (Array.isArray(errorFormData.value.tags)) {
-    errorFormData.value.tags = errorFormData.value.tags.join(', ')
-  }
-  errorDialogVisible.value = true
-}
-
-// 提交表单
-const submitErrorForm = async () => {
-  if (!errorFormRef.value) return
-  await errorFormRef.value.validate(async (valid: boolean) => {
-    if (!valid) return
-
-    // 处理tags字段
-    const data = { ...errorFormData.value }
-    if (typeof data.tags === 'string') {
-      data.tags = data.tags.split(',').map((t: string) => t.trim()).filter((t: string) => t)
-    }
-
-    try {
-      if (errorIsEdit.value) {
-        await axios.put(`${API_BASE}/errors/${data.id}`, data)
-        ElMessage.success('更新成功')
-      } else {
-        await axios.post(`${API_BASE}/errors`, data)
-        ElMessage.success('创建成功')
-      }
-      errorDialogVisible.value = false
-      await loadAllData()
-    } catch (error: any) {
-      ElMessage.error(error.response?.data?.message || '操作失败')
-    }
-  })
-}
-
-// 删除记录
-const deleteError = async (row: any) => {
-  try {
-    await ElMessageBox.confirm('确定要删除这条记录吗？', '确认删除', { type: 'warning' })
-    await axios.delete(`${API_BASE}/errors/${row.id}`)
-    ElMessage.success('删除成功')
-    await loadAllData()
-  } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('删除失败')
-    }
-  }
-}
-
-// 导出所有
-const exportErrors = async () => {
-  try {
-    const res = await axios.get(`${API_BASE}/errors/export`, { responseType: 'blob' })
-    const url = window.URL.createObjectURL(new Blob([res.data]))
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `errors_${Date.now()}.json`
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    ElMessage.success('导出成功')
-  } catch {
-    ElMessage.error('导出失败')
-  }
-}
-
-// ===== 实践经验库 CRUD 方法 =====
-
-// 打开新增对话框
-const openPracticeDialog = () => {
-  practiceIsEdit.value = false
-  practiceFormData.value = { title: '', scenario: '', practice: '', rationale: '', tags: '' }
-  practiceDialogVisible.value = true
-}
-
-// 打开编辑对话框
-const editPractice = (row: any) => {
-  practiceIsEdit.value = true
-  practiceFormData.value = { ...row }
-  if (Array.isArray(practiceFormData.value.tags)) {
-    practiceFormData.value.tags = practiceFormData.value.tags.join(', ')
-  }
-  practiceDialogVisible.value = true
-}
-
-// 提交表单
-const submitPracticeForm = async () => {
-  if (!practiceFormRef.value) return
-  await practiceFormRef.value.validate(async (valid: boolean) => {
-    if (!valid) return
-
-    // 处理tags字段
-    const data = { ...practiceFormData.value }
-    if (typeof data.tags === 'string') {
-      data.tags = data.tags.split(',').map((t: string) => t.trim()).filter((t: string) => t)
-    }
-
-    try {
-      if (practiceIsEdit.value) {
-        await axios.put(`${API_BASE}/practices/${data.id}`, data)
-        ElMessage.success('更新成功')
-      } else {
-        await axios.post(`${API_BASE}/practices`, data)
-        ElMessage.success('创建成功')
-      }
-      practiceDialogVisible.value = false
-      await loadAllData()
-    } catch (error: any) {
-      ElMessage.error(error.response?.data?.message || '操作失败')
-    }
-  })
-}
-
-// 删除记录
-const deletePractice = async (row: any) => {
-  try {
-    await ElMessageBox.confirm('确定要删除这条记录吗？', '确认删除', { type: 'warning' })
-    await axios.delete(`${API_BASE}/practices/${row.id}`)
-    ElMessage.success('删除成功')
-    await loadAllData()
-  } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('删除失败')
-    }
-  }
-}
-
-// 导出所有
-const exportPractices = async () => {
-  try {
-    const res = await axios.get(`${API_BASE}/practices/export`, { responseType: 'blob' })
-    const url = window.URL.createObjectURL(new Blob([res.data]))
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `practices_${Date.now()}.json`
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    ElMessage.success('导出成功')
-  } catch {
-    ElMessage.error('导出失败')
-  }
-}
-
-// ===== 用户画像库 CRUD 方法 =====
-
-// 打开新增对话框
-const openProfileDialog = () => {
-  profileIsEdit.value = false
-  profileFormData.value = { title: '', category: 'preference', items: '[{"key": "", "value": ""}]' }
-  profileDialogVisible.value = true
-}
-
-// 打开编辑对话框
-const editProfile = (row: any) => {
-  profileIsEdit.value = true
-  profileFormData.value = { ...row }
-  profileDialogVisible.value = true
-}
-
-// 提交表单
-const submitProfileForm = async () => {
-  if (!profileFormRef.value) return
-  await profileFormRef.value.validate(async (valid: boolean) => {
-    if (!valid) return
-
-    // 验证JSON格式
-    try {
-      JSON.parse(profileFormData.value.items)
-    } catch (e) {
-      ElMessage.error('内容必须是有效的JSON格式')
-      return
-    }
-
-    const data = { ...profileFormData.value }
-
-    try {
-      if (profileIsEdit.value) {
-        await axios.put(`${API_BASE}/profiles/${data.id}`, data)
-        ElMessage.success('更新成功')
-      } else {
-        await axios.post(`${API_BASE}/profiles`, data)
-        ElMessage.success('创建成功')
-      }
-      profileDialogVisible.value = false
-      await loadAllData()
-    } catch (error: any) {
-      ElMessage.error(error.response?.data?.message || '操作失败')
-    }
-  })
-}
-
-// 删除记录
-const deleteProfile = async (row: any) => {
-  try {
-    await ElMessageBox.confirm('确定要删除这条记录吗？', '确认删除', { type: 'warning' })
-    await axios.delete(`${API_BASE}/profiles/${row.id}`)
-    ElMessage.success('删除成功')
-    await loadAllData()
-  } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('删除失败')
-    }
-  }
-}
-
-// 导出所有
-const exportProfiles = async () => {
-  try {
-    const res = await axios.get(`${API_BASE}/profiles/export`, { responseType: 'blob' })
-    const url = window.URL.createObjectURL(new Blob([res.data]))
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `profiles_${Date.now()}.json`
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    ElMessage.success('导出成功')
-  } catch {
-    ElMessage.error('导出失败')
-  }
-}
-
-// ===== 项目上下文库 CRUD 方法 =====
-
-// 打开新增对话框
-const openContextDialog = () => {
-  contextIsEdit.value = false
-  contextFormData.value = { title: '', projectPath: '', techStack: '', keyDecisions: '', structure: '' }
-  contextDialogVisible.value = true
-}
-
-// 打开编辑对话框
-const editContext = (row: any) => {
-  contextIsEdit.value = true
-  contextFormData.value = { ...row }
-  if (Array.isArray(contextFormData.value.techStack)) {
-    contextFormData.value.techStack = contextFormData.value.techStack.join(', ')
-  }
-  contextDialogVisible.value = true
-}
-
-// 提交表单
-const submitContextForm = async () => {
-  if (!contextFormRef.value) return
-  await contextFormRef.value.validate(async (valid: boolean) => {
-    if (!valid) return
-
-    // 处理techStack字段
-    const data = { ...contextFormData.value }
-    if (typeof data.techStack === 'string') {
-      data.techStack = data.techStack.split(',').map((t: string) => t.trim()).filter((t: string) => t)
-    }
-
-    try {
-      if (contextIsEdit.value) {
-        await axios.put(`${API_BASE}/contexts/${data.id}`, data)
-        ElMessage.success('更新成功')
-      } else {
-        await axios.post(`${API_BASE}/contexts`, data)
-        ElMessage.success('创建成功')
-      }
-      contextDialogVisible.value = false
-      await loadAllData()
-    } catch (error: any) {
-      ElMessage.error(error.response?.data?.message || '操作失败')
-    }
-  })
-}
-
-// 删除记录
-const deleteContext = async (row: any) => {
-  try {
-    await ElMessageBox.confirm('确定要删除这条记录吗？', '确认删除', { type: 'warning' })
-    await axios.delete(`${API_BASE}/contexts/${row.id}`)
-    ElMessage.success('删除成功')
-    await loadAllData()
-  } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('删除失败')
-    }
-  }
-}
-
-// 导出所有
-const exportContexts = async () => {
-  try {
-    const res = await axios.get(`${API_BASE}/contexts/export`, { responseType: 'blob' })
-    const url = window.URL.createObjectURL(new Blob([res.data]))
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `contexts_${Date.now()}.json`
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    ElMessage.success('导出成功')
-  } catch {
-    ElMessage.error('导出失败')
-  }
-}
-
-// ===== 技能沉淀库 CRUD 方法 =====
-
-// 打开新增对话框
-const openSkillDialog = () => {
-  skillIsEdit.value = false
-  skillFormData.value = { title: '', skillType: 'technique', description: '', steps: '', tags: '' }
-  skillDialogVisible.value = true
-}
-
-// 打开编辑对话框
-const editSkill = (row: any) => {
-  skillIsEdit.value = true
-  skillFormData.value = { ...row }
-  if (Array.isArray(skillFormData.value.tags)) {
-    skillFormData.value.tags = skillFormData.value.tags.join(', ')
-  }
-  skillDialogVisible.value = true
-}
-
-// 提交表单
-const submitSkillForm = async () => {
-  if (!skillFormRef.value) return
-  await skillFormRef.value.validate(async (valid: boolean) => {
-    if (!valid) return
-
-    // 处理tags字段
-    const data = { ...skillFormData.value }
-    if (typeof data.tags === 'string') {
-      data.tags = data.tags.split(',').map((t: string) => t.trim()).filter((t: string) => t)
-    }
-
-    try {
-      if (skillIsEdit.value) {
-        await axios.put(`${API_BASE}/skills/${data.id}`, data)
-        ElMessage.success('更新成功')
-      } else {
-        await axios.post(`${API_BASE}/skills`, data)
-        ElMessage.success('创建成功')
-      }
-      skillDialogVisible.value = false
-      await loadAllData()
-    } catch (error: any) {
-      ElMessage.error(error.response?.data?.message || '操作失败')
-    }
-  })
-}
-
-// 删除记录
-const deleteSkill = async (row: any) => {
-  try {
-    await ElMessageBox.confirm('确定要删除这条记录吗？', '确认删除', { type: 'warning' })
-    await axios.delete(`${API_BASE}/skills/${row.id}`)
-    ElMessage.success('删除成功')
-    await loadAllData()
-  } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('删除失败')
-    }
-  }
-}
-
-// 导出所有
-const exportSkills = async () => {
-  try {
-    const res = await axios.get(`${API_BASE}/skills/export`, { responseType: 'blob' })
-    const url = window.URL.createObjectURL(new Blob([res.data]))
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `skills_${Date.now()}.json`
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    ElMessage.success('导出成功')
-  } catch {
-    ElMessage.error('导出失败')
-  }
-}
-
 // ===== 对话记录导出方法 =====
 
 // 导出所有对话记录
@@ -2458,21 +1837,34 @@ onMounted(() => {
 <style scoped>
 .app-container {
   min-height: 100vh;
-  max-width: 1400px;
-  margin: 0 auto;
   background: #f5f7fa;
 }
 
 .app-header {
-  display: flex;
-  align-items: center;
-  padding: 0 16px;
   background: #fff;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
   position: sticky;
   top: 0;
   z-index: 100;
+}
+
+.app-header-inner {
+  display: flex;
+  align-items: center;
   gap: 16px;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 16px;
+  height: 50px;
+}
+
+.app-main {
+  display: flex;
+  padding: 24px 16px;
+  gap: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+  box-sizing: border-box;
 }
 
 .logo {
@@ -2511,12 +1903,6 @@ onMounted(() => {
 
 .main-menu .el-menu-item .el-icon {
   font-size: 18px;
-}
-
-.app-main {
-  display: flex;
-  padding: 24px;
-  gap: 24px;
 }
 
 .content-panel {

@@ -6,13 +6,13 @@ import psycopg2
 import os
 from datetime import datetime
 
-# PostgreSQL 连接
+# PostgreSQL 连接 - 使用环境变量
 conn = psycopg2.connect(
-    host='localhost',
-    port=5500,
-    database='agentmemory',
-    user='agentmemory',
-    password='agentmemory123'
+    host=os.environ.get('DATABASE_HOST', 'localhost'),
+    port=int(os.environ.get('DATABASE_PORT', 5500)),
+    database=os.environ.get('DATABASE_NAME', 'agentmemory'),
+    user=os.environ.get('DATABASE_USER', 'agentmemory'),
+    password=os.environ.get('DATABASE_PASSWORD', 'agentmemory123')
 )
 
 c = conn.cursor()
