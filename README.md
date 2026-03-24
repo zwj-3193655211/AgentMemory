@@ -10,29 +10,49 @@
 
 自动监控你的 AI 编程助手（Claude Code、iFlow、Qwen 等）的对话，提取有价值的信息，支持语义搜索。
 
+## 📋 前置依赖
+
+| 依赖 | 版本要求 | 用途 |
+|------|---------|------|
+| Java (JDK) | 17+ | 后端服务 |
+| Python | 3.8+ | Embedding 服务 |
+| Node.js | 18+ | 前端服务 |
+| Docker | 最新版 | PostgreSQL 数据库 |
+
 ## 🚀 5 分钟快速开始
 
-### 1️⃣ 启动数据库
+### 1️⃣ 克隆项目
 
 ```bash
-# 使用 Docker 启动 PostgreSQL（推荐）
-docker-compose up -d
-
-# 或者使用本地 PostgreSQL
-psql -U postgres -c "CREATE DATABASE agent_memory;"
+git clone https://github.com/zwj-3193655211/AgentMemory.git
+cd AgentMemory
 ```
 
 ### 2️⃣ 配置环境
 
 ```bash
-# 设置数据库密码
-export DATABASE_PASSWORD=agentmemory123
+# 复制环境变量模板
+cp .env.example .env
 
-# 或者修改配置文件
-# 编辑 backend/src/main/resources/application.conf
+# 编辑 .env，设置你的 JAVA_HOME 路径
+# 例如：JAVA_HOME=C:\Program Files\Java\jdk-21
 ```
 
-### 3️⃣ 启动服务
+### 3️⃣ 安装依赖
+
+```bash
+# Embedding 服务依赖
+cd embedding_service
+pip install -r requirements.txt
+cd ..
+
+# 前端依赖
+cd frontend
+npm install
+cd ..
+```
+
+### 4️⃣ 启动服务
 
 ```bash
 # Windows
@@ -42,10 +62,11 @@ start.bat
 ./start.sh
 ```
 
-### 4️⃣ 访问界面
+### 5️⃣ 访问界面
 
-- **Web 界面**: http://localhost:3000
+- **Web 界面**: http://localhost:5173
 - **API 服务**: http://localhost:8080
+- **Embedding**: http://localhost:8100
 
 ## ✨ 主要功能
 
@@ -177,9 +198,9 @@ docker ps | grep agentmemory-db
 
 **A**: 需要启动 Embedding 服务：
 ```bash
-cd embedding-service
+cd embedding_service
 pip install -r requirements.txt
-python app.py
+python embed_server.py
 ```
 
 ### Q: 如何备份数据？
@@ -199,6 +220,21 @@ MIT License - 详见 [LICENSE](LICENSE) 文件
 
 ---
 
-**版本**: 2.0.0
+**版本**: 2.1.0
 **最后更新**: 2026-03-23
 **问题反馈**: [GitHub Issues](https://github.com/yourname/AgentMemory/issues)
+
+---
+
+## 🔄 项目状态
+
+**当前版本**: v2.1.0 (后端重构完成)
+
+**重构进度**: 35% 完成
+- ✅ 后端重构: 100% (减少 426 行代码，-46%)
+- 🔄 后端优化: 40% (P0/P1 问题修复中)
+- ⏸️ 前端重构: 0% (预计减少 1900 行重复代码)
+
+**详细报告**: [项目重构总体状态](docs/plans/2026-03-23-project-refactor-status.md)
+
+**代码质量**: ⭐⭐⭐⭐ (4/5)
