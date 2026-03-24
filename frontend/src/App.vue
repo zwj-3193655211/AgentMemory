@@ -818,6 +818,14 @@
         <el-form-item label="日志路径">
           <el-input v-model="newAgent.logBasePath" placeholder="如: ~/.myagent/sessions" />
         </el-form-item>
+        <el-form-item label="解析器类型">
+          <el-select v-model="newAgent.parserType" placeholder="选择日志格式" style="width: 100%">
+            <el-option label="OpenClaw 格式" value="openclaw" />
+            <el-option label="Claude Code 格式" value="claude" />
+            <el-option label="iFlow CLI 格式" value="iflow" />
+            <el-option label="Qwen/Qoder 格式" value="qwen" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="启用监控">
           <el-switch v-model="newAgent.enabled" />
         </el-form-item>
@@ -1070,6 +1078,7 @@ const newAgent = ref({
   name: '',
   displayName: '',
   logBasePath: '',
+  parserType: 'openclaw',
   enabled: true
 })
 
@@ -1329,7 +1338,7 @@ const addCustomAgent = async () => {
     await axios.post(`${API_BASE}/agents`, newAgent.value)
     ElMessage.success('添加成功')
     showAddAgentDialog.value = false
-    newAgent.value = { name: '', displayName: '', logBasePath: '', enabled: true }
+    newAgent.value = { name: '', displayName: '', logBasePath: '', parserType: 'openclaw', enabled: true }
     await loadAllData()
   } catch (e: any) {
     ElMessage.error(e.response?.data?.message || '添加失败')

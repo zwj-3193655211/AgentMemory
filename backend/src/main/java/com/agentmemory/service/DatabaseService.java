@@ -273,17 +273,18 @@ public class DatabaseService {
         String sql;
         if (useSqlite) {
             sql = """
-                INSERT OR REPLACE INTO agents (name, type, log_base_path, cli_path, version, enabled)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT OR REPLACE INTO agents (name, type, log_base_path, cli_path, version, parser_type, enabled)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """;
         } else {
             sql = """
-                INSERT INTO agents (name, type, log_base_path, cli_path, version, enabled)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO agents (name, type, log_base_path, cli_path, version, parser_type, enabled)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (name) DO UPDATE SET
                     log_base_path = EXCLUDED.log_base_path,
                     cli_path = EXCLUDED.cli_path,
                     version = EXCLUDED.version,
+                    parser_type = EXCLUDED.parser_type,
                     updated_at = CURRENT_TIMESTAMP
                 """;
         }
@@ -297,7 +298,8 @@ public class DatabaseService {
                 stmt.setString(3, agent.getLogPath());
                 stmt.setString(4, agent.getCliPath());
                 stmt.setString(5, agent.getVersion());
-                stmt.setBoolean(6, agent.isEnabled());
+                stmt.setString(6, agent.getParserType());
+                stmt.setBoolean(7, agent.isEnabled());
                 stmt.executeUpdate();
             }
             

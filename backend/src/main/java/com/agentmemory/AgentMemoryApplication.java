@@ -70,8 +70,9 @@ public class AgentMemoryApplication {
         for (AgentInfo agent : agents) {
             Path watchPath = expandHomePath(agent.getLogPath());
             if (watchPath.toFile().exists()) {
-                fileWatcherService.watchDirectory(agent.getType(), watchPath);
-                log.info("      监控: {}", watchPath);
+                String parserType = agent.getParserType() != null ? agent.getParserType() : agent.getType();
+                fileWatcherService.watchDirectory(agent.getType(), parserType, watchPath);
+                log.info("      监控: {} (解析器: {})", watchPath, parserType);
             } else {
                 log.warn("      路径不存在，跳过: {}", watchPath);
             }
@@ -88,6 +89,7 @@ public class AgentMemoryApplication {
         
         // 6. 启动 API 服务
         log.info("[6/7] 启动 API 服务...");
+        apiServer.setCompressionService(compressionService);
         apiServer.start();
         log.info("      API 地址: http://localhost:{}", config.getApiPort());
         

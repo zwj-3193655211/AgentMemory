@@ -2,6 +2,7 @@ package com.agentmemory.api;
 
 import com.agentmemory.service.DatabaseService;
 import com.agentmemory.service.FileWatcherService;
+import com.agentmemory.service.SessionCompressionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -38,6 +39,7 @@ public class ApiServer {
     private final ObjectMapper objectMapper;
     private HttpServer server;
     private final int port;
+    private SessionCompressionService compressionService;
     
     public ApiServer(DatabaseService databaseService, FileWatcherService fileWatcherService, int port) {
         this.databaseService = databaseService;
@@ -46,6 +48,10 @@ public class ApiServer {
         this.objectMapper = new ObjectMapper();
         this.objectMapper.registerModule(new JavaTimeModule());
         this.objectMapper.enable(SerializationFeature.INDENT_OUTPUT);
+    }
+    
+    public void setCompressionService(SessionCompressionService compressionService) {
+        this.compressionService = compressionService;
     }
     
     public void start() throws IOException {
@@ -308,6 +314,7 @@ public class ApiServer {
                     String displayName = (String) input.getOrDefault("displayName", name);
                     String logBasePath = (String) input.get("logBasePath");
                     String cliPath = (String) input.getOrDefault("cliPath", "");
+                    String parserType = (String) input.getOrDefault("parserType", "openclaw");
                     Boolean enabled = input.containsKey("enabled") ? (Boolean) input.get("enabled") : true;
                     
                     if (name == null || name.isEmpty()) {
@@ -317,18 +324,20 @@ public class ApiServer {
                     
                     // 插入或更新 Agent
                     executeUpdate(
-                        "INSERT INTO agents (name, display_name, log_base_path, cli_path, enabled) VALUES (?, ?, ?, ?, ?) " +
-                        "ON CONFLICT(name) DO UPDATE SET display_name = ?, log_base_path = ?, cli_path = ?, enabled = ?",
+                        "INSERT INTO agents (name, display_name, log_base_path, cli_path, parser_type, enabled) VALUES (?, ?, ?, ?, ?, ?) " +
+                        "ON CONFLICT(name) DO UPDATE SET display_name = ?, log_base_path = ?, cli_path = ?, parser_type = ?, enabled = ?",
                         stmt -> {
                             stmt.setString(1, name);
                             stmt.setString(2, displayName);
                             stmt.setString(3, logBasePath);
                             stmt.setString(4, cliPath);
-                            stmt.setBoolean(5, enabled);
-                            stmt.setString(6, displayName);
-                            stmt.setString(7, logBasePath);
-                            stmt.setString(8, cliPath);
-                            stmt.setBoolean(9, enabled);
+                            stmt.setString(5, parserType);
+                            stmt.setBoolean(6, enabled);
+                            stmt.setString(7, displayName);
+                            stmt.setString(8, logBasePath);
+                            stmt.setString(9, cliPath);
+                            stmt.setString(10, parserType);
+                            stmt.setBoolean(11, enabled);
                         }
                     );
                     
@@ -337,7 +346,7 @@ public class ApiServer {
                         try {
                             Path dir = Paths.get(logBasePath.replace("~", System.getProperty("user.home")));
                             if (Files.exists(dir)) {
-                                fileWatcherService.watchDirectory(name, dir);
+                                fileWatcherService.watchDirectory(name, parserType, dir);
                             }
                         } catch (Exception e) {
                             log.warn("启动监控失败: " + name, e);
@@ -358,6 +367,7 @@ public class ApiServer {
                         agent.put("displayName", rs.getString("display_name"));
                         agent.put("logBasePath", rs.getString("log_base_path"));
                         agent.put("cliPath", rs.getString("cli_path"));
+                        agent.put("parserType", rs.getString("parser_type"));
                         agent.put("version", rs.getString("version"));
                         agent.put("enabled", rs.getBoolean("enabled"));
                         return agent;
@@ -1682,8 +1692,83 @@ public class ApiServer {
                 
                 // PUT: 手动触发压缩
                 if ("PUT".equalsIgnoreCase(method)) {
-                    // 触发压缩任务（这里简单返回成功，实际由后台服务处理）
-                    sendJson(exchange, Map.of("status", "ok", "message", "压缩任务已触发"));
+                    if (compressionService == null) {
+                        sendJson(exchange, Map.of("status", "error", "message", "压缩服务未初始化"));
+                        return;
+                    }
+                    
+                    // 查找需要压缩的会话（消息数超过阈值）
+                    List<String> sessionsToCompress = new ArrayList<>();
+                    int threshold = 100;
+                    try (Connection conn = databaseService.getConnection();
+                         Statement stmt = conn.createStatement();
+                         ResultSet rs = stmt.executeQuery(
+                             "SELECT summary_threshold FROM compression_config WHERE config_key = 'session_compression'")) {
+                        if (rs.next()) threshold = rs.getInt(1);
+                    }
+                    
+                    try (Connection conn = databaseService.getConnection();
+                         PreparedStatement stmt = conn.prepareStatement(
+                             "SELECT id FROM sessions WHERE message_count > ? " +
+                             "AND (is_compressed = false OR is_compressed IS NULL) LIMIT 10")) {
+                        stmt.setInt(1, threshold);
+                        try (ResultSet rs = stmt.executeQuery()) {
+                            while (rs.next()) {
+                                sessionsToCompress.add(rs.getString("id"));
+                            }
+                        }
+                    }
+                    
+                    if (sessionsToCompress.isEmpty()) {
+                        sendJson(exchange, Map.of("status", "ok", "message", "没有需要压缩的会话", "compressedCount", 0));
+                        return;
+                    }
+                    
+                    // 执行压缩
+                    int successCount = 0;
+                    for (String sessionId : sessionsToCompress) {
+                        if (compressionService.compressSessionManual(sessionId)) {
+                            successCount++;
+                        }
+                    }
+                    
+                    sendJson(exchange, Map.of(
+                        "status", "ok", 
+                        "message", "压缩完成", 
+                        "compressedCount", successCount,
+                        "totalSessions", sessionsToCompress.size()
+                    ));
+                    return;
+                }
+                
+                // POST /api/compression/compress: 压缩指定会话（可指定压缩类型）
+                if ("POST".equalsIgnoreCase(method) && path.endsWith("/compress")) {
+                    Map<String, Object> input = readRequestBody(exchange);
+                    String sessionId = (String) input.get("sessionId");
+                    String compressionType = (String) input.get("compressionType");  // 可选
+                    
+                    if (sessionId == null || sessionId.isEmpty()) {
+                        sendJson(exchange, Map.of("status", "error", "message", "缺少 sessionId"));
+                        return;
+                    }
+                    
+                    if (compressionService == null) {
+                        sendJson(exchange, Map.of("status", "error", "message", "压缩服务未初始化"));
+                        return;
+                    }
+                    
+                    boolean success;
+                    if (compressionType != null && !compressionType.isEmpty()) {
+                        success = compressionService.compressSessionWithType(sessionId, compressionType);
+                    } else {
+                        success = compressionService.compressSessionManual(sessionId);
+                    }
+                    
+                    if (success) {
+                        sendJson(exchange, Map.of("status", "ok", "message", "压缩成功", "sessionId", sessionId, "compressionType", compressionType));
+                    } else {
+                        sendJson(exchange, Map.of("status", "error", "message", "压缩失败"));
+                    }
                     return;
                 }
                 
@@ -1851,15 +1936,22 @@ public class ApiServer {
         private int executeCleanup(int days) throws SQLException {
             int total = 0;
             
-            // 软删除超过指定天数的会话
+            // 硬删除超过指定天数的会话及其关联数据
             try (Connection conn = databaseService.getConnection()) {
-                String sql = "UPDATE sessions SET deleted = true, expires_at = NOW() WHERE created_at < NOW() - INTERVAL '" + days + " days' AND (deleted = false OR deleted IS NULL)";
+                // 先删除关联的消息
+                String sql = "DELETE FROM messages WHERE session_id IN (SELECT id FROM sessions WHERE created_at < NOW() - INTERVAL '" + days + " days')";
                 try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                     total += stmt.executeUpdate();
                 }
                 
-                // 软删除超过指定天数的消息
-                sql = "UPDATE messages SET deleted = true, expires_at = NOW() WHERE created_at < NOW() - INTERVAL '" + days + " days' AND (deleted = false OR deleted IS NULL)";
+                // 删除会话
+                sql = "DELETE FROM sessions WHERE created_at < NOW() - INTERVAL '" + days + " days'";
+                try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                    total += stmt.executeUpdate();
+                }
+                
+                // 删除过期的压缩历史
+                sql = "DELETE FROM compression_history WHERE created_at < NOW() - INTERVAL '" + days + " days'";
                 try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                     total += stmt.executeUpdate();
                 }

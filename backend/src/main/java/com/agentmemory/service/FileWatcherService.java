@@ -69,18 +69,21 @@ public class FileWatcherService {
     
     /**
      * 开始监控指定目录
+     * @param agentType Agent类型名称（用于标识和存储）
+     * @param parserType 解析器类型（iflow/claude/openclaw/qwen）
+     * @param directory 监控目录
      */
-    public void watchDirectory(String agentType, Path directory) {
+    public void watchDirectory(String agentType, String parserType, Path directory) {
         // 首次调用时加载文件位置
         loadFilePositionsFromDatabase();
         executor.submit(() -> {
-            startWatcher(agentType, directory);
+            startWatcher(agentType, parserType, directory);
         });
     }
     
     private boolean filePositionsLoaded = false;
     
-    private void startWatcher(String agentType, Path directory) {
+    private void startWatcher(String agentType, String parserType, Path directory) {
         // 使用 try-with-resources 确保 WatchService 正确关闭
         try (WatchService watchService = FileSystems.getDefault().newWatchService()) {
 
@@ -88,10 +91,10 @@ public class FileWatcherService {
             registerDirectoryTree(directory, watchService);
 
             running = true;
-            log.info("开始监控 [{}] 目录: {}", agentType, directory);
+            log.info("开始监控 [{}] 目录: {} (解析器: {})", agentType, directory, parserType);
 
             // 首次扫描已有文件
-            scanExistingFiles(agentType, directory);
+            scanExistingFiles(agentType, parserType, directory);
 
             while (running) {
                 WatchKey key;
@@ -111,7 +114,7 @@ public class FileWatcherService {
                 }
 
                 for (WatchEvent<?> event : key.pollEvents()) {
-                    handleWatchEvent(agentType, watchDir, event);
+                    handleWatchEvent(agentType, parserType, watchDir, event);
                 }
 
                 key.reset();
@@ -137,18 +140,18 @@ public class FileWatcherService {
             });
     }
     
-    private void scanExistingFiles(String agentType, Path directory) {
+    private void scanExistingFiles(String agentType, String parserType, Path directory) {
         try {
             Files.walk(directory)
                 .filter(Files::isRegularFile)
                 .filter(p -> p.toString().endsWith(".jsonl"))
-                .forEach(file -> processJsonlFile(agentType, file));
+                .forEach(file -> processJsonlFile(agentType, parserType, file));
         } catch (IOException e) {
             log.error("扫描已有文件失败", e);
         }
     }
     
-    private void handleWatchEvent(String agentType, Path watchDir, WatchEvent<?> event) {
+    private void handleWatchEvent(String agentType, String parserType, Path watchDir, WatchEvent<?> event) {
         WatchEvent.Kind<?> kind = event.kind();
         
         if (kind == StandardWatchEventKinds.OVERFLOW) {
@@ -160,10 +163,10 @@ public class FileWatcherService {
         if (filePath.toString().endsWith(".jsonl")) {
             if (kind == StandardWatchEventKinds.ENTRY_CREATE) {
                 log.debug("新文件: {}", filePath);
-                processJsonlFile(agentType, filePath);
+                processJsonlFile(agentType, parserType, filePath);
             } else if (kind == StandardWatchEventKinds.ENTRY_MODIFY) {
                 log.debug("文件修改: {}", filePath);
-                processJsonlFileIncremental(agentType, filePath);
+                processJsonlFileIncremental(agentType, parserType, filePath);
             }
         }
     }
@@ -171,7 +174,7 @@ public class FileWatcherService {
     /**
      * 处理 JSONL 文件（完整读取）
      */
-    private void processJsonlFile(String agentType, Path file) {
+    private void processJsonlFile(String agentType, String parserType, Path file) {
         String fileName = file.toString();
         
         // 获取文件级锁，防止并发处理同一文件
@@ -192,7 +195,7 @@ public class FileWatcherService {
                     }
                     
                     if (!line.trim().isEmpty()) {
-                        processJsonlLine(agentType, file, line);
+                        processJsonlLine(agentType, parserType, file, line);
                     }
                     
                     filePositions.put(fileName, currentPos);
@@ -208,34 +211,35 @@ public class FileWatcherService {
     /**
      * 处理 JSONL 文件（增量读取）
      */
-    private void processJsonlFileIncremental(String agentType, Path file) {
-        processJsonlFile(agentType, file);  // 使用相同的逻辑，通过位置追踪实现增量
+    private void processJsonlFileIncremental(String agentType, String parserType, Path file) {
+        processJsonlFile(agentType, parserType, file);  // 使用相同的逻辑，通过位置追踪实现增量
     }
     
     /**
      * 解析 JSONL 行并存储
+     * @param agentType Agent类型名称（用于标识和存储）
+     * @param parserType 解析器类型（iflow/claude/openclaw/qwen）
      */
-    private void processJsonlLine(String agentType, Path file, String line) {
+    private void processJsonlLine(String agentType, String parserType, Path file, String line) {
         try {
             JsonNode node = objectMapper.readTree(line);
             
-            // 根据不同的 Agent 类型解析
+            // 根据 parserType 选择解析器
             Message message = null;
             
-            if ("iflow".equals(agentType)) {
+            if ("iflow".equals(parserType)) {
                 message = parseIFlowMessage(node, file);
-            } else if ("claude".equals(agentType)) {
+            } else if ("claude".equals(parserType)) {
                 message = parseClaudeMessage(node, file);
-            } else if ("openclaw".equals(agentType)) {
+            } else if ("openclaw".equals(parserType)) {
                 message = parseOpenClawMessage(node, file);
-            } else if ("qwen".equals(agentType) || "qoder".equals(agentType)) {
-                message = parseQwenMessage(node, file);  // qoder 格式与 qwen 相同
-                if ("qoder".equals(agentType)) {
-                    message.setAgentType("qoder");
-                }
+            } else if ("qwen".equals(parserType)) {
+                message = parseQwenMessage(node, file);
             }
             
             if (message != null) {
+                // 使用 agentType 而非 parserType 作为消息的 agentType
+                message.setAgentType(agentType);
                 databaseService.saveMessage(message);
                 log.debug("已保存消息: {} - {}", message.getId(), message.getRole());
                 

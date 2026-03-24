@@ -10,6 +10,7 @@ public class AgentInfo {
     private String cliPath;
     private String version;
     private boolean enabled;
+    private String parserType;  // 解析器类型：iflow, claude, openclaw, qwen
     
     public AgentInfo() {}
     
@@ -39,6 +40,9 @@ public class AgentInfo {
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
     
+    public String getParserType() { return parserType; }
+    public void setParserType(String parserType) { this.parserType = parserType; }
+    
     @Override
     public String toString() {
         return "AgentInfo{" +
@@ -46,6 +50,7 @@ public class AgentInfo {
                 ", type='" + type + '\'' +
                 ", logPath='" + logPath + '\'' +
                 ", cliPath='" + cliPath + '\'' +
+                ", parserType='" + parserType + '\'' +
                 '}';
     }
 }

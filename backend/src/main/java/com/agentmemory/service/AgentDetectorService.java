@@ -87,7 +87,7 @@ public class AgentDetectorService {
     /**
      * 检测 Agent 的公共方法
      * @param name 显示名称
-     * @param type Agent 类型（用于 PATH 检测）
+     * @param type Agent 类型（用于 PATH 检测和作为默认解析器类型）
      * @param pathParts 相对于用户主目录的路径部分
      */
     private AgentInfo detectAgent(String name, String type, String... pathParts) {
@@ -96,8 +96,8 @@ public class AgentDetectorService {
             AgentInfo agent = new AgentInfo();
             agent.setName(name);
             agent.setType(type);
-            // logPath 使用最后一个路径部分
             agent.setLogPath(agentDir.toString());
+            agent.setParserType(type);  // 默认解析器类型与 Agent 类型相同
             
             String cliPath = findInPath(type.toLowerCase());
             agent.setCliPath(cliPath);
