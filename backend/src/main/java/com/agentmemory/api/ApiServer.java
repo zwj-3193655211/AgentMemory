@@ -408,9 +408,10 @@ public class ApiServer {
             }
 
             // 使用 PreparedStatement 防止 SQL 注入
+            // 支持 agent_types 数组查询：同一个 session 可以属于多个 agent
             String sql = "SELECT * FROM sessions WHERE deleted = false";
             if (agentType != null) {
-                sql += " AND agent_type = ?";
+                sql += " AND (? = ANY(agent_types) OR agent_type = ?)";
             }
             sql += " ORDER BY created_at DESC LIMIT ? OFFSET ?";
 
@@ -419,6 +420,7 @@ public class ApiServer {
 
                 int paramIndex = 1;
                 if (agentType != null) {
+                    stmt.setString(paramIndex++, agentType);
                     stmt.setString(paramIndex++, agentType);
                 }
                 stmt.setInt(paramIndex++, limit);
@@ -431,6 +433,7 @@ public class ApiServer {
                     Map<String, Object> session = new HashMap<>();
                     session.put("id", rs.getString("id"));
                     session.put("agentType", rs.getString("agent_type"));
+                    session.put("agentTypes", rs.getArray("agent_types"));
                     session.put("projectPath", rs.getString("project_path"));
                     session.put("messageCount", rs.getInt("message_count"));
                     session.put("createdAt", rs.getTimestamp("created_at"));
