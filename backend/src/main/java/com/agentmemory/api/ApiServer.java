@@ -1606,12 +1606,13 @@ public class ApiServer {
                         if (rs.next()) stats.put("compressedSessions", rs.getInt(1));
                     }
                     
-                    // 待压缩会话数（消息数超过阈值的）
+                    // 待压缩会话数（消息数超过阈值且未压缩的）
                     try (Connection conn = databaseService.getConnection();
                          Statement stmt = conn.createStatement();
                          ResultSet rs = stmt.executeQuery(
                              "SELECT COUNT(*) FROM sessions WHERE message_count > COALESCE(" +
-                             "(SELECT summary_threshold FROM compression_config WHERE config_key = 'session_compression'), 100)")) {
+                             "(SELECT summary_threshold FROM compression_config WHERE config_key = 'session_compression'), 100) " +
+                             "AND (is_compressed = false OR is_compressed IS NULL)")) {
                         if (rs.next()) stats.put("pendingSessions", rs.getInt(1));
                     }
                     
