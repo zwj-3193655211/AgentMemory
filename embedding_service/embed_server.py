@@ -40,6 +40,8 @@ import threading
 # 配置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+# 隐藏 werkzeug 开发服务器警告
+logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
 app = Flask(__name__)
 CORS(app)
@@ -136,7 +138,7 @@ def load_config():
                 LLM_API_KEY = config['llm_api_key']
             if 'llm_api_model' in config and not os.environ.get('LLM_API_MODEL'):
                 LLM_API_MODEL = config['llm_api_model']
-            if 'llm_local_model' in config and not os.environ.get('LLM_LOCAL_MODEL'):
+            if 'llm_local_model' in config and config['llm_local_model'] and not os.environ.get('LLM_LOCAL_MODEL'):
                 LLM_LOCAL_MODEL = config['llm_local_model']
             if 'embedding_model' in config and not os.environ.get('EMBEDDING_MODEL'):
                 EMBEDDING_MODEL = config['embedding_model']
@@ -148,23 +150,113 @@ def load_config():
 # 启动时加载配置
 load_config()
 
-# 提取提示词
-EXTRACTION_PROMPT = """分析以下对话内容，提取结构化记忆信息。
+# ========== 预处理过滤 ==========
+def preprocess_content(content: str) -> tuple[str, bool]:
+    """预处理对话内容，过滤无效信息
+    
+    返回: (清理后的内容, 是否应该跳过)
+    """
+    if not content or len(content.strip()) < 10:
+        return '', True
+    
+    original_len = len(content)
+    
+    # 1. 过滤 AI 思考过程标记
+    thinking_patterns = [
+        r'✻\s*Thinking\.\.\..*?(?=✦|\n\n|\Z)',  # ✻ Thinking... 块
+        r'✦[^✦]*?(?=\n\n|\Z)',  # ✦ 开头的思考块
+        r'<think>.*?</think>',  # <think>标签
+        r'\[Thinking\].*?\[/Thinking\]',  # [Thinking]标签
+    ]
+    for pattern in thinking_patterns:
+        content = re.sub(pattern, '', content, flags=re.DOTALL | re.IGNORECASE)
+    
+    # 2. 过滤工具调用日志
+    tool_log_patterns = [
+        r'✗\s*\w+.*?(?:error|failed|timeout).*?(?=\n|$)',  # ✗ tool error
+        r'▶\s*(?:Input|Result).*?(?=\n▶|\n✗|\n\n|\Z)',  # ▶ Input/Result 块
+        r'\[(?:web_search|web_fetch|read_file|write_file|run_shell).*?\].*?(?=\n\[|\n\n|\Z)',  # [tool] logs
+        r'Tool call.*?(?:error|failed|success).*?(?=\n|$)',  # Tool call logs
+    ]
+    for pattern in tool_log_patterns:
+        content = re.sub(pattern, '', content, flags=re.DOTALL | re.IGNORECASE)
+    
+    # 3. 过滤 HTTP/系统日志
+    http_log_patterns = [
+        r'(?:GET|POST|PUT|DELETE)\s+/api/.*?(?=\n|$)',  # HTTP requests
+        r'\[\d{4}-\d{2}-\d{2}.*?\].*?(?=\n|$)',  # Timestamp logs
+        r'\[(?:WorkerManage|conversationBridge|ACP|CDP)\].*?(?=\n|$)',  # System logs
+        r'\d{3}\s+in\s+\d+ms.*?(?=\n|$)',  # Response time logs
+        r'Starting\.\.\.|Ready in.*?(?=\n|$)',  # Startup logs
+    ]
+    for pattern in http_log_patterns:
+        content = re.sub(pattern, '', content, flags=re.MULTILINE)
+    
+    # 4. 过滤错误堆栈（保留错误信息，移除详细堆栈）
+    # 只保留第一行错误，移除后续堆栈
+    stack_trace_pattern = r'(File\s+".*?",\s*line\s+\d+.*?(?=\n\n|\Z))'
+    content = re.sub(stack_trace_pattern, '', content, flags=re.DOTALL)
+    
+    # 5. 清理多余空白
+    content = re.sub(r'\n{3,}', '\n\n', content)  # 多个换行变两个
+    content = re.sub(r'[ \t]+', ' ', content)  # 多个空格变一个
+    content = content.strip()
+    
+    # 6. 检查是否有效
+    if len(content) < 10:
+        return '', True
+    
+    # 如果过滤掉太多（超过70%），可能是纯日志，跳过
+    if len(content) < original_len * 0.3:
+        logger.info(f"预处理过滤过多 ({original_len} -> {len(content)})，可能为日志内容")
+        return '', True
+    
+    return content, False
 
-对话内容：
+
+# 提取提示词 - 优化版
+EXTRACTION_PROMPT = """你是记忆提取专家。分析对话内容，提取结构化记忆。
+
+【五大记忆库定义】
+
+1. **ERROR_CORRECTION（错误纠正）**
+   - 核心：已发生的具体问题 + 验证过的解决方案
+   - 必须有：问题现象 + 根因分析 + 解决方案
+   - 触发词：错误、报错、失败、异常 + 解决了、原因是、改成
+
+2. **USER_PROFILE（用户偏好）**
+   - 核心：用户的偏好、习惯、约束
+   - 关键：约束比偏好更重要（"不要"比"要"更有价值）
+   - 触发词：我喜欢、我偏好、我不用、请记住、以后、拒绝
+
+3. **BEST_PRACTICE（最佳实践）**
+   - 核心：特定场景下验证过有效的做法
+   - 必须有：场景边界 + 权衡取舍
+   - 触发词：建议、推荐、应该、最好 + 当...时、在...场景
+
+4. **PROJECT_CONTEXT（项目上下文）**
+   - 核心：项目技术背景、架构决策、目录结构
+   - 触发词：项目、技术栈、框架、目录结构、架构决策
+
+5. **SKILL（技能沉淀）**
+   - 核心：可复用的能力包（脚本、模板、踩坑点）
+   - 必须有：步骤 + 踩坑点（AI无法推导的知识）
+   - 触发词：擅长、精通、步骤、流程、模板、脚本
+
+【对话内容】
 {content}
 
-请判断属于哪种类型并提取信息：
-1. ERROR_CORRECTION（错误纠正）: problem, cause, solution
-2. USER_PROFILE（用户偏好）: preference, category  
-3. BEST_PRACTICE（最佳实践）: scenario, practice
-4. PROJECT_CONTEXT（项目上下文）: project_name, tech_stack[], key_info
-5. SKILL（技能沉淀）: skill_name, steps[], prerequisites
-
-无价值信息返回: {"type": "SKIP", "reason": "原因"}
-
+【输出要求】
 严格按JSON格式返回：
-{"type": "类型", "title": "简短标题", "tags": ["标签"], "extracted": {...}}"""
+{"type": "类型", "title": "简短标题(≤30字)", "tags": ["标签"], "extracted": {...具体字段...}}
+
+ERROR_CORRECTION extracted: {"problem": "问题现象", "cause": "根因", "solution": "解决方案"}
+USER_PROFILE extracted: {"preference": "偏好内容", "category": "分类", "constraint": "约束条件"}
+BEST_PRACTICE extracted: {"scenario": "适用场景", "practice": "具体做法", "rationale": "原理说明"}
+PROJECT_CONTEXT extracted: {"project_name": "项目名", "tech_stack": ["技术栈"], "key_info": "关键信息"}
+SKILL extracted: {"skill_name": "技能名", "steps": ["步骤1", "步骤2"], "gotchas": "踩坑点"}
+
+无价值内容返回: {"type": "SKIP", "reason": "原因"}"""
 
 # 模型缓存
 embedding_model = None
@@ -227,6 +319,21 @@ def check_model_exists(model_id: str) -> bool:
     return False
 
 
+def get_local_snapshot_path(model_id: str) -> str:
+    """获取模型的本地快照路径，用于完全离线加载"""
+    from pathlib import Path
+    cache_dir = Path(MODEL_CACHE).expanduser().resolve()
+    model_folder = model_id.replace('/', '--')
+    snapshots_path = cache_dir / f"models--{model_folder}" / "snapshots"
+    
+    if snapshots_path.exists():
+        snapshots = list(snapshots_path.iterdir())
+        if snapshots:
+            # 返回第一个有效的快照路径
+            return str(snapshots[0].resolve())
+    return None
+
+
 def get_embedding_model(model_id=None):
     """加载 embedding 模型，支持动态切换和按需下载"""
     global embedding_model, _current_embedding_model_id
@@ -245,18 +352,6 @@ def get_embedding_model(model_id=None):
             # 检查模型是否已下载
             model_exists = check_model_exists(model_id)
             
-            # 根据模型是否存在设置离线/在线模式
-            if model_exists:
-                logger.info(f"模型 {model_id} 已存在，使用离线模式加载")
-                os.environ['HF_HUB_OFFLINE'] = '1'
-                os.environ['TRANSFORMERS_OFFLINE'] = '1'
-            else:
-                logger.info(f"模型 {model_id} 未下载，将从网络下载")
-                os.environ.pop('HF_HUB_OFFLINE', None)
-                os.environ.pop('TRANSFORMERS_OFFLINE', None)
-                # 使用国内镜像加速
-                os.environ['HF_ENDPOINT'] = HF_MIRROR
-            
             # 如果切换模型，先释放旧模型
             if embedding_model is not None:
                 del embedding_model
@@ -264,10 +359,31 @@ def get_embedding_model(model_id=None):
             
             try:
                 logger.info(f"加载 embedding 模型 ({model_id})...")
-                embedding_model = SentenceTransformer(
-                    model_id,
-                    cache_folder=MODEL_CACHE
-                )
+                
+                if model_exists:
+                    # 关键修复：使用本地快照路径直接加载，完全避免联网
+                    # sentence_transformers 即使设置 local_files_only=True 仍可能尝试联网验证
+                    local_path = get_local_snapshot_path(model_id)
+                    if local_path:
+                        logger.info(f"使用本地快照路径加载: {local_path}")
+                        embedding_model = SentenceTransformer(local_path)
+                    else:
+                        # 回退到原来的方式（不应该发生）
+                        logger.warning(f"无法获取本地快照路径，回退到标准加载方式")
+                        embedding_model = SentenceTransformer(
+                            model_id,
+                            cache_folder=MODEL_CACHE,
+                            local_files_only=True
+                        )
+                else:
+                    logger.info(f"模型 {model_id} 未下载，将从网络下载")
+                    # 设置镜像加速
+                    os.environ['HF_ENDPOINT'] = HF_MIRROR
+                    embedding_model = SentenceTransformer(
+                        model_id,
+                        cache_folder=MODEL_CACHE
+                    )
+                
                 _current_embedding_model_id = model_id
                 dimension = EMBEDDING_MODELS.get(model_id, {}).get('dimension', 512)
                 logger.info(f"Embedding 模型加载完成，维度: {dimension}")
@@ -323,7 +439,12 @@ def call_api_llm(content: str) -> dict:
     if not LLM_API_KEY:
         raise ValueError("LLM_API_KEY 未配置")
     
-    prompt = EXTRACTION_PROMPT.format(content=content[:2000])
+    # 预处理：过滤无效内容
+    cleaned_content, should_skip = preprocess_content(content)
+    if should_skip:
+        return {'type': 'SKIP', 'reason': '预处理后内容无效'}
+    
+    prompt = EXTRACTION_PROMPT.format(content=cleaned_content[:2000])
     
     headers = {
         "Content-Type": "application/json",
@@ -336,7 +457,7 @@ def call_api_llm(content: str) -> dict:
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.1,
-        "max_tokens": 500
+        "max_tokens": 1200
     }
     
     try:
@@ -349,6 +470,12 @@ def call_api_llm(content: str) -> dict:
         resp.raise_for_status()
         
         result = resp.json()
+        
+        # 检查响应格式
+        if "choices" not in result or not result["choices"]:
+            logger.error(f"API 返回格式异常: {result}")
+            return {'type': 'SKIP', 'reason': 'API响应格式异常'}
+        
         reply = result["choices"][0]["message"]["content"]
         
         # 解析 JSON
@@ -379,13 +506,14 @@ def extract_with_rules(content):
     """
     result = {'type': 'SKIP', 'reason': '未能识别'}
     
+    # 预处理：过滤无效内容
+    content, should_skip = preprocess_content(content)
+    if should_skip:
+        return {'type': 'SKIP', 'reason': '预处理后内容无效'}
+    
     content_lower = content.lower()
     
     # ===== 0. 跳过无效内容 =====
-    # 太短的内容不识别
-    if len(content.strip()) < 10:
-        return {'type': 'SKIP', 'reason': '内容太短'}
-    
     # 纯问候语/客套话不识别
     skip_phrases = ['好的', '明白了', '了解', '好的明白了', '没问题', '可以', '嗯', '好', '收到']
     if content.strip() in skip_phrases:
@@ -678,6 +806,10 @@ def extract_with_rules(content):
 
 def parse_llm_response(reply: str) -> dict:
     """解析 LLM 返回的 JSON"""
+    if not reply or not reply.strip():
+        logger.warning("LLM 返回空内容")
+        return {'type': 'SKIP', 'reason': 'LLM返回空内容'}
+    
     # 清理 markdown 代码块
     if '```json' in reply:
         reply = reply.split('```json')[1].split('```')[0]
@@ -688,11 +820,14 @@ def parse_llm_response(reply: str) -> dict:
     json_match = re.search(r'\{[\s\S]*\}', reply)
     if json_match:
         reply = json_match.group()
+    else:
+        logger.warning(f"LLM 返回内容无法提取JSON: {reply[:200]}...")
     
     try:
         return json.loads(reply.strip())
-    except json.JSONDecodeError:
-        return {'type': 'SKIP', 'reason': 'JSON解析失败'}
+    except json.JSONDecodeError as e:
+        logger.warning(f"JSON解析失败: {e}, 内容: {reply[:200]}...")
+        return {'type': 'SKIP', 'reason': f'JSON解析失败: {str(e)[:50]}'}
 
 
 def extract_with_local_llm(content: str) -> dict:
@@ -703,9 +838,14 @@ def extract_with_local_llm(content: str) -> dict:
     if model is None:
         return {'type': 'SKIP', 'reason': '本地LLM未加载'}
     
+    # 预处理：过滤无效内容
+    cleaned_content, should_skip = preprocess_content(content)
+    if should_skip:
+        return {'type': 'SKIP', 'reason': '预处理后内容无效'}
+    
     # 构建消息格式
     system_prompt = "你是一个专业的对话分析助手，擅长从对话中提取结构化信息。"
-    user_message = EXTRACTION_PROMPT.format(content=content[:1500])
+    user_message = EXTRACTION_PROMPT.format(content=cleaned_content[:1500])
     
     messages = [
         {"role": "system", "content": system_prompt},
