@@ -433,7 +433,9 @@ public class ApiServer {
                     Map<String, Object> session = new HashMap<>();
                     session.put("id", rs.getString("id"));
                     session.put("agentType", rs.getString("agent_type"));
-                    session.put("agentTypes", rs.getArray("agent_types"));
+                    // 将 java.sql.Array 转换为 String[] 以支持 JSON 序列化
+                    java.sql.Array sqlArray = rs.getArray("agent_types");
+                    session.put("agentTypes", sqlArray != null ? (String[]) sqlArray.getArray() : null);
                     session.put("projectPath", rs.getString("project_path"));
                     session.put("messageCount", rs.getInt("message_count"));
                     session.put("createdAt", rs.getTimestamp("created_at"));
