@@ -1606,13 +1606,14 @@ public class ApiServer {
                         if (rs.next()) stats.put("compressedSessions", rs.getInt(1));
                     }
                     
-                    // 待压缩会话数（消息数超过阈值且未压缩的）
+                    // 待压缩会话数（实际消息数超过阈值且未压缩的）
                     try (Connection conn = databaseService.getConnection();
                          Statement stmt = conn.createStatement();
                          ResultSet rs = stmt.executeQuery(
-                             "SELECT COUNT(*) FROM sessions WHERE message_count > COALESCE(" +
+                             "SELECT COUNT(*) FROM sessions s WHERE " +
+                             "(SELECT COUNT(*) FROM messages m WHERE m.session_id = s.id AND (m.deleted = false OR m.deleted IS NULL)) > COALESCE(" +
                              "(SELECT summary_threshold FROM compression_config WHERE config_key = 'session_compression'), 100) " +
-                             "AND (is_compressed = false OR is_compressed IS NULL)")) {
+                             "AND (s.is_compressed = false OR s.is_compressed IS NULL)")) {
                         if (rs.next()) stats.put("pendingSessions", rs.getInt(1));
                     }
                     
@@ -1715,8 +1716,9 @@ public class ApiServer {
                     
                     try (Connection conn = databaseService.getConnection();
                          PreparedStatement stmt = conn.prepareStatement(
-                             "SELECT id FROM sessions WHERE message_count > ? " +
-                             "AND (is_compressed = false OR is_compressed IS NULL) LIMIT 10")) {
+                             "SELECT s.id FROM sessions s WHERE " +
+                             "(SELECT COUNT(*) FROM messages m WHERE m.session_id = s.id AND (m.deleted = false OR m.deleted IS NULL)) > ? " +
+                             "AND (s.is_compressed = false OR s.is_compressed IS NULL) LIMIT 10")) {
                         stmt.setInt(1, threshold);
                         try (ResultSet rs = stmt.executeQuery()) {
                             while (rs.next()) {

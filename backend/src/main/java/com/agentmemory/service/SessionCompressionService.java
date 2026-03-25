@@ -21,10 +21,10 @@ public class SessionCompressionService extends ScheduledServiceBase {
     private final LLMClient llmClient;
     private final Logger log = LoggerFactory.getLogger(SessionCompressionService.class);
 
-    // 压缩配置（从配置读取）
-    private final int windowSize;
-    private final int summaryThreshold;
-    private final boolean autoCompress;
+    // 压缩配置（从配置读取，可动态更新）
+    private int windowSize;
+    private int summaryThreshold;
+    private boolean autoCompress;
     private final int checkIntervalHours;
 
     public SessionCompressionService(DatabaseService databaseService, ApplicationConfig config) {
@@ -156,7 +156,7 @@ public class SessionCompressionService extends ScheduledServiceBase {
         // 使用基类的 start() 方法
         super.start();
 
-        log.info("会话压缩服务已启动 (检查间隔: {} 小时)", CHECK_INTERVAL_HOURS);
+        log.info("会话压缩服务已启动 (检查间隔: {} 小时)", checkIntervalHours);
     }
 
     /**
@@ -185,10 +185,11 @@ public class SessionCompressionService extends ScheduledServiceBase {
         List<String> sessions = new ArrayList<>();
 
         try (Connection conn = databaseService.getConnection()) {
-            // 查询消息数超过阈值且未压缩的会话
+            // 查询实际消息数超过阈值且未压缩的会话
+            // 使用子查询统计实际未删除的消息数，而不是依赖缓存的 message_count
             String sql = """
                 SELECT s.id FROM sessions s
-                WHERE s.message_count > ?
+                WHERE (SELECT COUNT(*) FROM messages m WHERE m.session_id = s.id AND (m.deleted = false OR m.deleted IS NULL)) > ?
                 AND (s.is_compressed = false OR s.is_compressed IS NULL)
                 AND (s.expires_at IS NULL OR s.expires_at > NOW())
                 ORDER BY s.message_count DESC
@@ -212,11 +213,21 @@ public class SessionCompressionService extends ScheduledServiceBase {
     }
 
     /**
-     * 压缩单个会话
+     * 压缩单个会话（自动选择压缩类型）
      * @return 是否成功压缩
      */
     public boolean compressSession(String sessionId) {
-        log.info("开始压缩会话: {}", sessionId);
+        return compressSessionInternal(sessionId, null);
+    }
+    
+    /**
+     * 压缩单个会话的内部实现
+     * @param sessionId 会话ID
+     * @param specifiedType 指定的压缩类型，null表示自动选择
+     * @return 是否成功压缩
+     */
+    private boolean compressSessionInternal(String sessionId, String specifiedType) {
+        log.info("开始压缩会话: {} (类型: {})", sessionId, specifiedType != null ? specifiedType : "自动");
 
         try (Connection conn = databaseService.getConnection()) {
             // 1. 获取会话消息
@@ -229,7 +240,7 @@ public class SessionCompressionService extends ScheduledServiceBase {
             int originalCount = messages.size();
 
             // 2. 确定压缩策略
-            String compressionType = determineCompressionType(messages.size());
+            String compressionType = specifiedType != null ? specifiedType : determineCompressionType(messages.size());
 
             // 3. 执行压缩
             List<String> compressedMessages;
@@ -501,6 +512,13 @@ public class SessionCompressionService extends ScheduledServiceBase {
      */
     public boolean compressSessionManual(String sessionId) {
         return compressSession(sessionId);
+    }
+
+    /**
+     * 手动压缩会话（指定压缩类型）
+     */
+    public boolean compressSessionWithType(String sessionId, String compressionType) {
+        return compressSessionInternal(sessionId, compressionType);
     }
 
     /**
