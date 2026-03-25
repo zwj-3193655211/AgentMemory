@@ -1,4 +1,5 @@
 @echo off
+setlocal enabledelayedexpansion
 chcp 65001 >nul
 
 echo ========================================
@@ -28,17 +29,66 @@ for /f "tokens=5" %%a in ('netstat -ano ^| findstr :%BACKEND_PORT% ^| findstr LI
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr :%FRONTEND_PORT% ^| findstr LISTENING 2^>nul') do taskkill /F /PID %%a >nul 2>&1
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr :%EMBEDDING_PORT% ^| findstr LISTENING 2^>nul') do taskkill /F /PID %%a >nul 2>&1
 
-echo [2/5] Starting PostgreSQL...
+echo [2/6] Checking Docker...
+docker info >nul 2>&1
+if !errorlevel! equ 0 goto docker_already_running
+
+echo [INFO] Docker Desktop is not running. Starting...
+start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
+echo [INFO] Waiting for Docker to start (max 60s)...
+set DOCKER_WAIT=0
+
+:docker_wait_loop
+timeout /t 3 /nobreak >nul
+set /a DOCKER_WAIT+=3
+docker info >nul 2>&1
+if !errorlevel! equ 0 goto docker_ready
+if !DOCKER_WAIT! geq 60 (
+    echo [ERROR] Docker Desktop failed to start within 60 seconds.
+    echo [INFO] Please start Docker Desktop manually and try again.
+    pause
+    exit /b 1
+)
+echo [INFO] Still waiting... !DOCKER_WAIT!s
+goto docker_wait_loop
+
+:docker_ready
+echo [INFO] Docker started successfully.
+goto docker_done
+
+:docker_already_running
+echo [INFO] Docker is already running.
+
+:docker_done
+
+echo [3/6] Starting PostgreSQL...
 docker-compose up -d
 
-echo [3/5] Starting Embedding Service...
+echo [INFO] Waiting for PostgreSQL to be ready...
+set PG_WAIT=0
+:pg_wait_loop
+timeout /t 2 /nobreak >nul
+set /a PG_WAIT+=2
+docker exec agentmemory-db pg_isready -U postgres >nul 2>&1
+if !errorlevel! equ 0 goto pg_ready
+if !PG_WAIT! geq 30 (
+    echo [ERROR] PostgreSQL failed to start within 30 seconds.
+    pause
+    exit /b 1
+)
+echo [INFO] Still waiting... !PG_WAIT!s
+goto pg_wait_loop
+:pg_ready
+echo [INFO] PostgreSQL is ready.
+
+echo [4/6] Starting Embedding Service...
 start "AgentMemory-Embedding" cmd /k "cd /d "%~dp0embedding_service" && python embed_server.py"
 
-echo [4/5] Starting Backend...
+echo [5/6] Starting Backend...
 set "PATH=%JAVA_HOME%\bin;%PATH%"
 start "AgentMemory-Backend" cmd /k "chcp 65001 >nul && cd /d "%~dp0backend" && set "JAVA_HOME=%JAVA_HOME%" && set "PATH=%JAVA_HOME%\bin;%PATH%" && set "DATABASE_PASSWORD=%DATABASE_PASSWORD%" && java -Dfile.encoding=UTF-8 -Dconsole.encoding=UTF-8 -cp "target\classes;target\lib\*" com.agentmemory.AgentMemoryApplication"
 
-echo [5/5] Starting Frontend...
+echo [6/6] Starting Frontend...
 start "AgentMemory-Frontend" cmd /k "cd /d "%~dp0frontend" && npm run dev"
 
 echo.
