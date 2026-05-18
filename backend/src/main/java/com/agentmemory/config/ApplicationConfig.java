@@ -28,6 +28,12 @@ public class ApplicationConfig {
     private final boolean compressionAutoCompress;
     private final int compressionCheckIntervalHours;
     
+    // LLM API 配置（用于会话摘要）
+    private final String apiLLMProvider;
+    private final String apiLLMBaseUrl;
+    private final String apiLLMApiKey;
+    private final String apiLLMModel;
+    
     private ApplicationConfig(Config config) {
         this.userHome = System.getProperty("user.home");
 
@@ -75,6 +81,16 @@ public class ApplicationConfig {
             ? config.getBoolean("compression.autoCompress") : true;
         this.compressionCheckIntervalHours = config.hasPath("compression.checkIntervalHours")
             ? config.getInt("compression.checkIntervalHours") : 2;
+        
+        // LLM API 配置（用于会话摘要）
+        this.apiLLMProvider = config.hasPath("llm.api.provider")
+            ? config.getString("llm.api.provider") : null;
+        this.apiLLMBaseUrl = config.hasPath("llm.api.baseUrl")
+            ? config.getString("llm.api.baseUrl") : null;
+        this.apiLLMApiKey = config.hasPath("llm.api.key")
+            ? config.getString("llm.api.key") : null;
+        this.apiLLMModel = config.hasPath("llm.api.model")
+            ? config.getString("llm.api.model") : null;
     }
     
     public static ApplicationConfig load() {
@@ -101,6 +117,12 @@ public class ApplicationConfig {
     public int getCompressionSummaryThreshold() { return compressionSummaryThreshold; }
     public boolean isCompressionAutoCompress() { return compressionAutoCompress; }
     public int getCompressionCheckIntervalHours() { return compressionCheckIntervalHours; }
+    
+    // LLM API 配置
+    public String getApiLLMProvider() { return apiLLMProvider; }
+    public String getApiLLMBaseUrl() { return apiLLMBaseUrl; }
+    public String getApiLLMApiKey() { return apiLLMApiKey; }
+    public String getApiLLMModel() { return apiLLMModel; }
     
     /**
      * 是否使用 SQLite

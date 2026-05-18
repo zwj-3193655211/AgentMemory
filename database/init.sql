@@ -33,7 +33,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     expires_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP + INTERVAL '14 days',
     deleted BOOLEAN DEFAULT false,
-    compressed_at TIMESTAMP
+    compressed_at TIMESTAMP,
+    summary TEXT  -- 会话摘要（LLM生成）
 );
 
 -- 消息表
@@ -167,7 +168,8 @@ INSERT INTO agents (name, display_name, enabled) VALUES
     ('qwen', 'Qwen CLI', true),
     ('qoder', 'Qoder CLI', true),
     ('openclaw', 'OpenClaw', true),
-    ('nanobot', 'Nanobot', true)
+    ('nanobot', 'Nanobot', true),
+    ('crush', 'Crush CLI', true)
 ON CONFLICT (name) DO NOTHING;
 
 -- 更新时间触发器

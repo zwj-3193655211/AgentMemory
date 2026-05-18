@@ -3,6 +3,8 @@ package com.agentmemory.api;
 import com.agentmemory.service.DatabaseService;
 import com.agentmemory.service.FileWatcherService;
 import com.agentmemory.service.SessionCompressionService;
+import com.agentmemory.service.AgentDetectorService;
+import com.agentmemory.api.SetupHandler;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -36,14 +38,16 @@ public class ApiServer {
     
     private final DatabaseService databaseService;
     private final FileWatcherService fileWatcherService;
+    private final AgentDetectorService agentDetectorService;
     private final ObjectMapper objectMapper;
     private HttpServer server;
     private final int port;
     private SessionCompressionService compressionService;
-    
-    public ApiServer(DatabaseService databaseService, FileWatcherService fileWatcherService, int port) {
+
+    public ApiServer(DatabaseService databaseService, FileWatcherService fileWatcherService, AgentDetectorService agentDetectorService, int port) {
         this.databaseService = databaseService;
         this.fileWatcherService = fileWatcherService;
+        this.agentDetectorService = agentDetectorService;
         this.port = port;
         this.objectMapper = new ObjectMapper();
         this.objectMapper.registerModule(new JavaTimeModule());
@@ -71,9 +75,167 @@ public class ApiServer {
         server.createContext("/api/compression", new CompressionHandler());
         server.createContext("/api/llm-providers", new LLMProviderHandler());
         server.createContext("/api/cleanup", new CleanupHandler());
+        server.createContext("/api/setup", new SetupHandler(databaseService, agentDetectorService, fileWatcherService));
+        server.createContext("/api/import", new SetupHandler(databaseService, agentDetectorService, fileWatcherService));
         
         // 静态文件服务（前端）
         server.createContext("/", new StaticFileHandler());
+        
+        // DEBUG: 测试数据库连接
+        server.createContext("/api/debug/db", exchange -> {
+            try {
+                Connection conn = databaseService.getConnection();
+                sendJson(exchange, Map.of("connected", conn != null));
+                conn.close();
+            } catch (Exception e) {
+                sendError(exchange, 500, e.getMessage());
+            }
+        });
+
+        // DEBUG: 重新计算消息数
+        server.createContext("/api/debug/recalc-counts", exchange -> {
+            try {
+                int updated = 0;
+                try (Connection conn = databaseService.getConnection();
+                     Statement stmt = conn.createStatement()) {
+
+                    // 重新计算所有会话的消息数
+                    String sql = """
+                        UPDATE sessions SET message_count = (
+                            SELECT COUNT(*) FROM messages WHERE messages.session_id = sessions.id
+                        ) WHERE deleted = false
+                        """;
+                    updated = stmt.executeUpdate(sql);
+                }
+                sendJson(exchange, Map.of("status", "ok", "updated", updated));
+            } catch (Exception e) {
+                sendError(exchange, 500, e.getMessage());
+            }
+        });
+        
+        // DEBUG: 测试 sessions SQL
+        server.createContext("/api/debug/sessions", exchange -> {
+            try {
+                Connection conn = databaseService.getConnection();
+                Statement stmt = conn.createStatement();
+                
+                // 先查看表结构和数据
+                List<String> results = new ArrayList<>();
+                
+                // 检查所有 sessions（包括 deleted）
+                ResultSet rs = stmt.executeQuery("SELECT id, agent_type, message_count, deleted FROM sessions");
+                while (rs.next()) {
+                    String row = String.format("id=%s, agent=%s, msg=%d, deleted=%d", 
+                        rs.getString("id"), 
+                        rs.getString("agent_type"),
+                        rs.getInt("message_count"),
+                        rs.getInt("deleted"));
+                    results.add(row);
+                }
+                stmt.close();
+                conn.close();
+                sendJson(exchange, results);
+            } catch (Exception e) {
+                sendError(exchange, 500, e.getMessage());
+            }
+        });
+        
+        // DEBUG: 测试 stats
+        server.createContext("/api/debug/stats", exchange -> {
+            try {
+                Connection conn = databaseService.getConnection();
+                Statement stmt = conn.createStatement();
+                Map<String, Object> stats = new HashMap<>();
+                
+                // 测试每个查询
+                try {
+                    ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM agents");
+                    rs.next();
+                    stats.put("agents", rs.getInt(1));
+                } catch (Exception e) { stats.put("agents_error", e.getMessage()); }
+                
+                try {
+                    ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM sessions WHERE deleted = false");
+                    rs.next();
+                    stats.put("sessions", rs.getInt(1));
+                } catch (Exception e) { stats.put("sessions_error", e.getMessage()); }
+                
+                try {
+                    ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM messages WHERE deleted = false");
+                    rs.next();
+                    stats.put("messages", rs.getInt(1));
+                } catch (Exception e) { stats.put("messages_error", e.getMessage()); }
+                
+                stmt.close();
+                conn.close();
+                sendJson(exchange, stats);
+            } catch (Exception e) {
+                sendError(exchange, 500, e.getMessage());
+            }
+        });
+        
+        // DEBUG: 测试 messages
+        server.createContext("/api/debug/messages", exchange -> {
+            try {
+                Connection conn = databaseService.getConnection();
+                Statement stmt = conn.createStatement();
+                
+                List<String> results = new ArrayList<>();
+                ResultSet rs = stmt.executeQuery("SELECT id, role, session_id FROM messages LIMIT 5");
+                while (rs.next()) {
+                    String row = String.format("id=%s, role=%s, session=%s", 
+                        rs.getString("id"), rs.getString("role"), rs.getString("session_id"));
+                    results.add(row);
+                }
+                stmt.close();
+                conn.close();
+                sendJson(exchange, results);
+            } catch (Exception e) {
+                sendError(exchange, 500, e.getMessage());
+            }
+        });
+        
+        // DEBUG: 检查 sessions 详细情况
+        server.createContext("/api/debug/sessionsql", exchange -> {
+            try {
+                Connection conn = databaseService.getConnection();
+                Statement stmt = conn.createStatement();
+                Map<String, Object> result = new HashMap<>();
+                
+                // 所有 sessions
+                ResultSet rs1 = stmt.executeQuery("SELECT COUNT(*) FROM sessions");
+                rs1.next();
+                result.put("total_sessions", rs1.getInt(1));
+                
+                // 未删除的 sessions
+                ResultSet rs2 = stmt.executeQuery("SELECT COUNT(*) FROM sessions WHERE deleted = false");
+                rs2.next();
+                result.put("active_sessions", rs2.getInt(1));
+                
+                // 按 agent_type 分组
+                ResultSet rs3 = stmt.executeQuery("SELECT agent_type, COUNT(*) FROM sessions GROUP BY agent_type");
+                List<Map<String, Object>> byAgent = new ArrayList<>();
+                while (rs3.next()) {
+                    Map<String, Object> row = new HashMap<>();
+                    row.put("agent", rs3.getString(1));
+                    row.put("count", rs3.getInt(2));
+                    byAgent.add(row);
+                }
+                result.put("by_agent", byAgent);
+                
+                // 最新和最老的 session
+                ResultSet rs4 = stmt.executeQuery("SELECT MIN(created_at), MAX(created_at) FROM sessions");
+                rs4.next();
+                result.put("oldest", rs4.getString(1));
+                result.put("newest", rs4.getString(2));
+                
+                stmt.close();
+                conn.close();
+                sendJson(exchange, result);
+            } catch (Exception e) {
+                sendError(exchange, 500, e.getMessage());
+            }
+        });
         
         server.setExecutor(null);
         server.start();
@@ -357,9 +519,18 @@ public class ApiServer {
                     return;
                 }
                 
-                // GET: 列出所有 Agents
+                // GET: 列出所有 Agents（去重，优先选择有完整信息的）
                 List<Map<String, Object>> agents = queryList(
-                    "SELECT * FROM agents ORDER BY name",
+                    """
+                    SELECT * FROM agents a1 WHERE id = (
+                        SELECT id FROM agents a2 
+                        WHERE COALESCE(a2.parser_type, a2.name) = COALESCE(a1.parser_type, a1.name)
+                        ORDER BY 
+                            CASE WHEN cli_path IS NOT NULL THEN 0 ELSE 1 END,
+                            id
+                        LIMIT 1
+                    ) ORDER BY name
+                    """,
                     rs -> {
                         Map<String, Object> agent = new HashMap<>();
                         agent.put("id", rs.getInt("id"));
@@ -407,44 +578,40 @@ public class ApiServer {
                 }
             }
 
-            // 使用 PreparedStatement 防止 SQL 注入
-            // 支持 agent_types 数组查询：同一个 session 可以属于多个 agent
-            String sql = "SELECT * FROM sessions WHERE deleted = false";
-            if (agentType != null) {
-                sql += " AND (? = ANY(agent_types) OR agent_type = ?)";
-            }
-            sql += " ORDER BY created_at DESC LIMIT ? OFFSET ?";
-
+            // 查询会话列表，实时统计消息数
             try (Connection conn = databaseService.getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-                int paramIndex = 1;
-                if (agentType != null) {
-                    stmt.setString(paramIndex++, agentType);
-                    stmt.setString(paramIndex++, agentType);
+                 Statement stmt = conn.createStatement()) {
+                
+                StringBuilder sql = new StringBuilder();
+                sql.append("SELECT s.id, s.agent_type, s.project_path, s.created_at, ");
+                sql.append("(SELECT COUNT(*) FROM messages m WHERE m.session_id = s.id AND m.deleted = false) as msg_count ");
+                sql.append("FROM sessions s WHERE s.deleted = false ");
+                if (agentType != null && !agentType.isEmpty()) {
+                    sql.append("AND s.agent_type = '").append(agentType).append("' ");
                 }
-                stmt.setInt(paramIndex++, limit);
-                stmt.setInt(paramIndex, offset);
-
-                ResultSet rs = stmt.executeQuery();
-
+                sql.append("ORDER BY s.created_at DESC ");
+                sql.append("LIMIT ").append(limit).append(" OFFSET ").append(offset);
+                
+                ResultSet rs = stmt.executeQuery(sql.toString());
+                
                 List<Map<String, Object>> sessions = new ArrayList<>();
                 while (rs.next()) {
                     Map<String, Object> session = new HashMap<>();
                     session.put("id", rs.getString("id"));
                     session.put("agentType", rs.getString("agent_type"));
-                    // 将 java.sql.Array 转换为 String[] 以支持 JSON 序列化
-                    java.sql.Array sqlArray = rs.getArray("agent_types");
-                    session.put("agentTypes", sqlArray != null ? (String[]) sqlArray.getArray() : null);
                     session.put("projectPath", rs.getString("project_path"));
-                    session.put("messageCount", rs.getInt("message_count"));
-                    session.put("createdAt", rs.getTimestamp("created_at"));
-                    session.put("expiresAt", rs.getTimestamp("expires_at"));
+                    session.put("messageCount", rs.getInt("msg_count"));
+                    session.put("createdAt", rs.getString("created_at"));
                     sessions.add(session);
                 }
-
+                
+                log.info("SessionsHandler 返回 {} 条", sessions.size());
                 sendJson(exchange, sessions);
             } catch (SQLException e) {
+                log.error("SessionsHandler SQL错误: {}", e.getMessage());
+                sendError(exchange, 500, e.getMessage());
+            } catch (Exception e) {
+                log.error("SessionsHandler 未知错误: {}", e.getMessage(), e);
                 sendError(exchange, 500, e.getMessage());
             }
         }
@@ -498,12 +665,17 @@ public class ApiServer {
                     msg.put("id", rs.getString("id"));
                     msg.put("role", rs.getString("role"));
                     msg.put("content", rs.getString("content"));
-                    msg.put("timestamp", rs.getTimestamp("timestamp"));
+                    msg.put("timestamp", rs.getString("timestamp"));
                     messages.add(msg);
                 }
                 
+                log.info("MessagesHandler sessionId={} 返回 {} 条", sessionId, messages.size());
                 sendJson(exchange, messages);
             } catch (SQLException e) {
+                log.error("MessagesHandler 错误: {}", e.getMessage());
+                sendError(exchange, 500, e.getMessage());
+            } catch (Exception e) {
+                log.error("MessagesHandler 未知错误: {}", e.getMessage());
                 sendError(exchange, 500, e.getMessage());
             }
         }
@@ -645,7 +817,7 @@ public class ApiServer {
 
         private void handleExport(HttpExchange exchange) throws SQLException, IOException {
             List<Map<String, Object>> items = queryList(
-                "SELECT * FROM error_corrections WHERE deleted = false ORDER BY created_at DESC",
+                "SELECT * FROM error_corrections WHERE deleted = 0 ORDER BY created_at DESC",
                 rs -> {
                     Map<String, Object> item = new HashMap<>();
                     item.put("id", rs.getString("id"));
@@ -1248,47 +1420,66 @@ public class ApiServer {
     class StatsHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
-            try (Connection conn = databaseService.getConnection()) {
-                Map<String, Object> stats = new HashMap<>();
+            Map<String, Object> stats = new HashMap<>();
+            
+            try (Connection conn = databaseService.getConnection();
+                 Statement stmt = conn.createStatement()) {
                 
-                Statement stmt = conn.createStatement();
+                // 查询各表的数量（排除 deleted 的记录）
+                ResultSet rsAgents = stmt.executeQuery("SELECT COUNT(*) FROM agents WHERE enabled = true");
+                rsAgents.next();
+                stats.put("agents", rsAgents.getInt(1));
                 
-                ResultSet rs1 = stmt.executeQuery("SELECT COUNT(*) FROM agents");
-                rs1.next();
-                stats.put("agents", rs1.getInt(1));
+                ResultSet rsSessions = stmt.executeQuery("SELECT COUNT(*) FROM sessions WHERE deleted = false");
+                rsSessions.next();
+                stats.put("sessions", rsSessions.getInt(1));
                 
-                ResultSet rs2 = stmt.executeQuery("SELECT COUNT(*) FROM sessions WHERE deleted = false");
-                rs2.next();
-                stats.put("sessions", rs2.getInt(1));
+                ResultSet rsMessages = stmt.executeQuery("SELECT COUNT(*) FROM messages WHERE deleted = false");
+                rsMessages.next();
+                stats.put("messages", rsMessages.getInt(1));
                 
-                ResultSet rs3 = stmt.executeQuery("SELECT COUNT(*) FROM messages WHERE deleted = false");
-                rs3.next();
-                stats.put("messages", rs3.getInt(1));
+                ResultSet rsErrors = stmt.executeQuery("SELECT COUNT(*) FROM error_corrections WHERE deleted = false");
+                rsErrors.next();
+                stats.put("errors", rsErrors.getInt(1));
                 
-                ResultSet rs4 = stmt.executeQuery("SELECT COUNT(*) FROM error_corrections WHERE deleted = false");
-                rs4.next();
-                stats.put("errors", rs4.getInt(1));
+                ResultSet rsProfiles = stmt.executeQuery("SELECT COUNT(*) FROM user_profiles");
+                rsProfiles.next();
+                stats.put("profiles", rsProfiles.getInt(1));
                 
-                ResultSet rs5 = stmt.executeQuery("SELECT COUNT(*) FROM user_profiles WHERE (deleted = false OR deleted IS NULL)");
-                rs5.next();
-                stats.put("profiles", rs5.getInt(1));
-
-                ResultSet rs6 = stmt.executeQuery("SELECT COUNT(*) FROM best_practices WHERE deleted = false");
-                rs6.next();
-                stats.put("practices", rs6.getInt(1));
-
-                ResultSet rs7 = stmt.executeQuery("SELECT COUNT(*) FROM project_contexts WHERE (deleted = false OR deleted IS NULL)");
-                rs7.next();
-                stats.put("contexts", rs7.getInt(1));
-
-                ResultSet rs8 = stmt.executeQuery("SELECT COUNT(*) FROM skills WHERE (deleted = false OR deleted IS NULL)");
-                rs8.next();
-                stats.put("skills", rs8.getInt(1));
+                ResultSet rsPractices = stmt.executeQuery("SELECT COUNT(*) FROM best_practices WHERE deleted = false");
+                rsPractices.next();
+                stats.put("practices", rsPractices.getInt(1));
                 
-                sendJson(exchange, stats);
+                ResultSet rsContexts = stmt.executeQuery("SELECT COUNT(*) FROM project_contexts");
+                rsContexts.next();
+                stats.put("contexts", rsContexts.getInt(1));
+                
+                ResultSet rsSkills = stmt.executeQuery("SELECT COUNT(*) FROM skills");
+                rsSkills.next();
+                stats.put("skills", rsSkills.getInt(1));
+                
+                // 添加总计数据（不区分 deleted 状态）
+                ResultSet rsTotalSessions = stmt.executeQuery("SELECT COUNT(*) FROM sessions");
+                rsTotalSessions.next();
+                stats.put("totalSessions", rsTotalSessions.getInt(1));
+                
+                ResultSet rsTotalMessages = stmt.executeQuery("SELECT COUNT(*) FROM messages");
+                rsTotalMessages.next();
+                stats.put("totalMessages", rsTotalMessages.getInt(1));
+                
             } catch (SQLException e) {
-                sendError(exchange, 500, e.getMessage());
+                log.error("查询统计失败", e);
+                stats.put("agents", 0);
+                stats.put("sessions", 0);
+                stats.put("messages", 0);
+                stats.put("errors", 0);
+                stats.put("profiles", 0);
+                stats.put("practices", 0);
+                stats.put("contexts", 0);
+                stats.put("skills", 0);
             }
+            
+            sendJson(exchange, stats);
         }
     }
     
@@ -1398,13 +1589,7 @@ public class ApiServer {
 
         private void semanticSearchTable(Connection conn, String table, String type,
                                          String vecStr, int limit, List<Map<String, Object>> results) throws SQLException {
-            String sql = String.format(
-                "SELECT id, title, COALESCE(solution, practice, description, '') as content, " +
-                "1 - (embedding <=> '%s'::vector) as similarity FROM %s " +
-                "WHERE embedding IS NOT NULL AND (deleted = false OR deleted IS NULL) " +
-                "ORDER BY similarity DESC LIMIT ?",
-                vecStr, table
-            );
+            String sql = buildSemanticSearchSql(table, vecStr);
 
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                 stmt.setInt(1, limit / 2);
@@ -1422,23 +1607,28 @@ public class ApiServer {
             }
         }
 
+        private String buildSemanticSearchSql(String table, String vecStr) {
+            String contentField = getContentField(table);
+            return String.format(
+                "SELECT id, title, %s as content, " +
+                "1 - (embedding <=> '%s'::vector) as similarity FROM %s " +
+                "WHERE embedding IS NOT NULL AND (deleted = false OR deleted IS NULL) " +
+                "ORDER BY similarity DESC LIMIT ?",
+                contentField, vecStr, table
+            );
+        }
+
         private void textSearchTable(Connection conn, String table, String type,
                                       String query, int limit, List<Map<String, Object>> results) throws SQLException {
-            String sql = String.format(
-                "SELECT id, title, COALESCE(solution, practice, description, '') as content FROM %s " +
-                "WHERE (deleted = false OR deleted IS NULL) AND " +
-                "(title ILIKE ? OR solution ILIKE ? OR practice ILIKE ? OR description ILIKE ?) " +
-                "LIMIT ?",
-                table
-            );
+            String sql = buildTextSearchSql(table);
 
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                 String searchPattern = "%" + query + "%";
-                stmt.setString(1, searchPattern);
-                stmt.setString(2, searchPattern);
-                stmt.setString(3, searchPattern);
-                stmt.setString(4, searchPattern);
-                stmt.setInt(5, limit);
+                String[] fields = getSearchFields(table);
+                for (int i = 0; i < fields.length; i++) {
+                    stmt.setString(i + 1, searchPattern);
+                }
+                stmt.setInt(fields.length + 1, limit);
                 ResultSet rs = stmt.executeQuery();
 
                 while (rs.next()) {
@@ -1447,9 +1637,47 @@ public class ApiServer {
                     item.put("type", type);
                     item.put("title", rs.getString("title"));
                     item.put("content", rs.getString("content"));
-                    item.put("similarity", 0.0); // 文本搜索不提供相似度
+                    item.put("similarity", 0.0);
                     results.add(item);
                 }
+            }
+        }
+
+        private String buildTextSearchSql(String table) {
+            String contentField = getContentField(table);
+            String[] fields = getSearchFields(table);
+            StringBuilder whereClause = new StringBuilder("(");
+            for (int i = 0; i < fields.length; i++) {
+                if (i > 0) whereClause.append(" OR ");
+                whereClause.append(fields[i]).append(" ILIKE ?");
+            }
+            whereClause.append(")");
+            return String.format(
+                "SELECT id, title, %s as content FROM %s " +
+                "WHERE (deleted = false OR deleted IS NULL) AND %s LIMIT ?",
+                contentField, table, whereClause.toString()
+            );
+        }
+
+        private String getContentField(String table) {
+            switch (table) {
+                case "error_corrections": return "COALESCE(solution, problem, '')";
+                case "user_profiles": return "COALESCE(items::text, category, '')";
+                case "best_practices": return "COALESCE(practice, scenario, rationale, '')";
+                case "project_contexts": return "COALESCE(project_path, tech_stack::text, key_decisions::text, '')";
+                case "skills": return "COALESCE(description, steps::text, '')";
+                default: return "COALESCE(description, '')";
+            }
+        }
+
+        private String[] getSearchFields(String table) {
+            switch (table) {
+                case "error_corrections": return new String[]{"title", "problem", "solution", "cause"};
+                case "user_profiles": return new String[]{"title", "category"};
+                case "best_practices": return new String[]{"title", "practice", "scenario", "rationale"};
+                case "project_contexts": return new String[]{"title", "project_path"};
+                case "skills": return new String[]{"title", "description"};
+                default: return new String[]{"title"};
             }
         }
     }

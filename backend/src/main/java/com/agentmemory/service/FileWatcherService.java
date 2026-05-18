@@ -39,6 +39,31 @@ public class FileWatcherService {
     // 文件级锁：防止同一文件并发处理
     private final ConcurrentHashMap<String, ReentrantLock> fileLocks = new ConcurrentHashMap<>();
     
+    // ========== 语义切分相关 ==========
+    // 话题转换关键词（检测到这些词时，触发一次处理）
+    private static final Set<String> TOPIC_SWITCH_KEYWORDS = new HashSet<>(Arrays.asList(
+        "另外", "还有", "顺便", "对了", "对了", "新话题", "换个话题", "重新开始",
+        "我有个问题", "另一个问题", "问一下", "顺便问一下",
+        "先这样", "暂时这样", "先不管",
+        "我重新", "重新开始"
+    ));
+    // 时间阈值：超过此时间（毫秒）未收到消息，视为新话题
+    private static final long SEMANTIC_GAP_MS = 7200000;  // 2小时
+    // 最小批量：至少积累这么多条才触发一次处理
+    private static final int MIN_BATCH_SIZE = 3;
+    // 最大批量：超过这么多条强制触发一次处理
+    private static final int MAX_BATCH_SIZE = 15;
+    // 强制刷新超时（兜底，防止消息永远卡在缓冲里）
+    private static final long MAX_BUFFER_AGE_MS = 60000;  // 1分钟
+    
+    // ========== 缓冲批量分类相关 ==========
+    // 消息缓冲：sessionId -> 缓冲的消息列表
+    private final ConcurrentHashMap<String, List<BufferedMessage>> messageBuffer = new ConcurrentHashMap<>();
+    // 缓冲刷新定时器
+    private ScheduledExecutorService bufferFlushExecutor;
+    // 上下文窗口大小（用于分类时包含的历史消息）
+    private static final int CONTEXT_WINDOW_SIZE = 10;
+    
     public FileWatcherService(DatabaseService databaseService) {
         this.databaseService = databaseService;
         this.memoryService = new MemoryService(databaseService);
@@ -65,6 +90,9 @@ public class FileWatcherService {
 
         // 启动持久化任务
         startPersistenceTask();
+        
+        // 启动缓冲刷新任务
+        startBufferFlushTask();
     }
     
     /**
@@ -243,25 +271,10 @@ public class FileWatcherService {
                 databaseService.saveMessage(message);
                 log.debug("已保存消息: {} - {}", message.getId(), message.getRole());
                 
-                // 异步处理记忆提取（仅处理有内容的用户消息）
+                // 改为缓冲消息，批量处理以获得更好的上下文
                 if ("user".equals(message.getRole()) && message.getContent() != null
                     && message.getContent().length() > 20) {
-                    final Message finalMessage = message;
-                    final String finalAgentType = agentType;
-                    executor.submit(() -> {
-                        try {
-                            memoryService.processMessage(
-                                finalMessage.getSessionId(),
-                                finalMessage.getContent(),
-                                finalAgentType
-                            );
-                        } catch (Exception e) {
-                            log.error("记忆处理失败 [session={}, role={}]: {}",
-                                finalMessage.getSessionId(),
-                                finalMessage.getRole(),
-                                e.getMessage(), e);
-                        }
-                    });
+                    bufferMessage(message, agentType);
                 }
             }
         } catch (Exception e) {
@@ -783,8 +796,257 @@ public class FileWatcherService {
         }, 5, 5, TimeUnit.MINUTES);  // 每5分钟执行一次
     }
     
+    /**
+     * 手动触发重新扫描指定目录（用于 Setup 向导）
+     * @param directory 要扫描的目录路径
+     */
+    public void rescanDirectory(String directory) {
+        Path path = Paths.get(directory);
+        if (Files.exists(path) && Files.isDirectory(path)) {
+            executor.submit(() -> {
+                log.info("手动触发重新扫描: {}", directory);
+                scanExistingFiles("manual", "unknown", path);
+                log.info("重新扫描完成: {}", directory);
+            });
+        }
+    }
+    
+    /**
+     * 内部类：缓冲消息
+     */
+    private static class BufferedMessage {
+        final Message message;
+        final long timestamp;
+        
+        BufferedMessage(Message message) {
+            this.message = message;
+            this.timestamp = System.currentTimeMillis();
+        }
+    }
+    
+    /**
+     * 将消息添加到缓冲，支持语义边界检测
+     */
+    private void bufferMessage(Message message, String agentType) {
+        String sessionId = message.getSessionId();
+        if (sessionId == null) return;
+        
+        List<BufferedMessage> buffer = messageBuffer.computeIfAbsent(sessionId, k -> new ArrayList<>());
+        synchronized (buffer) {
+            boolean shouldFlush = false;
+            String flushReason = null;
+            
+            if (!buffer.isEmpty()) {
+                long timeSinceLast = System.currentTimeMillis() - buffer.get(buffer.size() - 1).timestamp;
+                
+                // 检测语义边界1：时间间隔超过阈值
+                if (timeSinceLast > SEMANTIC_GAP_MS) {
+                    shouldFlush = true;
+                    flushReason = "语义间隔(" + (timeSinceLast / 1000) + "s)";
+                }
+                
+                // 检测语义边界2：当前消息包含话题转换关键词
+                else if (containsTopicSwitch(message.getContent())) {
+                    // 如果缓冲里有多条消息，先刷新
+                    if (buffer.size() >= MIN_BATCH_SIZE) {
+                        shouldFlush = true;
+                        flushReason = "话题切换";
+                    }
+                }
+            }
+            
+            // 检查最大批量限制
+            if (buffer.size() >= MAX_BATCH_SIZE) {
+                shouldFlush = true;
+                flushReason = "达到最大批量(" + MAX_BATCH_SIZE + ")";
+            }
+            
+            buffer.add(new BufferedMessage(message));
+            
+            // 如果缓冲为空且当前消息是话题转换，也需要特殊处理
+            if (buffer.size() == 1 && containsTopicSwitch(message.getContent())) {
+                // 这种情况很少见，但仍需处理
+                log.debug("检测到新话题起始: {}", truncate(message.getContent(), 50));
+            }
+            
+            // 达到最小批量且检测到语义边界，刷新
+            if (shouldFlush && buffer.size() >= MIN_BATCH_SIZE) {
+                log.debug("语义边界触发刷新 [session={}]: {}", 
+                    sessionId.substring(0, 8), flushReason);
+                flushBuffer(sessionId, buffer, agentType);
+            }
+        }
+    }
+    
+    /**
+     * 检测消息内容是否包含话题转换关键词
+     */
+    private boolean containsTopicSwitch(String content) {
+        if (content == null || content.isEmpty()) return false;
+        
+        String lower = content.toLowerCase();
+        for (String keyword : TOPIC_SWITCH_KEYWORDS) {
+            if (lower.contains(keyword.toLowerCase())) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * 启动缓冲刷新定时任务
+     */
+    private void startBufferFlushTask() {
+        bufferFlushExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread thread = new Thread(r, "buffer-flush");
+            thread.setDaemon(true);
+            return thread;
+        });
+        
+        // 每5秒检查一次超时缓冲
+        bufferFlushExecutor.scheduleAtFixedRate(() -> {
+            try {
+                flushTimedOutBuffers();
+            } catch (Exception e) {
+                log.warn("刷新缓冲失败: {}", e.getMessage());
+            }
+        }, 5, 5, TimeUnit.SECONDS);
+        
+        log.info("已启动缓冲刷新任务");
+    }
+    
+    /**
+     * 刷新超时的缓冲（兜底机制）
+     */
+    private void flushTimedOutBuffers() {
+        long now = System.currentTimeMillis();
+        List<String> sessionsToFlush = new ArrayList<>();
+        
+        // 找出需要刷新的会话
+        for (Map.Entry<String, List<BufferedMessage>> entry : messageBuffer.entrySet()) {
+            List<BufferedMessage> buffer = entry.getValue();
+            synchronized (buffer) {
+                if (!buffer.isEmpty()) {
+                    long oldest = buffer.get(0).timestamp;
+                    // 使用最大缓冲年龄作为超时阈值
+                    if (now - oldest >= MAX_BUFFER_AGE_MS) {
+                        sessionsToFlush.add(entry.getKey());
+                    }
+                }
+            }
+        }
+        
+        // 刷新这些会话
+        for (String sessionId : sessionsToFlush) {
+            List<BufferedMessage> buffer = messageBuffer.get(sessionId);
+            if (buffer != null) {
+                synchronized (buffer) {
+                    if (!buffer.isEmpty()) {
+                        String agentType = buffer.get(buffer.size() - 1).message.getAgentType();
+                        log.debug("缓冲超时刷新 [session={}]: {}条消息", 
+                            sessionId.substring(0, 8), buffer.size());
+                        flushBuffer(sessionId, buffer, agentType);
+                    }
+                }
+            }
+        }
+    }
+    
+    /**
+     * 截断长文本
+     */
+    private String truncate(String text, int maxLen) {
+        if (text == null || text.length() <= maxLen) return text;
+        return text.substring(0, maxLen) + "...";
+    }
+    
+    /**
+     * 刷新指定会话的缓冲
+     */
+    private void flushBuffer(String sessionId, List<BufferedMessage> buffer, String agentType) {
+        if (buffer.isEmpty()) return;
+        
+        try {
+            // 提取消息内容（带上下文）
+            List<String> batchContents = new ArrayList<>();
+            for (BufferedMessage bm : buffer) {
+                batchContents.add(bm.message.getContent());
+            }
+            
+            // 异步处理批量
+            final List<String> finalContents = batchContents;
+            final String finalAgentType = agentType;
+            executor.submit(() -> {
+                try {
+                    processMessageBatch(sessionId, finalContents, finalAgentType);
+                    log.debug("已处理会话 {} 的 {} 条缓冲消息", sessionId.substring(0, 8), buffer.size());
+                } catch (Exception e) {
+                    log.error("批量处理失败 [session={}]: {}", 
+                        sessionId.substring(0, 8), e.getMessage(), e);
+                }
+            });
+            
+        } finally {
+            buffer.clear();
+            messageBuffer.remove(sessionId);
+        }
+    }
+    
+    /**
+     * 批量处理消息（带上下文）
+     * 这是改进后的核心方法：多消息一起处理，获得更好的上下文
+     */
+    private void processMessageBatch(String sessionId, List<String> batchContents, String agentType) {
+        if (batchContents == null || batchContents.isEmpty()) return;
+        
+        // 对于每条消息，尝试用 LLM 提取（带上下文）
+        // 改进：不再单独处理每条消息，而是将多条消息合并分析
+        for (int i = 0; i < batchContents.size(); i++) {
+            String content = batchContents.get(i);
+            
+            // 构建上下文：将前后的消息作为上下文
+            StringBuilder contextBuilder = new StringBuilder();
+            
+            // 添加前面的一些消息作为上下文（最多5条）
+            int contextStart = Math.max(0, i - 5);
+            for (int j = contextStart; j < i; j++) {
+                contextBuilder.append("[上文] ").append(batchContents.get(j)).append("\n\n");
+            }
+            
+            // 当前消息
+            contextBuilder.append("[当前] ").append(content);
+            
+            String fullContext = contextBuilder.toString();
+            
+            // 调用 memoryService 处理（带上下文）
+            try {
+                memoryService.processMessageWithContext(sessionId, fullContext, agentType);
+            } catch (Exception e) {
+                log.error("单条处理失败: {}", e.getMessage());
+            }
+        }
+    }
+    
+    /**
+     * 手动刷新所有缓冲（用于关闭时）
+     */
+    private void flushAllBuffers() {
+        for (Map.Entry<String, List<BufferedMessage>> entry : messageBuffer.entrySet()) {
+            List<BufferedMessage> buffer = entry.getValue();
+            synchronized (buffer) {
+                if (!buffer.isEmpty()) {
+                    String agentType = buffer.get(0).message.getAgentType();
+                    flushBuffer(entry.getKey(), buffer, agentType);
+                }
+            }
+        }
+    }
+    
     public void stop() {
         running = false;
+        
+        // 先刷新所有缓冲
+        flushAllBuffers();
         
         // 关闭主线程池
         executor.shutdown();
@@ -795,6 +1057,9 @@ public class FileWatcherService {
         }
         if (cleanupExecutor != null) {
             cleanupExecutor.shutdown();
+        }
+        if (bufferFlushExecutor != null) {
+            bufferFlushExecutor.shutdown();
         }
         
         // 等待线程池终止
@@ -808,11 +1073,15 @@ public class FileWatcherService {
             if (cleanupExecutor != null && !cleanupExecutor.awaitTermination(2, TimeUnit.SECONDS)) {
                 cleanupExecutor.shutdownNow();
             }
+            if (bufferFlushExecutor != null && !bufferFlushExecutor.awaitTermination(2, TimeUnit.SECONDS)) {
+                bufferFlushExecutor.shutdownNow();
+            }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             executor.shutdownNow();
             if (persistenceExecutor != null) persistenceExecutor.shutdownNow();
             if (cleanupExecutor != null) cleanupExecutor.shutdownNow();
+            if (bufferFlushExecutor != null) bufferFlushExecutor.shutdownNow();
         }
         
         log.info("FileWatcherService 已停止");

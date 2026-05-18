@@ -304,4 +304,104 @@ public class EmbeddingClient {
         public String content;
         public ExtractRequest(String content) { this.content = content; }
     }
+    
+    /**
+     * 带上下文的 LLM 提取（用于缓冲批量处理）
+     * 发送完整上下文，让 LLM 理解对话的完整情况
+     */
+    public ExtractResult extractWithContext(String fullContext) {
+        try {
+            return executeWithRetry("LLM 上下文提取", () -> {
+                String requestBody = objectMapper.writeValueAsString(
+                    new ExtractWithContextRequest(fullContext));
+
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(baseUrl + "/extract_with_context"))
+                        .timeout(Duration.ofSeconds(90))  // 上下文更长，需要更长的超时
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                        .build();
+
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+                if (response.statusCode() != 200) {
+                    throw new RuntimeException("LLM 上下文提取服务返回错误: " + response.body());
+                }
+
+                JsonNode root = objectMapper.readTree(response.body());
+
+                ExtractResult result = new ExtractResult();
+                result.type = root.has("type") ? root.get("type").asText() : "SKIP";
+                result.title = root.has("title") ? root.get("title").asText() : "";
+                result.reason = root.has("reason") ? root.get("reason").asText() : null;
+                result.extracted = root.has("extracted") ? root.get("extracted") : null;
+
+                result.tags = new ArrayList<>();
+                if (root.has("tags") && root.get("tags").isArray()) {
+                    for (JsonNode tag : root.get("tags")) {
+                        result.tags.add(tag.asText());
+                    }
+                }
+
+                return result;
+            });
+        } catch (RuntimeException e) {
+            log.error("LLM 上下文提取失败", e);
+            return null;
+        }
+    }
+    
+    private static class ExtractWithContextRequest {
+        public String content;     // 当前消息
+        public String context;     // 上下文内容（[上文] 和 [当前] 标记）
+        
+        public ExtractWithContextRequest(String context) {
+            this.context = context;
+            // 从 context 中提取当前消息
+            int currentIndex = context.indexOf("[当前] ");
+            if (currentIndex >= 0) {
+                this.content = context.substring(currentIndex + 7).trim();
+            } else {
+                this.content = context;
+            }
+        }
+    }
+    
+    /**
+     * 使用 LLM 对消息进行分类
+     * @param content 消息内容
+     * @return 分类结果，如 ERROR_CORRECTION, USER_PROFILE 等
+     */
+    public String classifyWithLLM(String content) {
+        try {
+            return executeWithRetry("LLM分类", () -> {
+                String requestBody = objectMapper.writeValueAsString(
+                    new ClassifyRequest(content));
+                
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(baseUrl + "/classify"))
+                        .timeout(Duration.ofSeconds(30))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                        .build();
+                
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                
+                if (response.statusCode() != 200) {
+                    throw new RuntimeException("LLM分类服务返回错误: " + response.body());
+                }
+                
+                JsonNode root = objectMapper.readTree(response.body());
+                return root.has("type") ? root.get("type").asText() : "UNKNOWN";
+            });
+        } catch (Exception e) {
+            log.error("LLM分类失败: {}", e.getMessage());
+            return null;  // 返回 null 表示分类失败，使用规则方法
+        }
+    }
+    
+    private static class ClassifyRequest {
+        public String content;
+        public ClassifyRequest(String content) { this.content = content; }
+    }
 }

@@ -52,6 +52,13 @@ public class MemoryService {
     private boolean isValidTableName(String tableName) {
         return tableName != null && ALLOWED_TABLES.contains(tableName);
     }
+    
+    /**
+     * 更新会话摘要
+     */
+    public void updateSessionSummary(String sessionId, String summary) {
+        databaseService.updateSessionSummary(sessionId, summary);
+    }
 
     public MemoryService(DatabaseService databaseService) {
         this.databaseService = databaseService;
@@ -72,34 +79,32 @@ public class MemoryService {
     }
     
     /**
-     * 处理消息，判断是否需要提取记忆
+     * 处理消息，判断是否需要提取记忆（优先使用 LLM 分类）
      */
     public void processMessage(String sessionId, String content, String agentType) {
         if (content == null || content.trim().isEmpty()) {
             return;
         }
         
-        // 尝试使用 LLM 提取
-        EmbeddingClient.ExtractResult llmResult = null;
+        // 优先使用 LLM 分类（更准确）
+        MemoryType type = null;
+        boolean usedLLM = false;
+        
         if (embeddingClient.isHealthy()) {
-            llmResult = embeddingClient.extract(content);
+            String llmType = embeddingClient.classifyWithLLM(content);
+            if (llmType != null) {
+                try {
+                    type = MemoryType.valueOf(llmType);
+                    usedLLM = true;
+                    log.debug("LLM 分类结果: {}", type);
+                } catch (IllegalArgumentException e) {
+                    log.warn("LLM 返回未知类型: {}, 回退到关键词分类", llmType);
+                }
+            }
         }
         
-        MemoryType type;
-        ExtractedMemory memory;
-        
-        if (llmResult != null && !"SKIP".equals(llmResult.type) && llmResult.extracted != null) {
-            // 使用 LLM 提取结果
-            try {
-                type = MemoryType.valueOf(llmResult.type);
-                memory = convertFromLLMResult(llmResult);
-            } catch (IllegalArgumentException e) {
-                log.warn("LLM 返回未知类型: {}, 回退到关键词分类", llmResult.type);
-                type = classifier.classify(content);
-                memory = extractWithKeywords(content, type);
-            }
-        } else {
-            // 回退到关键词方法
+        // LLM 不可用或分类失败，使用关键词方法
+        if (type == null) {
             type = classifier.classify(content);
             if (type == MemoryType.UNKNOWN) {
                 log.debug("消息未匹配任何记忆类型，跳过");
@@ -109,6 +114,26 @@ public class MemoryService {
                 log.debug("消息不值得保存为记忆，跳过");
                 return;
             }
+        }
+        
+        // 尝试使用 LLM 提取结构化内容
+        EmbeddingClient.ExtractResult llmResult = null;
+        if (embeddingClient.isHealthy()) {
+            llmResult = embeddingClient.extract(content);
+        }
+        
+        ExtractedMemory memory;
+        
+        if (usedLLM && llmResult != null && !"SKIP".equals(llmResult.type) && llmResult.extracted != null) {
+            // 使用 LLM 提取结果
+            try {
+                type = MemoryType.valueOf(llmResult.type);  // 使用提取时的类型
+                memory = convertFromLLMResult(llmResult);
+            } catch (IllegalArgumentException e) {
+                memory = extractWithKeywords(content, type);
+            }
+        } else {
+            // 使用关键词提取
             memory = extractWithKeywords(content, type);
         }
         
@@ -132,6 +157,90 @@ public class MemoryService {
         saveMemory(memory, type, sessionId, agentType, embedding);
         
         log.info("已保存记忆 [{}]: {}", type.getDisplayName(), memory.title);
+    }
+    
+    /**
+     * 处理消息（带上下文）- 用于缓冲批量处理
+     * 改进：使用完整上下文进行分类和提取
+     */
+    public void processMessageWithContext(String sessionId, String fullContext, String agentType) {
+        if (fullContext == null || fullContext.trim().isEmpty()) {
+            return;
+        }
+        
+        // 提取当前消息（[当前] 标记之后的内容）
+        String currentContent = "";
+        int currentIndex = fullContext.indexOf("[当前] ");
+        if (currentIndex >= 0) {
+            currentContent = fullContext.substring(currentIndex + 7).trim();
+        } else {
+            // 没有上下文标记，直接使用全部内容
+            currentContent = fullContext;
+        }
+        
+        if (currentContent.isEmpty()) {
+            return;
+        }
+        
+        // 提取上下文（[上文] 部分）
+        String contextContent = "";
+        if (currentIndex > 0) {
+            contextContent = fullContext.substring(0, currentIndex).trim();
+        }
+        
+        // 使用 LLM 提取（优先）- 带完整上下文
+        EmbeddingClient.ExtractResult llmResult = null;
+        if (embeddingClient.isHealthy()) {
+            llmResult = embeddingClient.extractWithContext(fullContext);
+        }
+        
+        MemoryType type;
+        ExtractedMemory memory;
+        
+        if (llmResult != null && !"SKIP".equals(llmResult.type) && llmResult.extracted != null) {
+            // 使用 LLM 提取结果
+            try {
+                type = MemoryType.valueOf(llmResult.type);
+                memory = convertFromLLMResult(llmResult);
+            } catch (IllegalArgumentException e) {
+                log.warn("LLM 返回未知类型: {}, 回退到关键词分类", llmResult.type);
+                type = classifier.classify(currentContent);
+                memory = extractWithKeywords(currentContent, type);
+            }
+        } else {
+            // 回退到关键词方法
+            type = classifier.classify(currentContent);
+            if (type == MemoryType.UNKNOWN) {
+                log.debug("消息未匹配任何记忆类型，跳过");
+                return;
+            }
+            if (!classifier.isWorthRemembering(currentContent, type)) {
+                log.debug("消息不值得保存为记忆，跳过");
+                return;
+            }
+            memory = extractWithKeywords(currentContent, type);
+        }
+        
+        if (memory == null) {
+            return;
+        }
+        
+        // 语义去重
+        if (isDuplicate(memory.title, type)) {
+            log.debug("检测到相似记忆，跳过: {}", memory.title);
+            return;
+        }
+        
+        // 生成向量
+        float[] embedding = null;
+        if (embeddingClient.isHealthy()) {
+            embedding = embeddingClient.embed(memory.title + " " + currentContent);
+        }
+        
+        // 存储
+        saveMemory(memory, type, sessionId, agentType, embedding);
+        
+        log.info("已保存记忆 [带上下文 - {}]: {}", type.getDisplayName(), memory.title);
     }
     
     /**

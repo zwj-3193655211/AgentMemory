@@ -1,5 +1,10 @@
 <template>
   <div class="app-container">
+    <!-- 初始化向导 -->
+    <Setup v-if="showSetup" @complete="handleSetupComplete" />
+
+    <!-- 主界面 -->
+    <div v-show="!showSetup">
     <!-- 顶部导航 -->
     <header class="app-header">
       <div class="app-header-inner">
@@ -12,60 +17,70 @@
         <div class="search-box">
           <el-input
             v-model="searchQuery"
-            placeholder="搜索..."
+            placeholder="搜索记忆..."
             :prefix-icon="Search"
             clearable
             @keyup.enter="handleSearch"
-            style="width: 150px"
-            size="small"
+            style="width: 280px"
+            size="default"
+            round
           />
         </div>
 
-        <el-menu mode="horizontal" :default-active="activeMenu" @select="handleMenuSelect" class="main-menu">
+        <el-menu mode="horizontal" :default-active="activeMenu" @select="handleMenuSelect" class="main-menu" :ellipsis="false">
           <el-menu-item index="dashboard">
             <el-tooltip content="仪表盘" placement="bottom">
               <el-icon><Odometer /></el-icon>
             </el-tooltip>
+            <span class="menu-label">仪表盘</span>
           </el-menu-item>
           <el-menu-item index="sessions">
             <el-tooltip content="对话记录" placement="bottom">
               <el-icon><ChatDotRound /></el-icon>
             </el-tooltip>
+            <span class="menu-label">对话记录</span>
           </el-menu-item>
           <el-menu-item index="errors">
             <el-tooltip content="错误纠正" placement="bottom">
               <el-icon><WarningFilled /></el-icon>
             </el-tooltip>
+            <span class="menu-label">错误纠正</span>
           </el-menu-item>
           <el-menu-item index="profiles">
             <el-tooltip content="用户画像" placement="bottom">
               <el-icon><User /></el-icon>
             </el-tooltip>
+            <span class="menu-label">用户画像</span>
           </el-menu-item>
           <el-menu-item index="practices">
             <el-tooltip content="实践经验" placement="bottom">
               <el-icon><DocumentChecked /></el-icon>
             </el-tooltip>
+            <span class="menu-label">实践经验</span>
           </el-menu-item>
           <el-menu-item index="contexts">
             <el-tooltip content="项目上下文" placement="bottom">
               <el-icon><FolderOpened /></el-icon>
             </el-tooltip>
+            <span class="menu-label">项目上下文</span>
           </el-menu-item>
           <el-menu-item index="skills">
             <el-tooltip content="技能沉淀" placement="bottom">
               <el-icon><Reading /></el-icon>
             </el-tooltip>
+            <span class="menu-label">技能沉淀</span>
           </el-menu-item>
           <el-menu-item index="compression">
             <el-tooltip content="会话摘要" placement="bottom">
               <el-icon><Connection /></el-icon>
             </el-tooltip>
+            <span class="menu-label">会话摘要</span>
           </el-menu-item>
-          <el-menu-item index="settings">
+          <el-menu-item index="settings" class="settings-menu-item">
             <el-tooltip content="设置" placement="bottom">
               <el-icon><Setting /></el-icon>
             </el-tooltip>
+            <span class="menu-label">设置</span>
           </el-menu-item>
         </el-menu>
       </div>
@@ -82,7 +97,7 @@
 
         <!-- 统计卡片 -->
         <div class="stats-grid">
-          <el-card class="stat-card" @click="activeMenu = 'sessions'">
+          <el-card class="stat-card clickable" shadow="hover" @click="activeMenu = 'sessions'">
             <div class="stat-content">
               <div class="stat-icon sessions">
                 <el-icon :size="32"><ChatDotRound /></el-icon>
@@ -91,10 +106,13 @@
                 <div class="stat-number">{{ stats.sessions }}</div>
                 <div class="stat-label">会话总数</div>
               </div>
+              <div class="stat-arrow">
+                <el-icon><ArrowRight /></el-icon>
+              </div>
             </div>
           </el-card>
 
-          <el-card class="stat-card" @click="activeMenu = 'errors'">
+          <el-card class="stat-card clickable" shadow="hover" @click="activeMenu = 'errors'">
             <div class="stat-content">
               <div class="stat-icon errors">
                 <el-icon :size="32"><WarningFilled /></el-icon>
@@ -103,10 +121,13 @@
                 <div class="stat-number">{{ stats.errors }}</div>
                 <div class="stat-label">错误纠正</div>
               </div>
+              <div class="stat-arrow">
+                <el-icon><ArrowRight /></el-icon>
+              </div>
             </div>
           </el-card>
 
-          <el-card class="stat-card" @click="activeMenu = 'practices'">
+          <el-card class="stat-card clickable" shadow="hover" @click="activeMenu = 'practices'">
             <div class="stat-content">
               <div class="stat-icon practices">
                 <el-icon :size="32"><DocumentChecked /></el-icon>
@@ -115,10 +136,13 @@
                 <div class="stat-number">{{ stats.practices }}</div>
                 <div class="stat-label">实践经验</div>
               </div>
+              <div class="stat-arrow">
+                <el-icon><ArrowRight /></el-icon>
+              </div>
             </div>
           </el-card>
 
-          <el-card class="stat-card" @click="activeMenu = 'profiles'">
+          <el-card class="stat-card clickable" shadow="hover" @click="activeMenu = 'profiles'">
             <div class="stat-content">
               <div class="stat-icon profiles">
                 <el-icon :size="32"><User /></el-icon>
@@ -127,10 +151,13 @@
                 <div class="stat-number">{{ stats.profiles }}</div>
                 <div class="stat-label">用户画像</div>
               </div>
+              <div class="stat-arrow">
+                <el-icon><ArrowRight /></el-icon>
+              </div>
             </div>
           </el-card>
 
-          <el-card class="stat-card" @click="activeMenu = 'contexts'">
+          <el-card class="stat-card clickable" shadow="hover" @click="activeMenu = 'contexts'">
             <div class="stat-content">
               <div class="stat-icon contexts">
                 <el-icon :size="32"><FolderOpened /></el-icon>
@@ -139,10 +166,13 @@
                 <div class="stat-number">{{ stats.contexts }}</div>
                 <div class="stat-label">项目上下文</div>
               </div>
+              <div class="stat-arrow">
+                <el-icon><ArrowRight /></el-icon>
+              </div>
             </div>
           </el-card>
 
-          <el-card class="stat-card" @click="activeMenu = 'skills'">
+          <el-card class="stat-card clickable" shadow="hover" @click="activeMenu = 'skills'">
             <div class="stat-content">
               <div class="stat-icon skills">
                 <el-icon :size="32"><Reading /></el-icon>
@@ -151,10 +181,13 @@
                 <div class="stat-number">{{ stats.skills }}</div>
                 <div class="stat-label">技能沉淀</div>
               </div>
+              <div class="stat-arrow">
+                <el-icon><ArrowRight /></el-icon>
+              </div>
             </div>
           </el-card>
 
-          <el-card class="stat-card" @click="activeMenu = 'sessions'">
+          <el-card class="stat-card messages-card" shadow="never">
             <div class="stat-content">
               <div class="stat-icon messages">
                 <el-icon :size="32"><Box /></el-icon>
@@ -280,7 +313,7 @@
         </div>
         
         <el-row :gutter="20" style="margin-bottom: 20px">
-          <el-col :span="6">
+          <el-col :xs="12" :sm="12" :md="6">
             <el-card class="stat-card">
               <div class="stat-content">
                 <div class="stat-number">{{ compressionStats.totalSessions }}</div>
@@ -288,7 +321,7 @@
               </div>
             </el-card>
           </el-col>
-          <el-col :span="6">
+          <el-col :xs="12" :sm="12" :md="6">
             <el-card class="stat-card">
               <div class="stat-content">
                 <div class="stat-number">{{ compressionStats.compressedSessions }}</div>
@@ -296,7 +329,7 @@
               </div>
             </el-card>
           </el-col>
-          <el-col :span="6">
+          <el-col :xs="12" :sm="12" :md="6">
             <el-card class="stat-card">
               <div class="stat-content">
                 <div class="stat-number">{{ compressionStats.pendingSessions }}</div>
@@ -304,7 +337,7 @@
               </div>
             </el-card>
           </el-col>
-          <el-col :span="6">
+          <el-col :xs="12" :sm="12" :md="6">
             <el-card class="stat-card">
               <div class="stat-content">
                 <div class="stat-number">{{ compressionStats.totalMessages }}</div>
@@ -314,7 +347,7 @@
           </el-col>
         </el-row>
         
-        <el-card>
+        <el-card class="setting-card">
           <template #header>
             <div class="card-header">
               <span>压缩配置</span>
@@ -372,8 +405,6 @@
                   <span style="margin-left: 10px;">{{ getLLMProvider(compressionConfig.llmProvider)?.baseUrl }}</span>
                 </span>
               </el-form-item>
-              
-
             </template>
             
             <el-form-item>
@@ -384,7 +415,7 @@
         </el-card>
         
         <!-- LLM Provider 配置 -->
-        <el-card style="margin-top: 20px">
+        <el-card class="setting-card" style="margin-top: 20px">
           <template #header>
             <div class="card-header">
               <span>LLM Provider（用于会话压缩）</span>
@@ -440,10 +471,10 @@
               <el-input v-model="newLLMProvider.model" :placeholder="getModelPlaceholder()" style="width: 300px" />
             </el-form-item>
 
-                          <el-form-item v-if="newLLMProvider.providerName === 'ollama'" label="思考模式">
-                            <el-switch v-model="newLLMProvider.thinkMode" />
-                            <span style="margin-left: 10px; font-size: 12px;">当前是「{{ newLLMProvider.thinkMode ? '思考' : '直接输出' }}」模式</span>
-                          </el-form-item>
+            <el-form-item v-if="newLLMProvider.providerName === 'ollama'" label="思考模式">
+              <el-switch v-model="newLLMProvider.thinkMode" />
+              <span style="margin-left: 10px; font-size: 12px;">当前是「{{ newLLMProvider.thinkMode ? '思考' : '直接输出' }}」模式</span>
+            </el-form-item>
             <el-form-item label="显示名称">
               <el-input v-model="newLLMProvider.displayName" placeholder="如：我的 OpenAI" style="width: 200px" />
             </el-form-item>
@@ -459,7 +490,7 @@
           </template>
         </el-dialog>
         
-        <el-card style="margin-top: 20px">
+        <el-card class="setting-card" style="margin-top: 20px">
           <template #header>
             <div class="card-header">
               <span>会话摘要列表</span>
@@ -835,6 +866,7 @@
         <el-button type="primary" @click="addCustomAgent" :loading="addingAgent">添加</el-button>
       </template>
     </el-dialog>
+    </div>
   </div>
 </template>
 
@@ -842,7 +874,7 @@
 import { ref, computed, onMounted, reactive } from 'vue'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Setting, ChatDotRound, WarningFilled, User, DocumentChecked, FolderOpened, Reading, Odometer, Box, Delete, Plus, Download, Close, Connection, InfoFilled } from '@element-plus/icons-vue'
+import { Search, Setting, ChatDotRound, WarningFilled, User, DocumentChecked, FolderOpened, Reading, Odometer, Box, Delete, Plus, Download, Close, Connection, InfoFilled, ArrowRight } from '@element-plus/icons-vue'
 
 // 导入记忆库组件
 import Errors from './views/Errors.vue'
@@ -850,6 +882,7 @@ import Profiles from './views/Profiles.vue'
 import Practices from './views/Practices.vue'
 import Contexts from './views/Contexts.vue'
 import Skills from './views/Skills.vue'
+import Setup from './views/Setup.vue'
 
 // 使用 Vite 环境变量，支持运行时配置
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8080/api'
@@ -857,6 +890,7 @@ const EMBED_BASE = import.meta.env.VITE_EMBED_BASE || 'http://localhost:8100'
 
 // 数据
 const activeMenu = ref('dashboard')
+const showSetup = ref(true)  // 默认显示初始化向导
 const agents = ref<any[]>([])
 const sessions = ref<any[]>([])
 const messages = ref<any[]>([])
@@ -1828,7 +1862,17 @@ const exportSingleSession = async (sessionId: string) => {
   }
 }
 
-onMounted(() => {
+// 初始化完成处理
+const handleSetupComplete = () => {
+  showSetup.value = false
+  loadAllData()
+  loadEmbeddingStatus()
+  loadEmbeddingModels()
+  loadPresets()
+  loadCompressionStats()
+}
+
+onMounted(async () => {
   // 使用统一加载方法，减少API调用次数
   loadAllData()
   loadEmbeddingStatus()
@@ -1844,14 +1888,16 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* 整体布局 */
 .app-container {
   min-height: 100vh;
-  background: #f5f7fa;
+  background: linear-gradient(180deg, #f5f7fa 0%, #e4e8f0 100%);
 }
 
+/* 顶部导航 */
 .app-header {
-  background: #fff;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -1860,105 +1906,140 @@ onMounted(() => {
 .app-header-inner {
   display: flex;
   align-items: center;
-  gap: 16px;
-  max-width: 1400px;
+  gap: 20px;
+  max-width: 1600px;
   margin: 0 auto;
-  padding: 0 16px;
-  height: 50px;
+  padding: 0 24px;
+  height: 60px;
 }
 
 .app-main {
   display: flex;
-  padding: 24px 16px;
+  padding: 24px;
   gap: 24px;
-  max-width: 1400px;
+  max-width: 1600px;
   margin: 0 auto;
   box-sizing: border-box;
 }
 
+/* Logo */
 .logo {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 18px;
-  font-weight: bold;
+  gap: 10px;
+  font-size: 20px;
+  font-weight: 700;
   color: #409eff;
   flex-shrink: 0;
+  padding: 8px 0;
 }
 
+.logo .el-icon {
+  font-size: 28px;
+}
+
+/* 搜索框 */
 .search-box {
   display: flex;
   align-items: center;
   flex-shrink: 0;
 }
 
-.stats {
-  margin-left: auto;
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
+/* 主菜单 */
 .main-menu {
   flex: 1;
   border-bottom: none;
+  justify-content: flex-start;
+  background: transparent;
 }
 
 .main-menu .el-menu-item {
-  padding: 0 8px;
-  height: 50px;
-  line-height: 50px;
+  padding: 0 16px;
+  height: 60px;
+  line-height: 60px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.3s ease;
+}
+
+.main-menu .el-menu-item:hover {
+  background: rgba(64, 158, 255, 0.08);
+  color: #409eff;
 }
 
 .main-menu .el-menu-item .el-icon {
   font-size: 18px;
 }
 
+.menu-label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.settings-menu-item {
+  margin-left: auto;
+}
+
+/* 内容面板 */
 .content-panel {
   flex: 1;
   min-width: 0;
-  background: #fff;
-  border-radius: 8px;
+  background: #ffffff;
+  border-radius: 12px;
   padding: 24px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
 }
 
 .content-panel.full {
   width: 100%;
 }
 
+/* 详情面板 */
 .detail-panel {
-  width: 400px;
-  flex-shrink: 0;
-  background: #fff;
-  border-radius: 8px;
+  flex: 0 0 420px;
+  background: #ffffff;
+  border-radius: 12px;
   padding: 24px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
 }
 
+/* 面板头部 */
 .panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f0f2f5;
 }
 
 .panel-header h2, .panel-header h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 20px;
+  font-weight: 600;
+  color: #1a1a2e;
 }
 
+/* 会话列表 */
 .session-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 16px;
 }
 
 .session-card {
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid #f0f2f5;
 }
 
 .session-card:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(64, 158, 255, 0.15);
+  border-color: #409eff;
 }
 
 .session-header {
@@ -1987,47 +2068,146 @@ onMounted(() => {
   color: #909399;
 }
 
-.message-list {
-  max-height: calc(100vh - 200px);
-  overflow-y: auto;
+/* 统计卡片网格 */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
 }
 
-.message-item {
-  padding: 12px;
-  margin-bottom: 12px;
-  border-radius: 8px;
+/* 统计卡片 */
+.stat-card {
+  border: none;
+  border-radius: 12px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.message-item.user {
-  background: #ecf5ff;
+.stat-card.clickable {
+  cursor: pointer;
 }
 
-.message-item.assistant {
-  background: #f0f9eb;
+.stat-card.clickable:hover {
+  transform: translateY(-4px);
 }
 
-.message-role {
-  font-size: 12px;
-  color: #909399;
-  margin-bottom: 4px;
+.stat-card.messages-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
 }
 
-.message-content {
+.stat-card.messages-card .stat-icon {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.stat-card.messages-card .stat-label {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.stat-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.stat-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.stat-icon.sessions {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+}
+
+.stat-icon.errors {
+  background: linear-gradient(135deg, #f56565 0%, #fc8181 100%);
+  color: #fff;
+}
+
+.stat-icon.practices {
+  background: linear-gradient(135deg, #48bb78 0%, #68d391 100%);
+  color: #fff;
+}
+
+.stat-icon.profiles {
+  background: linear-gradient(135deg, #ed8936 0%, #f6ad55 100%);
+  color: #fff;
+}
+
+.stat-icon.contexts {
+  background: linear-gradient(135deg, #718096 0%, #a0aec0 100%);
+  color: #fff;
+}
+
+.stat-icon.skills {
+  background: linear-gradient(135deg, #38b2ac 0%, #4fd1c5 100%);
+  color: #fff;
+}
+
+.stat-icon.messages {
+  background: linear-gradient(135deg, #9f7aea 0%, #b794f4 100%);
+  color: #fff;
+}
+
+.stat-info {
+  flex: 1;
+}
+
+.stat-number {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1a1a2e;
+  line-height: 1.2;
+}
+
+.stat-label {
   font-size: 14px;
-  white-space: pre-wrap;
-  word-break: break-all;
+  color: #606266;
+  margin-top: 4px;
 }
 
-.item-tag {
-  margin: 2px;
+.stat-arrow {
+  opacity: 0;
+  transform: translateX(-8px);
+  transition: all 0.3s ease;
+  color: #409eff;
 }
 
-.tech-tag {
-  margin: 2px;
+.stat-card.clickable:hover .stat-arrow {
+  opacity: 1;
+  transform: translateX(0);
 }
 
+/* 活动区域 */
+.activity-section {
+  margin-top: 24px;
+}
+
+.activity-section h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a2e;
+  margin-bottom: 16px;
+}
+
+/* 设置卡片 */
 .setting-card {
   margin-bottom: 20px;
+  border-radius: 12px;
+  border: 1px solid #f0f2f5;
+}
+
+.setting-card :deep(.el-card__header) {
+  padding: 16px 20px;
+  border-bottom: 1px solid #f0f2f5;
+  font-weight: 600;
 }
 
 .card-header {
@@ -2039,9 +2219,116 @@ onMounted(() => {
 .form-tip {
   font-size: 12px;
   color: #909399;
-  margin-top: 4px;
+  margin-left: 8px;
 }
 
+/* 消息列表 */
+.message-list {
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+}
+
+.message-item {
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  background: #f5f7fa;
+}
+
+.message-item.user {
+  background: linear-gradient(135deg, #e8f4fd 0%, #d4edfc 100%);
+}
+
+.message-item.assistant {
+  background: linear-gradient(135deg, #f0f9eb 0%, #e8f5e9 100%);
+}
+
+.message-role {
+  font-size: 12px;
+  font-weight: 600;
+  color: #606266;
+  margin-bottom: 4px;
+}
+
+.message-content {
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.empty-hint {
+  text-align: center;
+  color: #909399;
+  padding: 20px;
+  font-size: 14px;
+}
+
+/* 预设区域 */
+.preset-section {
+  margin-bottom: 20px;
+  padding: 16px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #edf2f7 100%);
+  border-radius: 12px;
+}
+
+.preset-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.preset-title {
+  font-weight: 600;
+  color: #303133;
+}
+
+.preset-tip {
+  font-size: 12px;
+  color: #909399;
+  margin-left: 12px;
+}
+
+.preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.preset-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e4e7ed;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.preset-item:hover {
+  border-color: #409eff;
+  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.15);
+}
+
+.preset-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.preset-name {
+  font-weight: 500;
+  color: #303133;
+  min-width: 100px;
+}
+
+.preset-model {
+  font-size: 12px;
+  color: #909399;
+}
+
+/* Embedding 模型列表 */
 .embedding-model-info {
   display: flex;
   align-items: center;
@@ -2062,7 +2349,7 @@ onMounted(() => {
 .embedding-model-item {
   padding: 16px;
   border: 1px solid #e4e7ed;
-  border-radius: 8px;
+  border-radius: 12px;
   transition: all 0.3s;
 }
 
@@ -2081,6 +2368,7 @@ onMounted(() => {
   align-items: center;
   gap: 10px;
   margin-bottom: 8px;
+  flex-wrap: wrap;
 }
 
 .embedding-model-item .model-main-info .model-name {
@@ -2098,6 +2386,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 .embedding-model-item .download-progress {
@@ -2133,24 +2422,6 @@ onMounted(() => {
   white-space: nowrap;
 }
 
-.embedding-model-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-}
-
-.embedding-model-option .model-name {
-  font-weight: 500;
-  min-width: 150px;
-}
-
-.embedding-model-option .model-desc {
-  flex: 1;
-  color: #909399;
-  font-size: 12px;
-}
-
 .embedding-tip {
   display: flex;
   align-items: center;
@@ -2159,168 +2430,86 @@ onMounted(() => {
   font-size: 12px;
 }
 
-.empty-hint {
-  text-align: center;
-  color: #909399;
-  font-size: 12px;
-  padding: 20px;
+/* 响应式设计 */
+@media (max-width: 1200px) {
+  .app-main {
+    padding: 16px;
+    gap: 16px;
+  }
+
+  .content-panel {
+    padding: 16px;
+  }
+
+  .detail-panel {
+    flex: 0 0 360px;
+  }
+
+  .menu-label {
+    display: none;
+  }
 }
 
-.preset-section {
-  margin-bottom: 20px;
-  padding: 16px;
-  background: #f5f7fa;
-  border-radius: 8px;
+@media (max-width: 768px) {
+  .app-header-inner {
+    padding: 0 12px;
+    gap: 12px;
+  }
+
+  .logo span {
+    display: none;
+  }
+
+  .search-box {
+    flex: 1;
+    max-width: 200px;
+  }
+
+  .search-box :deep(.el-input) {
+    width: 100% !important;
+  }
+
+  .main-menu {
+    overflow-x: auto;
+  }
+
+  .main-menu .el-menu-item {
+    padding: 0 12px;
+  }
+
+  .settings-menu-item {
+    margin-left: 0;
+  }
+
+  .app-main {
+    flex-direction: column;
+    padding: 12px;
+  }
+
+  .detail-panel {
+    flex: 1;
+    width: 100%;
+    max-height: none;
+  }
+
+  .session-list {
+    grid-template-columns: 1fr;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
 }
 
-.preset-header {
-  display: flex;
-  align-items: center;
-  margin-bottom: 12px;
-}
+@media (max-width: 480px) {
+  .stats-grid {
+    grid-template-columns: 1fr !important;
+  }
 
-.preset-title {
-  font-weight: 500;
-  color: #303133;
-}
-
-.preset-tip {
-  font-size: 12px;
-  color: #909399;
-  margin-left: 12px;
-}
-
-.preset-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.preset-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  background: white;
-  border-radius: 6px;
-  border: 1px solid #e4e7ed;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.preset-item:hover {
-  border-color: #409eff;
-  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.15);
-}
-
-.preset-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.preset-name {
-  font-weight: 500;
-  color: #303133;
-  min-width: 100px;
-}
-
-.preset-model {
-  font-size: 12px;
-  color: #909399;
-}
-
-/* 仪表盘样式 */
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.stat-card {
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-}
-
-.stat-content {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.stat-icon {
-  width: 60px;
-  height: 60px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-}
-
-.stat-icon.sessions {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-
-.stat-icon.messages {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-}
-
-.stat-icon.errors {
-  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-}
-
-.stat-icon.practices {
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-}
-
-.stat-icon.profiles {
-  background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
-}
-
-.stat-icon.contexts {
-  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-}
-
-.stat-icon.skills {
-  background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);
-}
-
-.stat-icon.agents {
-  background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
-}
-
-.stat-info {
-  flex: 1;
-}
-
-.stat-number {
-  font-size: 28px;
-  font-weight: bold;
-  color: #303133;
-  line-height: 1;
-}
-
-.stat-label {
-  font-size: 14px;
-  color: #909399;
-  margin-top: 4px;
-}
-
-.activity-section {
-  margin-top: 24px;
-}
-
-.activity-section h3 {
-  margin: 0 0 16px 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: #303133;
+  .panel-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
 }
 </style>

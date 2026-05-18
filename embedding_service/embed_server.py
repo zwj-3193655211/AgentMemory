@@ -407,6 +407,14 @@ def get_local_llm():
         with _model_lock:
             if llm_model is None:  # double check
                 logger.info(f"加载本地 LLM 模型 ({LLM_LOCAL_MODEL})...")
+                
+                # 设置离线模式，避免网络连接
+                import os
+                os.environ['HF_HUB_OFFLINE'] = '1'
+                os.environ['TRANSFORMERS_OFFLINE'] = '1'
+                os.environ['HF_HOME'] = MODEL_CACHE
+                os.environ['TRANSFORMERS_CACHE'] = MODEL_CACHE
+                
                 import torch
                 from transformers import AutoModelForCausalLM, AutoTokenizer
                 
@@ -1010,12 +1018,12 @@ def extract():
     try:
         data = request.get_json()
         content = data.get('content', '')
-        
+
         if not content:
             return jsonify({'error': 'content 不能为空'}), 400
-        
+
         result = None
-        
+
         # 根据配置选择提取方式
         if LLM_MODE == 'api':
             try:
@@ -1023,24 +1031,411 @@ def extract():
                 logger.info(f"API LLM提取完成: type={result.get('type')}")
             except Exception as e:
                 logger.warning(f"API LLM提取失败，回退到规则: {e}")
-                
+
         elif LLM_MODE == 'local':
             try:
                 result = extract_with_local_llm(content)
                 logger.info(f"本地LLM提取完成: type={result.get('type')}")
             except Exception as e:
                 logger.warning(f"本地LLM提取失败，回退到规则: {e}")
-        
+
         # 如果 LLM 未启用或失败，使用规则提取
         if result is None:
             result = extract_with_rules(content)
             logger.info(f"规则提取完成: type={result.get('type')}")
-        
+
         return jsonify(result)
-        
+
     except Exception as e:
         logger.error(f"语义提取失败: {e}")
         return jsonify({'type': 'SKIP', 'reason': str(e)})
+
+
+@app.route('/extract_with_context', methods=['POST'])
+def extract_with_context():
+    """带上下文的语义提取（用于缓冲批量处理）
+
+    改进：接收包含 [上文] 和 [当前] 标记的完整上下文，
+    让 LLM 能够理解对话的完整情况，从而做出更准确的分类和提取。
+    """
+    try:
+        data = request.get_json()
+        context = data.get('context', '')
+
+        if not context:
+            return jsonify({'error': 'context 不能为空'}), 400
+
+        # 提取当前消息（[当前] 标记之后的内容）
+        current_content = context
+        if '[当前]' in context:
+            parts = context.split('[当前]')
+            current_content = parts[-1].strip() if len(parts) > 1 else context
+
+        if not current_content or len(current_content) < 10:
+            return jsonify({'type': 'SKIP', 'reason': '当前消息内容为空或过短'})
+
+        result = None
+
+        # 根据配置选择提取方式
+        if LLM_MODE == 'api':
+            try:
+                # 使用增强的提示词，包含上下文信息
+                result = call_api_llm_with_context(context)
+                logger.info(f"API LLM上下文提取完成: type={result.get('type')}")
+            except Exception as e:
+                logger.warning(f"API LLM上下文提取失败，回退到规则: {e}")
+
+        elif LLM_MODE == 'local':
+            try:
+                result = extract_with_local_llm_with_context(context)
+                logger.info(f"本地LLM上下文提取完成: type={result.get('type')}")
+            except Exception as e:
+                logger.warning(f"本地LLM上下文提取失败，回退到规则: {e}")
+
+        # 如果 LLM 未启用或失败，使用规则提取
+        if result is None:
+            result = extract_with_rules(current_content)
+            logger.info(f"规则提取完成(上下文): type={result.get('type')}")
+
+        return jsonify(result)
+
+    except Exception as e:
+        logger.error(f"上下文语义提取失败: {e}")
+        return jsonify({'type': 'SKIP', 'reason': str(e)})
+
+
+def call_api_llm_with_context(context: str) -> dict:
+    """调用外部 API 进行带上下文的语义提取"""
+    if not LLM_API_KEY:
+        raise ValueError("LLM_API_KEY 未配置")
+
+    # 预处理：过滤无效内容
+    cleaned_context, should_skip = preprocess_content(context)
+    if should_skip:
+        return {'type': 'SKIP', 'reason': '预处理后内容无效'}
+
+    # 增强的提示词模板（包含上下文说明）
+    enhanced_prompt = """你是记忆提取专家。分析对话内容，提取结构化记忆。
+
+【五大记忆库定义】
+
+1. **ERROR_CORRECTION（错误纠正）**
+   - 核心：已发生的具体问题 + 验证过的解决方案
+   - 必须有：问题现象 + 根因分析 + 解决方案
+   - 触发词：错误、报错、失败、异常 + 解决了、原因是、改成
+
+2. **USER_PROFILE（用户偏好）**
+   - 核心：用户的偏好、习惯、约束
+   - 关键：约束比偏好更重要（"不要"比"要"更有价值）
+   - 触发词：我喜欢、我偏好、我不用、请记住、以后、拒绝
+
+3. **BEST_PRACTICE（最佳实践）**
+   - 核心：特定场景下验证过有效的做法
+   - 必须有：场景边界 + 权衡取舍
+   - 触发词：建议、推荐、应该、最好 + 当...时、在...场景
+
+4. **PROJECT_CONTEXT（项目上下文）**
+   - 核心：项目技术背景、架构决策、目录结构
+   - 触发词：项目、技术栈、框架、目录结构、架构决策
+
+5. **SKILL（技能沉淀）**
+   - 核心：可复用的能力包（脚本、模板、踩坑点）
+   - 必须有：步骤 + 踩坑点（AI无法推导的知识）
+   - 触发词：擅长、精通、步骤、流程、模板、脚本
+
+【对话上下文】
+上下文用 [上文] 标记，历史消息用 [当前] 标记当前正在分析的消息。
+{content}
+
+【重要提示】
+- [上文] 部分帮助你理解对话的完整背景
+- [当前] 部分是当前正在分析的消息，需要根据上下文判断其价值
+- 如果上下文显示问题已解决，应归类为 ERROR_CORRECTION
+- 如果上下文显示用户表达了偏好或约束，应归类为 USER_PROFILE
+- 避免遗漏有价值的记忆
+
+【输出要求】
+严格按JSON格式返回：
+{"type": "类型", "title": "简短标题(≤30字)", "tags": ["标签"], "extracted": {...具体字段...}, "reason": "判断理由"}
+
+无价值内容返回: {"type": "SKIP", "reason": "原因"}"""
+
+    prompt = enhanced_prompt.format(content=cleaned_context[:3000])  # 上下文更长，截断到3000字符
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {LLM_API_KEY}"
+    }
+
+    payload = {
+        "model": LLM_API_MODEL,
+        "messages": [
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.1,
+        "max_tokens": 1500  # 稍微增加以适应更长的输出
+    }
+
+    try:
+        resp = requests.post(
+            f"{LLM_API_BASE}/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=LLM_API_TIMEOUT
+        )
+        resp.raise_for_status()
+
+        result = resp.json()
+
+        # 检查响应格式
+        if "choices" not in result or not result["choices"]:
+            logger.error(f"API 返回格式异常: {result}")
+            return {'type': 'SKIP', 'reason': 'API响应格式异常'}
+
+        reply = result["choices"][0]["message"]["content"]
+
+        # 解析 JSON
+        return parse_llm_response(reply)
+
+    except requests.exceptions.Timeout:
+        logger.error("API 请求超时")
+        return {'type': 'SKIP', 'reason': 'API超时'}
+    except requests.exceptions.RequestException as e:
+        logger.error(f"API 请求失败: {e}")
+        return {'type': 'SKIP', 'reason': f'API错误: {str(e)}'}
+
+
+def extract_with_local_llm_with_context(context: str) -> dict:
+    """使用本地 LLM 进行带上下文的语义提取"""
+    import torch
+
+    model, tokenizer = get_local_llm()
+    if model is None:
+        return {'type': 'SKIP', 'reason': '本地LLM未加载'}
+
+    # 预处理：过滤无效内容
+    cleaned_context, should_skip = preprocess_content(context)
+    if should_skip:
+        return {'type': 'SKIP', 'reason': '预处理后内容无效'}
+
+    # 增强的提示词模板
+    enhanced_prompt = """你是记忆提取专家。分析对话内容，提取结构化记忆。
+
+【五大记忆库定义】
+1. ERROR_CORRECTION（错误纠正）- 已发生的具体问题 + 验证过的解决方案
+2. USER_PROFILE（用户偏好）- 用户的偏好、习惯、约束
+3. BEST_PRACTICE（最佳实践）- 特定场景下验证过有效的做法
+4. PROJECT_CONTEXT（项目上下文）- 项目技术背景、架构决策
+5. SKILL（技能沉淀）- 可复用的能力包
+
+【对话上下文】
+上下文用 [上文] 标记，历史消息用 [当前] 标记当前正在分析的消息。
+{content}
+
+【重要提示】
+- [上文] 部分帮助你理解对话的完整背景
+- [当前] 部分是当前正在分析的消息
+- 如果上下文显示问题已解决，应归类为 ERROR_CORRECTION
+- 如果上下文显示用户表达了偏好或约束，应归类为 USER_PROFILE
+
+严格按JSON格式返回：
+{"type": "类型", "title": "简短标题(≤30字)", "tags": ["标签"], "extracted": {...}}
+
+无价值内容返回: {"type": "SKIP", "reason": "原因"}"""
+
+    system_prompt = "你是一个专业的对话分析助手，擅长从对话中提取结构化信息。"
+    user_message = enhanced_prompt.format(content=cleaned_context[:2000])
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_message}
+    ]
+
+    # 应用chat模板，Qwen3需要关闭思考模式
+    if is_qwen3_only:
+        text = tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+            enable_thinking=False
+        )
+    else:
+        text = tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True
+        )
+
+    inputs = tokenizer([text], return_tensors="pt")
+
+    with torch.no_grad():
+        outputs = model.generate(
+            **inputs,
+            max_new_tokens=300,  # 稍微增加以适应更长的输出
+            temperature=0.7,
+            top_p=0.8,
+            top_k=20,
+            do_sample=True,
+            pad_token_id=tokenizer.eos_token_id
+        )
+
+    # 解码输出
+    output_ids = outputs[0][inputs['input_ids'].shape[1]:].tolist()
+    reply = tokenizer.decode(output_ids, skip_special_tokens=True)
+
+    return parse_llm_response(reply)
+    
+
+CLASSIFY_PROMPT = """你是一个记忆分类器。请分析用户消息，判断它应该归类到哪个记忆库。
+
+可选分类：
+- ERROR_CORRECTION：错误纠正（已解决的报错、问题、踩坑经历）
+- USER_PROFILE：用户画像（用户偏好、习惯、环境配置）
+- BEST_PRACTICE：最佳实践（经验总结、建议、注意事项）
+- PROJECT_CONTEXT：项目上下文（项目结构、技术栈、配置）
+- SKILL：技能沉淀（步骤、流程、操作方法）
+- SKIP：不需要保存（普通提问、闲聊、无实质内容）
+
+只返回分类名称，不要有任何其他内容。
+
+用户消息：
+{content}
+"""
+
+def classify_with_llm_api(content: str) -> str:
+    """使用 API LLM 进行分类"""
+    if not LLM_API_KEY:
+        return "SKIP"
+    
+    prompt = CLASSIFY_PROMPT.format(content=content[:1000])
+    
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {LLM_API_KEY}"
+    }
+    
+    payload = {
+        "model": LLM_API_MODEL,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.1,
+        "max_tokens": 50
+    }
+    
+    try:
+        resp = requests.post(
+            f"{LLM_API_BASE}/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=LLM_API_TIMEOUT
+        )
+        resp.raise_for_status()
+        result = resp.json()
+        reply = result["choices"][0]["message"]["content"].strip()
+        
+        # 提取分类名称
+        valid_types = ['ERROR_CORRECTION', 'USER_PROFILE', 'BEST_PRACTICE', 'PROJECT_CONTEXT', 'SKILL', 'SKIP']
+        reply_upper = reply.upper()
+        for t in valid_types:
+            if t in reply_upper:
+                return t
+        return "SKIP"
+    except Exception as e:
+        logger.error(f"API 分类失败: {e}")
+        return "SKIP"
+
+
+def classify_with_local_llm(content: str) -> str:
+    """使用本地 LLM 进行分类"""
+    model, tokenizer = get_local_llm()
+    if model is None:
+        return "SKIP"
+    
+    prompt = CLASSIFY_PROMPT.format(content=content[:1000])
+    
+    try:
+        import torch
+        inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=2048)
+        
+        gen_kwargs = {
+            "max_new_tokens": 50,
+            "pad_token_id": tokenizer.eos_token_id
+        }
+        
+        # Qwen3 系列需要在 generate 时关闭思考模式
+        if is_qwen3_only:
+            # Qwen3-0.6B 使用 eos_token_id 来结束思考
+            pass
+        
+        with torch.no_grad():
+            outputs = model.generate(**inputs, **gen_kwargs)
+        
+        output_ids = outputs[0][inputs['input_ids'].shape[1]:].tolist()
+        reply = tokenizer.decode(output_ids, skip_special_tokens=True).strip()
+        
+        valid_types = ['ERROR_CORRECTION', 'USER_PROFILE', 'BEST_PRACTICE', 'PROJECT_CONTEXT', 'SKILL', 'SKIP']
+        reply_upper = reply.upper()
+        for t in valid_types:
+            if t in reply_upper:
+                return t
+        return "SKIP"
+    except Exception as e:
+        logger.error(f"本地 LLM 分类失败: {e}")
+        return "SKIP"
+
+
+@app.route('/classify', methods=['POST'])
+def classify():
+    """使用 LLM 对消息进行分类"""
+    data = request.get_json()
+    if not data or 'content' not in data:
+        return jsonify({'type': 'SKIP', 'error': 'missing content'})
+    
+    content = data['content']
+    if not content or len(content.strip()) < 10:
+        return jsonify({'type': 'SKIP'})
+    
+    # 优先使用规则分类（快速且准确）
+    rule_result = classify_with_rules(content)
+    if rule_result != "SKIP":
+        return jsonify({'type': rule_result})
+    
+    # 规则分类失败时才尝试 LLM（更慢但更智能）
+    if LLM_MODE == 'api' and LLM_API_KEY:
+        result = classify_with_llm_api(content)
+    elif LLM_MODE == 'local':
+        result = classify_with_local_llm(content)
+    else:
+        result = "SKIP"
+    
+    return jsonify({'type': result})
+
+
+def classify_with_rules(content: str) -> str:
+    """基于规则的分类（轻量模式备用）"""
+    content_lower = content.lower()
+    
+    # 错误纠正
+    if any(kw in content for kw in ['失败', '报错', '错误', 'bug', '异常', '问题']):
+        if any(m in content for m in ['原来', '是因为', '解决', '修复', '改好了', '好了', '搞定']):
+            return 'ERROR_CORRECTION'
+    
+    # 用户偏好
+    if any(kw in content for kw in ['我喜欢', '我习惯', '我偏好', '我用', '不用', '想要', '希望']):
+        return 'USER_PROFILE'
+    
+    # 最佳实践
+    if any(kw in content for kw in ['最佳实践', '推荐', '建议', '应该', '最好', '最好用']):
+        return 'BEST_PRACTICE'
+    
+    # 项目上下文
+    if '项目' in content and any(kw in content for kw in ['技术栈', '框架', '数据库', '语言', '用的']):
+        return 'PROJECT_CONTEXT'
+    
+    # 技能/步骤
+    if any(kw in content for kw in ['步骤', '流程', '如何', '怎么', '方法', '先', '再', '然后', '最后', '接着', '分几步']):
+        return 'SKILL'
+    
+    return 'SKIP'
 
 
 @app.route('/config', methods=['GET'])

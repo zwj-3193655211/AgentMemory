@@ -6,6 +6,7 @@ import com.agentmemory.service.DatabaseService;
 import com.agentmemory.service.FileWatcherService;
 import com.agentmemory.service.AgentDetectorService;
 import com.agentmemory.service.CleanupService;
+import com.agentmemory.service.CrushDatabaseWatcher;
 import com.agentmemory.service.SessionCompressionService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,7 +37,9 @@ public class AgentMemoryApplication {
     private final CleanupService cleanupService;
     private final SessionCompressionService compressionService;
     private final ApiServer apiServer;
-    
+    private List<AgentInfo> detectedAgents;
+    private CrushDatabaseWatcher crushDatabaseWatcher;
+
     public AgentMemoryApplication(ApplicationConfig config) {
         this.config = config;
         this.databaseService = new DatabaseService(config);
@@ -44,9 +47,9 @@ public class AgentMemoryApplication {
         this.agentDetectorService = new AgentDetectorService();
         this.cleanupService = new CleanupService(databaseService, config.getRetentionDays());
         this.compressionService = new SessionCompressionService(databaseService);
-        this.apiServer = new ApiServer(databaseService, fileWatcherService, config.getApiPort());
+        this.apiServer = new ApiServer(databaseService, fileWatcherService, agentDetectorService, config.getApiPort());
     }
-    
+
     public void start() throws Exception {
         log.info("========================================");
         log.info("AgentMemory 启动中...");
@@ -59,15 +62,15 @@ public class AgentMemoryApplication {
         
         // 2. 检测已安装的 Agent
         log.info("[2/6] 检测已安装的 Agent...");
-        List<AgentInfo> agents = agentDetectorService.detectAgents();
-        for (AgentInfo agent : agents) {
+        detectedAgents = agentDetectorService.detectAgents();
+        for (AgentInfo agent : detectedAgents) {
             log.info("      发现: {} (路径: {})", agent.getName(), agent.getLogPath());
         }
-        databaseService.registerAgents(agents);
-        
+        databaseService.registerAgents(detectedAgents);
+
         // 3. 启动文件监控
         log.info("[3/6] 启动文件监控服务...");
-        for (AgentInfo agent : agents) {
+        for (AgentInfo agent : detectedAgents) {
             Path watchPath = expandHomePath(agent.getLogPath());
             if (watchPath.toFile().exists()) {
                 String parserType = agent.getParserType() != null ? agent.getParserType() : agent.getType();
@@ -86,17 +89,21 @@ public class AgentMemoryApplication {
         // 5. 启动会话压缩服务
         log.info("[5/7] 启动会话压缩服务...");
         compressionService.start();
-        
-        // 6. 启动 API 服务
-        log.info("[6/7] 启动 API 服务...");
+
+        // 6. 启动 Crush 数据库监控服务
+        log.info("[6/7] 启动 Crush 数据库监控服务...");
+        startCrushDatabaseWatcher();
+
+        // 7. 启动 API 服务
+        log.info("[7/7] 启动 API 服务...");
         apiServer.setCompressionService(compressionService);
         apiServer.start();
         log.info("      API 地址: http://localhost:{}", config.getApiPort());
-        
-        // 7. 启动完成
-        log.info("[7/7] AgentMemory 已就绪");
+
+        // 8. 启动完成
+        log.info("[8/8] AgentMemory 已就绪");
         log.info("========================================");
-        log.info("正在监控 {} 个 Agent 的会话日志...", agents.size());
+        log.info("正在监控 {} 个 Agent 的会话日志...", detectedAgents.size());
         log.info("前端界面: http://localhost:{}", config.getApiPort());
         log.info("按 Ctrl+C 退出");
         log.info("========================================");
@@ -105,6 +112,9 @@ public class AgentMemoryApplication {
         CountDownLatch latch = new CountDownLatch(1);
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             log.info("正在关闭...");
+            if (crushDatabaseWatcher != null) {
+                crushDatabaseWatcher.stop();
+            }
             apiServer.stop();
             compressionService.stop();
             cleanupService.stop();
@@ -122,6 +132,26 @@ public class AgentMemoryApplication {
             return Paths.get(path.replace("~", home));
         }
         return Paths.get(path);
+    }
+
+    /**
+     * 启动 Crush 数据库监控服务
+     */
+    private void startCrushDatabaseWatcher() {
+        // 查找 Crush agent 的配置
+        for (AgentInfo agent : detectedAgents) {
+            if ("crush".equals(agent.getType())) {
+                String crushDbPath = agent.getLogPath();
+                if (crushDbPath != null && !crushDbPath.isEmpty()) {
+                    crushDbPath = expandHomePath(crushDbPath).toString();
+                    crushDatabaseWatcher = new CrushDatabaseWatcher(databaseService, crushDbPath);
+                    crushDatabaseWatcher.start();
+                    log.info("      Crush 数据库监控: {} (每 30 秒检查)", crushDbPath);
+                    return;
+                }
+            }
+        }
+        log.info("      Crush 数据库未配置，跳过");
     }
     
     public static void main(String[] args) {

@@ -66,13 +66,49 @@ public class AgentDetectorService {
         
         // 使用统一方法检测各 Agent
         addIfNotNull(agents, detectAgent("iFlow CLI", "iflow", ".iflow", "projects"));
-        addIfNotNull(agents, detectAgentWithVersion("Claude Code", "claude", ".claude", "projects"));
+        addIfNotNull(agents, detectClaudeCode());
         addIfNotNull(agents, detectAgent("OpenClaw", "openclaw", ".openclaw", "agents", "main", "sessions"));
         addIfNotNull(agents, detectAgent("Nanobot", "nanobot", ".nanobot"));
         addIfNotNull(agents, detectAgent("Qwen CLI", "qwen", ".qwen", "projects"));
         addIfNotNull(agents, detectAgent("Qoder CLI", "qoder", ".qoder", "projects"));
+        addIfNotNull(agents, detectAgent("Crush CLI", "crush", ".crush"));
         
+        log.info("检测到 {} 个 Agent", agents.size());
         return agents;
+    }
+    
+    /**
+     * 专门检测 Claude Code（兼容 Unix/Windows 路径）
+     */
+    private AgentInfo detectClaudeCode() {
+        // 标准路径: ~/.claude/projects
+        AgentInfo agent = detectAgentWithVersion("Claude Code", "claude", ".claude", "projects");
+        if (agent != null) return agent;
+        
+        // Windows 路径: ~/.claude（根目录，无 projects 子目录时也能识别）
+        agent = detectAgentWithVersion("Claude Code", "claude", ".claude");
+        if (agent != null) return agent;
+        
+        // Windows AppData 路径
+        if (isWindows) {
+            String appData = System.getenv("APPDATA");
+            if (appData != null) {
+                Path claudeAppData = Paths.get(appData, "Claude");
+                if (Files.exists(claudeAppData)) {
+                    AgentInfo info = new AgentInfo();
+                    info.setName("Claude Code");
+                    info.setType("claude");
+                    info.setLogPath(claudeAppData.toString());
+                    info.setParserType("claude");
+                    String cliPath = findInPath("claude");
+                    info.setCliPath(cliPath);
+                    info.setEnabled(cliPath != null);
+                    log.debug("检测到 Claude Code (AppData): {}", claudeAppData);
+                    return info;
+                }
+            }
+        }
+        return null;
     }
     
     /**

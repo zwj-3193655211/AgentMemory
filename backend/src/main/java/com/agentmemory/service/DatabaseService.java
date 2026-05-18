@@ -234,15 +234,31 @@ public class DatabaseService {
                 CREATE TABLE IF NOT EXISTS sessions (
                     id TEXT PRIMARY KEY,
                     agent_id INTEGER,
+                    agent_type TEXT,
+                    agent_types TEXT,
                     project_path TEXT,
                     workspace_path TEXT,
                     started_at TIMESTAMP,
                     ended_at TIMESTAMP,
+                    expires_at TIMESTAMP,
                     message_count INTEGER DEFAULT 0,
+                    deleted INTEGER DEFAULT 0,
+                    is_compressed INTEGER DEFAULT 0,
+                    compression_type TEXT,
+                    compressed_at TIMESTAMP,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
                 """);
+            
+            // 添加缺失列（如果表已存在）
+            try { stmt.executeUpdate("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS deleted INTEGER DEFAULT 0"); } catch (SQLException e) { /* ignore */ }
+            try { stmt.executeUpdate("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS agent_type TEXT"); } catch (SQLException e) { /* ignore */ }
+            try { stmt.executeUpdate("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS agent_types TEXT"); } catch (SQLException e) { /* ignore */ }
+            try { stmt.executeUpdate("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP"); } catch (SQLException e) { /* ignore */ }
+            try { stmt.executeUpdate("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS is_compressed INTEGER DEFAULT 0"); } catch (SQLException e) { /* ignore */ }
+            try { stmt.executeUpdate("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS compression_type TEXT"); } catch (SQLException e) { /* ignore */ }
+            try { stmt.executeUpdate("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS compressed_at TIMESTAMP"); } catch (SQLException e) { /* ignore */ }
             
             // 消息表
             stmt.executeUpdate("""
@@ -254,9 +270,13 @@ public class DatabaseService {
                     content TEXT,
                     raw_json TEXT,
                     timestamp TEXT,
+                    deleted INTEGER DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
                 """);
+            
+            // 添加缺失列
+            try { stmt.executeUpdate("ALTER TABLE messages ADD COLUMN IF NOT EXISTS deleted INTEGER DEFAULT 0"); } catch (SQLException e) { /* ignore */ }
             
             // 索引
             stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id)");
@@ -341,6 +361,7 @@ public class DatabaseService {
     private void ensureSessionExistsOptimized(Connection conn, Message message) throws SQLException {
         String sql;
         if (useSqlite) {
+            // SQLite 兼容语法
             sql = """
                 INSERT INTO sessions (id, project_path, agent_type, message_count, expires_at)
                 VALUES (?, ?, ?, 0, datetime('now', '+14 days'))
@@ -364,8 +385,49 @@ public class DatabaseService {
             stmt.setString(3, message.getAgentType());
             stmt.executeUpdate();
         }
+        
+        // 确保 deleted 列存在
+        if (useSqlite) {
+            try (Statement stmt = conn.createStatement()) {
+                try { stmt.executeUpdate("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS deleted INTEGER DEFAULT 0"); } catch (SQLException ignored) {}
+                try { stmt.executeUpdate("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS agent_types TEXT"); } catch (SQLException ignored) {}
+            }
+        }
     }
-    
+
+    /**
+     * 保存会话（如果不存在）
+     * 用于 Crush 等非文件监控的数据源
+     */
+    public void saveSessionIfNotExists(String sessionId, String agentType, String projectPath, String title) {
+        try (Connection conn = dataSource.getConnection()) {
+            String sql;
+            if (useSqlite) {
+                sql = """
+                    INSERT INTO sessions (id, agent_type, project_path, title, message_count, expires_at)
+                    VALUES (?, ?, ?, ?, 0, datetime('now', '+14 days'))
+                    ON CONFLICT (id) DO NOTHING
+                    """;
+            } else {
+                sql = """
+                    INSERT INTO sessions (id, agent_type, project_path, title, message_count, expires_at)
+                    VALUES (?, ?, ?, ?, 0, CURRENT_TIMESTAMP + INTERVAL '14 days')
+                    ON CONFLICT (id) DO NOTHING
+                    """;
+            }
+
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setString(1, sessionId);
+                stmt.setString(2, agentType);
+                stmt.setString(3, projectPath != null ? projectPath : "");
+                stmt.setString(4, title != null ? title : "Untitled");
+                stmt.executeUpdate();
+            }
+        } catch (SQLException e) {
+            log.warn("保存会话失败: {} - {}", sessionId, e.getMessage());
+        }
+    }
+
     /**
      * 插入消息（优化版：使用触发器自动更新计数）
      *
@@ -497,6 +559,22 @@ public class DatabaseService {
     public void close() {
         if (dataSource != null) {
             dataSource.close();
+        }
+    }
+    
+    /**
+     * 更新会话摘要
+     */
+    public void updateSessionSummary(String sessionId, String summary) {
+        String sql = "UPDATE sessions SET summary = ?, compressed_at = CURRENT_TIMESTAMP WHERE id = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, summary);
+            stmt.setString(2, sessionId);
+            stmt.executeUpdate();
+            log.debug("已更新会话摘要: {}", sessionId.substring(0, Math.min(8, sessionId.length())));
+        } catch (SQLException e) {
+            log.error("更新会话摘要失败: {}", sessionId, e);
         }
     }
     

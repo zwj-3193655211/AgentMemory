@@ -96,8 +96,8 @@ public class CleanupService extends ScheduledServiceBase {
      */
     private int hardDeleteOld() {
         int total = 0;
-        total += executeUpdate("DELETE FROM messages WHERE deleted = true AND expires_at < NOW() - INTERVAL '" + hardDeleteDays + " days'", "物理删除 messages");
-        total += executeUpdate("DELETE FROM sessions WHERE deleted = true AND expires_at < NOW() - INTERVAL '" + hardDeleteDays + " days'", "物理删除 sessions");
+        total += executeUpdate("DELETE FROM messages WHERE deleted = 1 AND expires_at < NOW() - INTERVAL '" + hardDeleteDays + " days'", "物理删除 messages");
+        total += executeUpdate("DELETE FROM sessions WHERE deleted = 1 AND expires_at < NOW() - INTERVAL '" + hardDeleteDays + " days'", "物理删除 sessions");
         return total;
     }
     
@@ -106,8 +106,8 @@ public class CleanupService extends ScheduledServiceBase {
      */
     private int cleanupMemoryTables() {
         int total = 0;
-        total += executeUpdate("DELETE FROM error_corrections WHERE expires_at < NOW() AND deleted = true", "清理 error_corrections");
-        total += executeUpdate("DELETE FROM best_practices WHERE expires_at < NOW() AND deleted = true", "清理 best_practices");
+        total += executeUpdate("DELETE FROM error_corrections WHERE expires_at < NOW() AND deleted = 1", "清理 error_corrections");
+        total += executeUpdate("DELETE FROM best_practices WHERE expires_at < NOW() AND deleted = 1", "清理 best_practices");
         return total;
     }
     

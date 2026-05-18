@@ -29,6 +29,7 @@ public class SessionProcessor {
     private final MemoryExtractor memoryExtractor;
     private final MemoryService memoryService;
     private final ApplicationConfig config;
+    private final LLMClient llmClient;  // 用于生成会话摘要
 
     // 会话缓存：使用 ConcurrentHashMap 支持高并发
     private final int MAX_CACHE_SIZE;
@@ -62,6 +63,19 @@ public class SessionProcessor {
         this.keyNodeExtractor = new KeyNodeExtractor();
         this.memoryClassifier = new MemoryClassifier();
         this.memoryExtractor = new MemoryExtractor();
+        
+        // 初始化 LLM 客户端（用于生成会话摘要）
+        this.llmClient = new LLMClient();
+        
+        // 如果配置中有 LLM 设置，应用它
+        if (config != null && config.getApiLLMProvider() != null) {
+            llmClient.setProvider(
+                config.getApiLLMProvider(),
+                config.getApiLLMBaseUrl(),
+                config.getApiLLMApiKey(),
+                config.getApiLLMModel()
+            );
+        }
     }
     
     /**
@@ -312,12 +326,109 @@ public class SessionProcessor {
     }
     
     /**
-     * 生成会话摘要
+     * 生成会话摘要（已实现）
+     * 使用 LLM 分析对话内容，生成简洁的摘要
      */
     private void generateSessionSummary(SessionContext ctx) {
-        // TODO: 可以调用LLM生成摘要，或者简单地统计关键节点
-        log.debug("会话 {} 包含 {} 条消息，可生成摘要",
-            ctx.getSessionId().substring(0, 8), ctx.getMessageCount());
+        List<String> contents = ctx.getContents();
+        if (contents.isEmpty()) {
+            return;
+        }
+
+        log.info("开始生成会话 {} 的摘要（{} 条消息）",
+            ctx.getSessionId().substring(0, 8), contents.size());
+
+        try {
+            String summary;
+            
+            // 优先使用 LLM 生成摘要
+            if (llmClient.isHealthy()) {
+                summary = llmClient.summarize(contents);
+                log.info("LLM 摘要生成完成: {} 字", summary.length());
+            } else {
+                // LLM 不可用时，使用简单的关键词统计
+                summary = generateFallbackSummary(contents);
+                log.info("使用回退摘要: {} 字", summary.length());
+            }
+
+            // 保存摘要到数据库（通过 MemoryService 或直接保存）
+            saveSessionSummary(ctx.getSessionId(), summary, contents.size());
+
+            log.info("会话 {} 摘要已保存: {}", ctx.getSessionId().substring(0, 8),
+                summary.substring(0, Math.min(50, summary.length())));
+
+        } catch (Exception e) {
+            log.error("生成会话摘要失败: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 生成回退摘要（当 LLM 不可用时）
+     */
+    private String generateFallbackSummary(List<String> contents) {
+        StringBuilder summary = new StringBuilder();
+        summary.append("对话包含 ").append(contents.size()).append(" 条消息。");
+
+        // 提取关键主题
+        Set<String> keyTopics = new LinkedHashSet<>();
+        Set<String> keyPhrases = new LinkedHashSet<>();
+
+        for (String msg : contents) {
+            String lower = msg.toLowerCase();
+
+            // 错误相关
+            if (lower.contains("错误") || lower.contains("error") || lower.contains("报错")) {
+                keyPhrases.add("包含错误处理");
+            }
+
+            // 优化相关
+            if (lower.contains("优化") || lower.contains("性能") || lower.contains("效率")) {
+                keyPhrases.add("涉及性能优化");
+            }
+
+            // 配置相关
+            if (lower.contains("配置") || lower.contains("设置") || lower.contains("安装")) {
+                keyPhrases.add("涉及环境配置");
+            }
+
+            // 建议相关
+            if (lower.contains("推荐") || lower.contains("建议") || lower.contains("最好")) {
+                keyPhrases.add("包含建议推荐");
+            }
+
+            // 偏好相关
+            if (lower.contains("我") && (lower.contains("喜欢") || lower.contains("偏好") || lower.contains("不用"))) {
+                keyTopics.add("用户偏好");
+            }
+
+            // 技能相关
+            if (lower.contains("步骤") || lower.contains("流程") || lower.contains("方法")) {
+                keyPhrases.add("包含技能步骤");
+            }
+        }
+
+        if (!keyTopics.isEmpty()) {
+            summary.append(" 主要主题：").append(String.join("、", keyTopics)).append("。");
+        }
+
+        if (!keyPhrases.isEmpty()) {
+            summary.append(" 关键内容：").append(String.join("、", keyPhrases)).append("。");
+        }
+
+        return summary.toString();
+    }
+
+    /**
+     * 保存会话摘要到数据库
+     */
+    private void saveSessionSummary(String sessionId, String summary, int messageCount) {
+        try {
+            memoryService.updateSessionSummary(sessionId, summary);
+            log.info("会话摘要已保存 [session={}]: {}字, {}条消息",
+                sessionId.substring(0, Math.min(8, sessionId.length())), summary.length(), messageCount);
+        } catch (Exception e) {
+            log.error("保存会话摘要失败: {}", sessionId, e);
+        }
     }
 
     /**
