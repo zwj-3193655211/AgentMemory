@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=os.environ.get('CORS_ORIGINS', 'http://localhost:8082,http://localhost:5173').split(','))
 
 # ========== 配置 ==========
 # 不再全局设置离线模式，改为动态检测
@@ -636,7 +636,7 @@ def extract_with_rules(content):
     # 5. 错误纠正检测
     # 包含错误关键词且有解决方案
     error_keywords = ['错误', '报错', '失败', 'exception', 'error', 'bug', '问题', '修复', '解决', '不行']
-    resolved_markers = ['解决了', '修复了', '后来', '原来是', '原因', '所以', '改用', '改成', '改成', '即可', '才行']
+    resolved_markers = ['解决了', '修复了', '后来', '原来是', '原因', '所以', '改用', '改成', '即可', '才行']
     
     if any(kw in content for kw in error_keywords):
         # 必须有解决/修复/原因等标记才识别为错误纠正
@@ -688,124 +688,6 @@ def extract_with_rules(content):
                     'experience': title,
                     'lessons': lessons[:5] if lessons else [content[:200]],
                     'related_technologies': list(set(tech_keywords))
-                }
-            }
-    
-    # 2. 错误纠正检测
-    error_patterns = [
-        r'错误[：:]\s*(.+?)(?=\n|原因|$)',
-        r'报错[：:]\s*(.+?)(?=\n|$)',
-        r'exception[：:]\s*(.+?)(?=\n|$)',
-        r'error[：:]\s*(.+?)(?=\n|$)',
-        r'failed[：:]\s*(.+?)(?=\n|$)',
-        r'失败[：:]\s*(.+?)(?=\n|$)',
-    ]
-    fix_patterns = [
-        r'解决[方法方案]*[：:]\s*(.+?)(?=\n|$)',
-        r'修复[：:]\s*(.+?)(?=\n|$)',
-        r'改为[：:]\s*(.+?)(?=\n|$)',
-        r'修改为[：:]\s*(.+?)(?=\n|$)',
-        r'fix[：:]\s*(.+?)(?=\n|$)',
-    ]
-    
-    problem = None
-    solution = None
-    
-    for pattern in error_patterns:
-        match = re.search(pattern, content, re.IGNORECASE)
-        if match:
-            problem = match.group(1).strip()[:200]
-            break
-    
-    for pattern in fix_patterns:
-        match = re.search(pattern, content, re.IGNORECASE)
-        if match:
-            solution = match.group(1).strip()[:500]
-            break
-    
-    if problem or '错误' in content or 'error' in content_lower or 'exception' in content_lower:
-        # 提取标题
-        title_match = re.search(r'([^\n。！？]{10,50})', content)
-        title = title_match.group(1).strip() if title_match else "错误处理"
-        
-        return {
-            'type': 'ERROR_CORRECTION',
-            'title': title[:100],
-            'tags': ['error', 'fix'],
-            'extracted': {
-                'problem': problem or content[:200],
-                'cause': '',
-                'solution': solution or ''
-            }
-        }
-    
-    # 3. 用户偏好检测
-    preference_patterns = [
-        r'我喜欢(.{1,50})',
-        r'我偏好(.{1,50})',
-        r'我习惯(.{1,50})',
-        r'我想要(.{1,50})',
-        r'请记住(.{1,30})',
-        r'请(.{1,30})',
-        r'不要(.{1,30})',
-        r'希望(.{1,30})',
-    ]
-    
-    for pattern in preference_patterns:
-        match = re.search(pattern, content)
-        if match:
-            return {
-                'type': 'USER_PROFILE',
-                'title': f"用户偏好: {match.group(1)[:30]}",
-                'tags': ['preference'],
-                'extracted': {
-                    'preference': match.group(0)[:200],
-                    'category': 'general'
-                }
-            }
-    
-    # 4. 最佳实践检测
-    if any(kw in content for kw in ['最佳实践', '建议', '推荐', '应该', '最好']):
-        title_match = re.search(r'([^\n。]{10,50})', content)
-        return {
-            'type': 'BEST_PRACTICE',
-            'title': title_match.group(1).strip() if title_match else "最佳实践",
-            'tags': ['practice', 'recommendation'],
-            'extracted': {
-                'scenario': content[:100],
-                'practice': content[:500]
-            }
-        }
-    
-    # 5. 项目上下文检测
-    if any(kw in content for kw in ['项目', '工程', 'project', '技术栈', '框架']):
-        tech_keywords = re.findall(r'(python|java|javascript|react|vue|spring|django|flask|node|typescript|go|rust)', content_lower)
-        return {
-            'type': 'PROJECT_CONTEXT',
-            'title': "项目上下文",
-            'tags': list(set(tech_keywords)) or ['project'],
-            'extracted': {
-                'project_name': '',
-                'tech_stack': list(set(tech_keywords)),
-                'key_info': content[:500]
-            }
-        }
-    
-    # 6. 技能沉淀检测
-    if any(kw in content for kw in ['步骤', '流程', '第一步', '如何', '怎么', '方法']):
-        steps = re.findall(r'(第[一二三四五六七八九十\d]+步[：:]?.{10,100})', content)
-        if not steps:
-            steps = re.findall(r'(\d+[\.、].{10,100})', content)
-        
-        if steps:
-            return {
-                'type': 'SKILL',
-                'title': content[:50],
-                'tags': ['skill', 'workflow'],
-                'extracted': {
-                    'skill_name': content[:50],
-                    'steps': steps[:5],
-                    'prerequisites': []
                 }
             }
     

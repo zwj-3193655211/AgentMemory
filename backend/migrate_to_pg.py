@@ -4,7 +4,11 @@ SQLite 数据迁移到 PostgreSQL
 import sqlite3
 import psycopg2
 import os
+import sys
+import logging
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 # SQLite 连接 - 使用环境变量或默认用户目录
 sqlite_path = os.environ.get('SQLITE_PATH', 
@@ -18,7 +22,7 @@ pg_conn = psycopg2.connect(
     port=int(os.environ.get('DATABASE_PORT', 5500)),
     database=os.environ.get('DATABASE_NAME', 'agentmemory'),
     user=os.environ.get('DATABASE_USER', 'agentmemory'),
-    password=os.environ.get('DATABASE_PASSWORD', 'agentmemory123')
+    password=os.environ.get('DATABASE_PASSWORD') or sys.exit('ERROR: DATABASE_PASSWORD environment variable not set')
 )
 pg_c = pg_conn.cursor()
 
@@ -43,7 +47,8 @@ def parse_timestamp(ts):
             if 'T' in ts:
                 dt = datetime.fromisoformat(ts.replace('Z', '+00:00').replace('+00:00', ''))
                 return dt, dt.strftime('%Y-%m-%d')
-    except:
+    except (ValueError, TypeError, OverflowError) as e:
+        logger.warning(f"无法解析时间戳 '{ts}': {e}")
         pass
     
     return None, None
@@ -91,7 +96,7 @@ success = 0
 errors = 0
 
 while offset < total_messages:
-    sqlite_c.execute(f"SELECT id, session_id, parent_id, role, content, raw_json, timestamp, created_at FROM messages ORDER BY rowid LIMIT {batch_size} OFFSET {offset}")
+    sqlite_c.execute("SELECT id, session_id, parent_id, role, content, raw_json, timestamp, created_at FROM messages ORDER BY rowid LIMIT ? OFFSET ?", (batch_size, offset))
     messages = sqlite_c.fetchall()
     
     for m in messages:

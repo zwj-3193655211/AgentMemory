@@ -354,23 +354,24 @@ public class MemoryService {
                 // 使用数据库的向量相似度计算（比API调用更快）
                 // 表名已通过白名单验证，可以安全使用
                 String sql = String.format("""
-                    SELECT title, 1 - (embedding <=> '%s'::vector) as similarity
+                    SELECT title, 1 - (embedding <=> ?::vector) as similarity
                     FROM %s
                     WHERE embedding IS NOT NULL AND (deleted = false OR deleted IS NULL)
                     ORDER BY similarity DESC
                     LIMIT 10
-                    """, vecStr, tableName);
+                    """, tableName);
 
-                try (PreparedStatement stmt = conn.prepareStatement(sql);
-                     ResultSet rs = stmt.executeQuery()) {
-
-                    // 检查最相似的一个是否超过阈值
-                    if (rs.next()) {
-                        float similarity = rs.getFloat("similarity");
-                        if (similarity > 0.9f) {
-                            String existingTitle = rs.getString("title");
-                            log.debug("发现相似记忆: {} (相似度: {:.2f})", existingTitle, similarity);
-                            return true;
+                try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                    stmt.setString(1, vecStr);
+                    try (ResultSet rs = stmt.executeQuery()) {
+                        // 检查最相似的一个是否超过阈值
+                        if (rs.next()) {
+                            float similarity = rs.getFloat("similarity");
+                            if (similarity > 0.9f) {
+                                String existingTitle = rs.getString("title");
+                                log.debug("发现相似记忆: {} (相似度: {:.2f})", existingTitle, similarity);
+                                return true;
+                            }
                         }
                     }
                 }

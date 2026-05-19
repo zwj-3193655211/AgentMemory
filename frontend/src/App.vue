@@ -871,7 +871,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, reactive } from 'vue'
+import { ref, computed, onMounted, onUnmounted, reactive } from 'vue'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Setting, ChatDotRound, WarningFilled, User, DocumentChecked, FolderOpened, Reading, Odometer, Box, Delete, Plus, Download, Close, Connection, InfoFilled, ArrowRight } from '@element-plus/icons-vue'
@@ -885,7 +885,7 @@ import Skills from './views/Skills.vue'
 import Setup from './views/Setup.vue'
 
 // 使用 Vite 环境变量，支持运行时配置
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8080/api'
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8082/api'
 const EMBED_BASE = import.meta.env.VITE_EMBED_BASE || 'http://localhost:8100'
 
 // 数据
@@ -1884,6 +1884,14 @@ onMounted(async () => {
   const savedCleanupDays = localStorage.getItem('cleanupDays')
   if (savedAutoCleanup) autoCleanup.value = savedAutoCleanup === 'true'
   if (savedCleanupDays) cleanupDays.value = parseInt(savedCleanupDays) || 30
+})
+
+onUnmounted(() => {
+  // 清理轮询定时器，防止内存泄漏
+  if (downloadPollingInterval.value) {
+    clearInterval(downloadPollingInterval.value)
+    downloadPollingInterval.value = null
+  }
 })
 </script>
 

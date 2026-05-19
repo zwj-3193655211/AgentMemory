@@ -96,8 +96,20 @@ public class CleanupService extends ScheduledServiceBase {
      */
     private int hardDeleteOld() {
         int total = 0;
-        total += executeUpdate("DELETE FROM messages WHERE deleted = 1 AND expires_at < NOW() - INTERVAL '" + hardDeleteDays + " days'", "物理删除 messages");
-        total += executeUpdate("DELETE FROM sessions WHERE deleted = 1 AND expires_at < NOW() - INTERVAL '" + hardDeleteDays + " days'", "物理删除 sessions");
+        try (Connection conn = databaseService.getConnection()) {
+            try (PreparedStatement stmt = conn.prepareStatement(
+                    "DELETE FROM messages WHERE deleted = 1 AND expires_at < NOW() - ?::interval")) {
+                stmt.setString(1, hardDeleteDays + " days");
+                total += stmt.executeUpdate();
+            }
+            try (PreparedStatement stmt = conn.prepareStatement(
+                    "DELETE FROM sessions WHERE deleted = 1 AND expires_at < NOW() - ?::interval")) {
+                stmt.setString(1, hardDeleteDays + " days");
+                total += stmt.executeUpdate();
+            }
+        } catch (SQLException e) {
+            log.error("hardDeleteOld 错误", e);
+        }
         return total;
     }
     

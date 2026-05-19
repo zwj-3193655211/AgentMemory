@@ -262,7 +262,7 @@ public class MemoryClassifier {
         return lower.contains("我喜欢") || lower.contains("我习惯") || 
                lower.contains("我偏好") || lower.contains("我不用") ||
                lower.contains("我更喜欢") || lower.contains("我通常") ||
-               lower.contains("不用") && (lower.contains("npm") || lower.contains("yarn"));
+               (lower.contains("不用") && (lower.contains("npm") || lower.contains("yarn")));
     }
     
     /**

@@ -42,7 +42,7 @@ public class FileWatcherService {
     // ========== 语义切分相关 ==========
     // 话题转换关键词（检测到这些词时，触发一次处理）
     private static final Set<String> TOPIC_SWITCH_KEYWORDS = new HashSet<>(Arrays.asList(
-        "另外", "还有", "顺便", "对了", "对了", "新话题", "换个话题", "重新开始",
+        "另外", "还有", "顺便", "对了", "新话题", "换个话题", "重新开始",
         "我有个问题", "另一个问题", "问一下", "顺便问一下",
         "先这样", "暂时这样", "先不管",
         "我重新", "重新开始"
@@ -109,7 +109,7 @@ public class FileWatcherService {
         });
     }
     
-    private boolean filePositionsLoaded = false;
+    private volatile boolean filePositionsLoaded = false;
     
     private void startWatcher(String agentType, String parserType, Path directory) {
         // 使用 try-with-resources 确保 WatchService 正确关闭

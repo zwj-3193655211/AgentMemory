@@ -503,10 +503,6 @@ public class SessionCompressionService extends ScheduledServiceBase {
         return summary.toString();
     }
 
-    private StringBuilder append(int count) {
-        return new StringBuilder().append(count);
-    }
-
     /**
      * 手动触发会话压缩（API 调用）
      */

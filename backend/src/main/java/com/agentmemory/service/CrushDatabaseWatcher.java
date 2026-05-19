@@ -1,6 +1,7 @@
 package com.agentmemory.service;
 
 import com.agentmemory.model.Message;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -17,12 +18,12 @@ import java.util.concurrent.TimeUnit;
 public class CrushDatabaseWatcher extends ScheduledServiceBase {
 
     private static final Logger log = LoggerFactory.getLogger(CrushDatabaseWatcher.class);
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     private final DatabaseService databaseService;
     private final MemoryService memoryService;
 
     private String crushDbPath;
-    private Connection crushConn;
     private long lastCheckTime;  // 上次检查时间（用于增量检查）
 
     public CrushDatabaseWatcher(DatabaseService databaseService, String crushDbPath) {
@@ -135,12 +136,11 @@ public class CrushDatabaseWatcher extends ScheduledServiceBase {
      */
     private boolean sessionExists(String sessionId) {
         try (Connection conn = databaseService.getConnection();
-             Statement stmt = conn.createStatement()) {
-
-            ResultSet rs = stmt.executeQuery(
-                "SELECT 1 FROM sessions WHERE id = '" + sessionId.replace("'", "''") + "'"
-            );
-            return rs.next();
+             PreparedStatement stmt = conn.prepareStatement("SELECT 1 FROM sessions WHERE id = ?")) {
+            stmt.setString(1, sessionId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                return rs.next();
+            }
         } catch (SQLException e) {
             return false;
         }
@@ -289,11 +289,6 @@ public class CrushDatabaseWatcher extends ScheduledServiceBase {
     @Override
     public void stop() {
         super.stop();
-        if (crushConn != null) {
-            try {
-                crushConn.close();
-            } catch (SQLException ignored) {}
-        }
         log.info("CrushDatabaseWatcher 已停止");
     }
 }

@@ -147,6 +147,14 @@ CREATE INDEX IF NOT EXISTS idx_context_path ON project_contexts(project_path);
 CREATE INDEX IF NOT EXISTS idx_skill_type ON skills(skill_type);
 CREATE INDEX IF NOT EXISTS idx_skill_tags ON skills USING GIN(tags);
 
+-- 外键索引（提升 JOIN 性能）
+CREATE INDEX IF NOT EXISTS idx_sessions_agent_id ON sessions(agent_id);
+CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id);
+
+-- 软删除字段索引
+CREATE INDEX IF NOT EXISTS idx_sessions_deleted ON sessions(deleted);
+CREATE INDEX IF NOT EXISTS idx_messages_deleted ON messages(deleted);
+
 -- 向量索引（使用 HNSW 算法，性能更好）
 -- 如果数据量小于 1000 条，可以暂时不创建索引
 -- HNSW 索引适合高召回率场景

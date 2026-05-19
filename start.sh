@@ -6,7 +6,7 @@ echo "========================================"
 echo
 
 # 设置数据库密码
-export DATABASE_PASSWORD=agentmemory123
+export DATABASE_PASSWORD=${DATABASE_PASSWORD:-agentmemory}
 
 # 检查是否在正确的目录
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -24,7 +24,7 @@ echo
 
 # 启动后端
 echo "[2/3] 启动后端服务..."
-echo "正在启动Java后端服务（端口8080）..."
+echo "正在启动Java后端服务（端口8082）..."
 cd "$SCRIPT_DIR/backend"
 java -Dfile.encoding=UTF-8 -cp target\classes:target\lib/* com.agentmemory.AgentMemoryApplication &
 BACKEND_PID=$!
@@ -52,11 +52,11 @@ echo "========================================"
 echo
 echo "🌐 访问地址："
 echo "   前端界面: http://localhost:5173"
-echo "   后端API:  http://localhost:8080"
+echo "   后端API:  http://localhost:8082"
 echo
 echo "📖 使用说明："
 echo "   - 按 Ctrl+C 停止服务"
-echo "   - 数据库密码: agentmemory123"
+echo "   - 数据库密码: (使用环境变量 DATABASE_PASSWORD)"
 echo
 echo "🔄 停止服务："
 echo "   - 运行: kill $BACKEND_PID $FRONTEND_PID"

@@ -3,11 +3,15 @@
 Crush 使用 SQLite 数据库存储对话数据
 """
 import json
+import logging
 import os
+import sys
 import sqlite3
 import psycopg2
 from datetime import datetime
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # Crush 数据库路径
 CRUSH_DB_PATH = os.path.expanduser('~/.crush/crush.db')
@@ -19,7 +23,7 @@ def get_pg_conn():
         port=int(os.environ.get('DATABASE_PORT', 5500)),
         database=os.environ.get('DATABASE_NAME', 'agentmemory'),
         user=os.environ.get('DATABASE_USER', 'agentmemory'),
-        password=os.environ.get('DATABASE_PASSWORD', 'agentmemory123')
+        password=os.environ.get('DATABASE_PASSWORD') or sys.exit('ERROR: DATABASE_PASSWORD environment variable not set')
     )
 
 def get_crush_conn():
@@ -57,7 +61,8 @@ def parse_crush_message(parts_str):
                 elif part_type == 'finish':
                     pass  # skip finish marker
         return '\n'.join(text_parts)
-    except:
+    except json.JSONDecodeError as e:
+        logger.warning(f"解析 Crush 消息 parts 失败: {e}")
         return parts_str if parts_str else ''
 
 def get_crush_sessions(conn):
@@ -133,7 +138,8 @@ def import_crush_session(pg_conn, session_data, agent_type='crush'):
     if started_at:
         try:
             started_at = datetime.fromisoformat(started_at)
-        except:
+        except (ValueError, TypeError) as e:
+            logger.warning(f"无法解析会话时间戳 '{started_at}': {e}")
             started_at = datetime.now()
     else:
         started_at = datetime.now()
@@ -162,7 +168,8 @@ def import_crush_session(pg_conn, session_data, agent_type='crush'):
         
         try:
             created_at = datetime.fromisoformat(ts) if ts else datetime.now()
-        except:
+        except (ValueError, TypeError) as e:
+            logger.warning(f"无法解析消息时间戳 '{ts}': {e}")
             created_at = datetime.now()
         
         cur.execute("""
@@ -197,7 +204,7 @@ def scan_and_import():
                 msg_count = len(session_data.get('messages', []))
                 print(f"  导入: {title}... ({msg_count} 条消息)")
         except Exception as e:
-            print(f"  错误: {e}")
+            logger.error(f"导入 Crush 会话失败 '{session_data.get('title', 'Untitled')}': {e}", exc_info=True)
     
     crush_conn.close()
     pg_conn.close()

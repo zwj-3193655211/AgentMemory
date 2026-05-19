@@ -377,6 +377,10 @@ public class LLMClient {
 
         @Override
         public String generateWithSystemPrompt(String systemPrompt, String userPrompt) throws IOException, InterruptedException {
+            if (apiKey == null || apiKey.isEmpty()) {
+                throw new IOException("DeepSeek API key is not configured");
+            }
+
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("model", model);
             requestBody.put("stream", false);

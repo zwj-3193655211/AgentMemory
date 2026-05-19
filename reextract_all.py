@@ -5,6 +5,7 @@ import requests
 import json
 import uuid
 import os
+import sys
 import time
 from datetime import datetime
 
@@ -18,7 +19,7 @@ DB_CONFIG = {
     "port": int(os.environ.get('DATABASE_PORT', 5500)),
     "database": os.environ.get('DATABASE_NAME', 'agentmemory'),
     "user": os.environ.get('DATABASE_USER', 'agentmemory'),
-    "password": os.environ.get('DATABASE_PASSWORD', 'agentmemory123')
+    "password": os.environ.get('DATABASE_PASSWORD') or sys.exit('ERROR: DATABASE_PASSWORD environment variable not set')
 }
 
 EXTRACTION_PROMPT = """你是记忆提取专家。分析以下对话内容，提取有价值的记忆。
@@ -38,6 +39,9 @@ EXTRACTION_PROMPT = """你是记忆提取专家。分析以下对话内容，提
 返回JSON数组，每条记忆包含 type, title, content 字段。无有价值内容返回空数组 []。
 示例：
 [{{"type": "USER_PROFILE", "title": "Python环境偏好", "content": "用户要求使用conda虚拟环境，不要动系统Python"}}]"""
+
+# 白名单：允许操作的表名
+ALLOWED_TABLES = {'user_profiles', 'error_corrections', 'skills', 'best_practices', 'project_contexts'}
 
 def call_ollama(prompt, max_retries=3):
     """调用 Ollama API"""
@@ -91,6 +95,7 @@ def main():
     print("清空现有记忆表...")
     tables = ['user_profiles', 'error_corrections', 'skills', 'best_practices', 'project_contexts']
     for table in tables:
+        assert table in ALLOWED_TABLES, f"Invalid table name: {table}"
         cur.execute(f"DELETE FROM {table}")
         print(f"  已清空: {table}")
     conn.commit()
@@ -231,6 +236,7 @@ def main():
     # 检查各表数量
     print("\n各表记录数:")
     for table in tables:
+        assert table in ALLOWED_TABLES, f"Invalid table name: {table}"
         cur.execute(f"SELECT COUNT(*) FROM {table}")
         print(f"  {table}: {cur.fetchone()[0]}")
     

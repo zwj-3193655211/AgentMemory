@@ -22,7 +22,7 @@ COPY --from=builder /app/target/classes/application.conf config/
 RUN mkdir -p /app/frontend
 
 # 暴露端口
-EXPOSE 8080
+EXPOSE 8082
 
 # 启动命令
 ENTRYPOINT ["java", "-cp", "app.jar:lib/*", "com.agentmemory.AgentMemoryApplication"]

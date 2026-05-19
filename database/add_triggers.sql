@@ -1,18 +1,19 @@
 -- AgentMemory 性能优化脚本
 -- 创建时间: 2026-03-23
 -- 说明: 使用触发器自动更新会话消息计数，消除手动更新查询
+-- PostgreSQL 版本
 
 -- ============================================
--- 1. 创建自动更新消息计数的触发器
+-- 1. 创建自动更新消息计数的触发器函数
 -- ============================================
 
 -- 删除旧的触发器（如果存在）
 DROP TRIGGER IF EXISTS update_session_message_count ON messages;
+DROP FUNCTION IF EXISTS update_session_message_count_func() CASCADE;
 
--- 创建触发器：每次插入消息时自动更新会话的消息计数
-CREATE TRIGGER update_session_message_count
-AFTER INSERT ON messages
-FOR EACH ROW
+-- 创建触发器函数
+CREATE OR REPLACE FUNCTION update_session_message_count_func()
+RETURNS TRIGGER AS $$
 BEGIN
     -- 如果是新消息，增加计数
     INSERT INTO sessions (id, message_count, updated_at)
@@ -20,7 +21,15 @@ BEGIN
     ON CONFLICT (id) DO UPDATE SET
         message_count = sessions.message_count + 1,
         updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
 END;
+$$ LANGUAGE plpgsql;
+
+-- 创建触发器：每次插入消息时自动更新会话的消息计数
+CREATE OR REPLACE TRIGGER update_session_message_count
+AFTER INSERT ON messages
+FOR EACH ROW
+EXECUTE FUNCTION update_session_message_count_func();
 
 -- ============================================
 -- 2. 创建优化消息计数的函数（用于批量导入）

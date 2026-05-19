@@ -6,6 +6,8 @@ import type { ApiResponse } from '../types'
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8082/api'
 const EMBED_BASE = import.meta.env.VITE_EMBED_BASE || 'http://localhost:8100'
 
+axios.defaults.timeout = 30000
+
 /**
  * API 鏈嶅姟绫? * 缁熶竴绠＄悊鎵€鏈?API 璋冪敤
  */
@@ -19,6 +21,7 @@ export class ApiService {
       return res.data as T
     } catch (error: any) {
       const msg = error.response?.data?.error || error.message || '璇锋眰澶辫触'
+      ElMessage.error(msg)
       console.error(`GET ${endpoint} 澶辫触:`, msg)
       throw error
     }

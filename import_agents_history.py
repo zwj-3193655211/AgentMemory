@@ -2,10 +2,14 @@
 导入 Qwen CLI 和 Claude CLI 的历史对话到 AgentMemory 数据库
 """
 import json
+import logging
 import os
+import sys
 import psycopg2
 from datetime import datetime
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # 数据库连接 - 使用环境变量
 def get_db_conn():
@@ -14,7 +18,7 @@ def get_db_conn():
         port=int(os.environ.get('DATABASE_PORT', 5500)),
         database=os.environ.get('DATABASE_NAME', 'agentmemory'),
         user=os.environ.get('DATABASE_USER', 'agentmemory'),
-        password=os.environ.get('DATABASE_PASSWORD', 'agentmemory123')
+        password=os.environ.get('DATABASE_PASSWORD') or sys.exit('ERROR: DATABASE_PASSWORD environment variable not set')
     )
 
 def ensure_agent(cur, agent_type):
@@ -39,18 +43,19 @@ def parse_qwen_session(file_path):
         for line in f:
             try:
                 data = json.loads(line)
-            except:
+            except json.JSONDecodeError as e:
+                logger.warning(f"跳过无效 JSON 行: {e}")
                 continue
-            
+
             if session_id is None:
                 session_id = data.get('sessionId')
             if cwd is None:
                 cwd = data.get('cwd', '')
-            
+
             msg_type = data.get('type')
             if msg_type not in ('user', 'assistant'):
                 continue
-            
+
             # 提取消息内容
             parts = data.get('message', {}).get('parts', [])
             text_parts = []
@@ -87,18 +92,19 @@ def parse_claude_session(file_path):
         for line in f:
             try:
                 data = json.loads(line)
-            except:
+            except json.JSONDecodeError as e:
+                logger.warning(f"跳过无效 JSON 行: {e}")
                 continue
-            
+
             if session_id is None:
                 session_id = data.get('sessionId')
             if cwd is None:
                 cwd = data.get('cwd', '')
-            
+
             msg_type = data.get('type')
             if msg_type not in ('user', 'assistant'):
                 continue
-            
+
             # 提取消息内容
             msg = data.get('message', {})
             content_parts = []
@@ -154,7 +160,8 @@ def import_session(conn, session_data, agent_type):
     if first_ts:
         try:
             started_at = datetime.fromisoformat(first_ts.replace('Z', '+00:00'))
-        except:
+        except (ValueError, TypeError) as e:
+            logger.warning(f"无法解析时间戳 '{first_ts}': {e}")
             started_at = datetime.now()
     else:
         started_at = datetime.now()
@@ -182,7 +189,8 @@ def import_session(conn, session_data, agent_type):
         
         try:
             created_at = datetime.fromisoformat(ts.replace('Z', '+00:00')) if ts else datetime.now()
-        except:
+        except (ValueError, TypeError) as e:
+            logger.warning(f"无法解析消息时间戳 '{ts}': {e}")
             created_at = datetime.now()
         
         cur.execute("""
@@ -218,7 +226,7 @@ def scan_and_import():
                             qwen_count += 1
                             print(f"  导入: {jsonl_file.name} ({len(session_data['messages'])} 条消息)")
                 except Exception as e:
-                    print(f"  错误: {jsonl_file.name} - {e}")
+                    logger.error(f"导入 Qwen 会话失败 {jsonl_file.name}: {e}", exc_info=True)
     
     # Claude CLI
     claude_count = 0
@@ -235,7 +243,7 @@ def scan_and_import():
                         claude_count += 1
                         print(f"  导入: {jsonl_file.name} ({len(session_data['messages'])} 条消息)")
             except Exception as e:
-                print(f"  错误: {jsonl_file.name} - {e}")
+                logger.error(f"导入 Claude 会话失败 {jsonl_file.name}: {e}", exc_info=True)
     
     conn.close()
     

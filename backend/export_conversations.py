@@ -1,19 +1,19 @@
 import sqlite3
 import os
 
-dbPath = os.path.expanduser("~/.agentmemory/data/agentmemory.db")
-outputPath = os.path.expanduser("~/.agentmemory/export/conversations.txt")
+db_path = os.path.expanduser("~/.agentmemory/data/agentmemory.db")
+output_path = os.path.expanduser("~/.agentmemory/export/conversations.txt")
 
-conn = sqlite3.connect(dbPath)
+conn = sqlite3.connect(db_path)
 c = conn.cursor()
 
 # 获取最近20个会话
 c.execute('SELECT id FROM sessions ORDER BY updated_at DESC LIMIT 20')
 sessions = [r[0] for r in c.fetchall()]
 
-os.makedirs(os.path.dirname(outputPath), exist_ok=True)
+os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-with open(outputPath, 'w', encoding='utf-8') as f:
+with open(output_path, 'w', encoding='utf-8') as f:
     f.write('AgentMemory 对话导出\n')
     f.write('='*60 + '\n\n')
     
@@ -31,6 +31,6 @@ with open(outputPath, 'w', encoding='utf-8') as f:
                     total_msgs += 1
             f.write('\n')
 
-print(f'导出完成: {outputPath}')
+print(f'导出完成: {output_path}')
 print(f'共导出 {total_msgs} 条消息')
 conn.close()

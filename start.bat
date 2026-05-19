@@ -17,8 +17,8 @@ if exist "%~dp0.env" (
 
 REM Defaults
 if not defined JAVA_HOME set "JAVA_HOME=D:\JDK\jdk_21"
-if not defined DATABASE_PASSWORD set "DATABASE_PASSWORD=agentmemory123"
-if not defined BACKEND_PORT set "BACKEND_PORT=8081"
+if not defined DATABASE_PASSWORD set "DATABASE_PASSWORD=agentmemory"
+if not defined BACKEND_PORT set "BACKEND_PORT=8082"
 if not defined FRONTEND_PORT set "FRONTEND_PORT=5173"
 if not defined EMBEDDING_PORT set "EMBEDDING_PORT=8100"
 
@@ -82,17 +82,17 @@ goto pg_wait_loop
 echo [INFO] PostgreSQL is ready.
 
 echo [4/6] Starting Embedding Service...
-start "Embedding" cmd /c "cd /d "%~dp0embedding_service" && python embed_server.py"
+start "Embedding" cmd /k "cd /d %~dp0embedding_service && python embed_server.py"
 
 echo [5/6] Starting Backend...
-start "Backend" cmd /c "cd /d "%~dp0backend" && set "JAVA_HOME=%JAVA_HOME%" && set "DATABASE_PASSWORD=%DATABASE_PASSWORD%" && java -Dfile.encoding=UTF-8 -Dconsole.encoding=UTF-8 -cp "target\classes;target\lib\*" com.agentmemory.AgentMemoryApplication"
+start "Backend" cmd /k "cd /d %~dp0backend && set JAVA_HOME=%JAVA_HOME% && set DATABASE_PASSWORD=%DATABASE_PASSWORD% && "%JAVA_HOME%\bin\java.exe" -Dfile.encoding=UTF-8 -Dconsole.encoding=UTF-8 -cp target\classes;target\lib\* com.agentmemory.AgentMemoryApplication"
 
 echo [6/6] Starting Frontend...
-start "Frontend" cmd /c "cd /d "%~dp0frontend" && npm run dev"
+start "Frontend" cmd /k "cd /d %~dp0frontend && npm run dev"
 
 echo.
 echo ========================================
-echo   Started! 窗口会自动关闭
+echo   Started! 窗口会保持打开以便查看日志
 echo ========================================
 echo    Frontend:  http://localhost:%FRONTEND_PORT%
 echo    Backend:   http://localhost:%BACKEND_PORT%

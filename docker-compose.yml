@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: agentmemory
       POSTGRES_USER: agentmemory
-      POSTGRES_PASSWORD: agentmemory123
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agentmemory}
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "5500:5432"

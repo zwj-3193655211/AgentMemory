@@ -19,7 +19,7 @@ if not defined JAVA_HOME (
     pause
     exit /b 1
 )
-if not defined DATABASE_PASSWORD set "DATABASE_PASSWORD=agentmemory123"
+if not defined DATABASE_PASSWORD set "DATABASE_PASSWORD=agentmemory"
 
 set "PATH=%JAVA_HOME%\bin;%PATH%"
 
