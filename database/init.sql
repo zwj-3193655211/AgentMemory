@@ -204,3 +204,35 @@ CREATE TRIGGER update_profiles_updated_at
 CREATE TRIGGER update_contexts_updated_at
     BEFORE UPDATE ON project_contexts
     FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- =====================================================
+-- 聊天功能表
+-- =====================================================
+
+-- 聊天会话表
+CREATE TABLE IF NOT EXISTS chat_sessions (
+    id VARCHAR(64) PRIMARY KEY,
+    agent_type VARCHAR(50) NOT NULL,
+    agent_name VARCHAR(100) NOT NULL,
+    title VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted BOOLEAN DEFAULT FALSE
+);
+
+-- 聊天消息表
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id VARCHAR(64) PRIMARY KEY,
+    session_id VARCHAR(64) NOT NULL REFERENCES chat_sessions(id),
+    role VARCHAR(20) NOT NULL,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON chat_messages(session_id);
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_deleted ON chat_sessions(deleted);
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated ON chat_sessions(updated_at DESC);
+
+CREATE TRIGGER update_chat_sessions_updated_at
+    BEFORE UPDATE ON chat_sessions
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at();

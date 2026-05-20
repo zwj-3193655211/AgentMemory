@@ -43,21 +43,47 @@ public class MemoryExtractor {
         }
     }
     
-    // 问题-解决方案模式 - 更严格匹配
+    // 问题-解决方案模式 - 更严格匹配（保留给其他类型）
     private static final Pattern PROBLEM_SOLUTION_PATTERN = Pattern.compile(
         "(?<problem>.{10,100}?)(是因为|原因|由于).{0,20}?(?<solution>.{10,200}?)(解决|修复|改好|好了)",
         Pattern.DOTALL
     );
-    
-    // "后来发现"模式 - 常见的已解决表达
-    private static final Pattern LATER_FOUND_PATTERN = Pattern.compile(
-        "(?<problem>.{10,80}?)[，,]?(后来发现|原来|原来是)(?<cause>.{5,50}?)[，,，]?(?<solution>.{5,100}?)(就好了|就行|这样|搞定)",
+
+    // === 错误纠正提取模式（用户纠正AI的错误）===
+
+    // "不是X，(而)是Y" 模式：提取AI的错误X和正确答案Y
+    private static final Pattern NOT_X_IS_Y_PATTERN = Pattern.compile(
+        "(?:不是|并非)(?<wrong>.{2,80}?)[，,。；;\\s]*(?:而是|是|应该是|应该是|要用|其实是)(?<correct>.{2,200})",
         Pattern.DOTALL
     );
-    
-    // 解决方案模式
-    private static final Pattern SOLUTION_PATTERN = Pattern.compile(
-        "(解决办法|解决方法|解决方案|修复方法)[是为：:](?<solution>.{10,200})",
+
+    // "不对/错了...应该X" 模式
+    private static final Pattern WRONG_SHOULD_PATTERN = Pattern.compile(
+        "(?:不对|错了|搞错了|搞反了|方向错了).{0,40}?(?:应该是|应该是|应该用|要用|要改成|改为)(?<correct>.{2,200})",
+        Pattern.DOTALL
+    );
+
+    // "不要X，(要/应该)Y" 模式
+    private static final Pattern DONT_X_DO_Y_PATTERN = Pattern.compile(
+        "(?:不要|别|不能用|不能这样|不要这样|不要用).{2,40}?(?:要|应该|改成|改用|用)(?<correct>.{2,200})",
+        Pattern.DOTALL
+    );
+
+    // "我说的不是X，我说的/其实是Y" 模式
+    private static final Pattern I_MEANT_PATTERN = Pattern.compile(
+        "(?:我说的不是|我的意思不是|我指的不是|不是这个意思)(?<wrong>.{2,60}?)[，,。；;\\s]*(?:我说的|我的意思是|我指的是|其实是|而是)(?<correct>.{2,200})",
+        Pattern.DOTALL
+    );
+
+    // "注意/记住不要X" 约束纠正模式
+    private static final Pattern CONSTRAINT_PATTERN = Pattern.compile(
+        "(?:注意|记住|切记|千万).{0,10}(?:不要|别|不能|不可以)(?<wrong>.{2,150})",
+        Pattern.DOTALL
+    );
+
+    // "X不行/不对/错误，应该Y" 模式
+    private static final Pattern X_BAD_Y_GOOD_PATTERN = Pattern.compile(
+        "(?<wrong>.{5,80}?(?:不行|不对|不对的|错误|有问题)).{0,20}?(?:应该|要用|改成|改为|改用)(?<correct>.{2,200})",
         Pattern.DOTALL
     );
     
@@ -80,72 +106,144 @@ public class MemoryExtractor {
     );
     
     /**
-     * 提取错误纠正记忆
-     * 如果没有有效的解决方案，返回null表示不应保存
+     * 提取错误纠正记忆（用户纠正AI的错误）
+     * 提取AI的错误(wrong)和用户给出的正确内容(correct)
+     * 如果没有提取到有效的纠正内容，返回null
      */
     public ExtractedMemory extractErrorCorrection(String content, List<String> tags) {
         ExtractedMemory memory = new ExtractedMemory();
         memory.tags = tags;
-        
-        // 尝试匹配"后来发现...就好了"模式（最常见的已解决表达）
-        Matcher laterMatcher = LATER_FOUND_PATTERN.matcher(content);
-        if (laterMatcher.find()) {
-            memory.problem = laterMatcher.group("problem").trim();
-            memory.cause = laterMatcher.group("cause").trim();
-            memory.solution = laterMatcher.group("solution").trim();
-            memory.title = generateTitle(memory.problem, "错误纠正");
-            return memory;
-        }
-        
-        // 尝试匹配问题-解决方案模式
-        Matcher matcher = PROBLEM_SOLUTION_PATTERN.matcher(content);
+
+        Matcher matcher;
+
+        // 模式1: "不是X，(而)是Y" — 最常见的纠正句式
+        matcher = NOT_X_IS_Y_PATTERN.matcher(content);
         if (matcher.find()) {
-            memory.problem = matcher.group("problem").trim();
-            memory.solution = matcher.group("solution").trim();
-            memory.title = generateTitle(memory.problem, "错误纠正");
+            memory.problem = "AI认为：" + matcher.group("wrong").trim();
+            memory.solution = "正确答案：" + matcher.group("correct").trim();
+            memory.title = generateCorrectionTitle(matcher.group("wrong").trim(), matcher.group("correct").trim());
             return memory;
         }
-        
-        // 尝试匹配明确的解决方案模式
-        Matcher solutionMatcher = SOLUTION_PATTERN.matcher(content);
-        if (solutionMatcher.find()) {
-            memory.solution = solutionMatcher.group("solution").trim();
-            // 尝试从前面提取问题
-            int solutionStart = content.indexOf("解决");
-            if (solutionStart > 20) {
-                memory.problem = content.substring(0, Math.min(solutionStart, 100)).trim();
-            } else {
-                memory.problem = content.substring(0, Math.min(80, content.length())).trim();
-            }
-            memory.title = generateTitle(memory.problem, "错误纠正");
+
+        // 模式2: "不对/错了...应该X" — 先否定再给出正确答案
+        matcher = WRONG_SHOULD_PATTERN.matcher(content);
+        if (matcher.find()) {
+            // 提取"不对"之前的内容作为AI的错误
+            int wrongIdx = content.indexOf("不对");
+            if (wrongIdx == -1) wrongIdx = content.indexOf("错了");
+            if (wrongIdx == -1) wrongIdx = content.indexOf("搞错了");
+            if (wrongIdx == -1) wrongIdx = content.indexOf("搞反了");
+            if (wrongIdx == -1) wrongIdx = content.indexOf("方向错了");
+            String wrongPart = wrongIdx > 0 ? content.substring(0, Math.min(wrongIdx, 80)).trim() : "";
+            memory.problem = wrongPart.isEmpty() ? "AI回答有误" : "AI认为：" + wrongPart;
+            memory.solution = "正确答案：" + matcher.group("correct").trim();
+            memory.title = generateCorrectionTitle(wrongPart, matcher.group("correct").trim());
             return memory;
         }
-        
-        // 尝试提取原因
-        int causeIndex = content.indexOf("因为");
-        if (causeIndex == -1) causeIndex = content.indexOf("原因是");
-        if (causeIndex == -1) causeIndex = content.indexOf("问题出在");
-        
-        if (causeIndex != -1) {
-            // 提取问题（原因之前的部分）
-            memory.problem = content.substring(0, Math.min(causeIndex, 100)).trim();
-            // 提取原因和解决方案（原因之后的部分）
-            int end = Math.min(causeIndex + 150, content.length());
-            String causeAndSolution = content.substring(causeIndex, end).trim();
-            
-            // 检查是否有解决方案标记
-            if (causeAndSolution.contains("所以") || causeAndSolution.contains("要用") || 
-                causeAndSolution.contains("需要") || causeAndSolution.contains("改为")) {
-                memory.cause = causeAndSolution;
-                memory.solution = causeAndSolution;
-                memory.title = generateTitle(memory.problem, "错误纠正");
-                return memory;
+
+        // 模式3: "不要X，要/应该Y" — 否定指令+正确指令
+        matcher = DONT_X_DO_Y_PATTERN.matcher(content);
+        if (matcher.find()) {
+            // 找到"不要/别"的位置和后面"要/应该"的位置
+            int dontIdx = -1;
+            for (String kw : new String[]{"不要", "别", "不能用", "不能这样", "不要这样", "不要用"}) {
+                dontIdx = content.indexOf(kw);
+                if (dontIdx >= 0) break;
             }
+            if (dontIdx >= 0) {
+                int doIdx = -1;
+                for (String kw : new String[]{"要", "应该", "改成", "改用"}) {
+                    int idx = content.indexOf(kw, dontIdx + 2);
+                    if (idx > dontIdx) { doIdx = idx; break; }
+                }
+                if (doIdx > dontIdx) {
+                    memory.problem = "AI错误做法：" + content.substring(dontIdx, doIdx).trim();
+                    int correctEnd = Math.min(doIdx + 200, content.length());
+                    memory.solution = "正确做法：" + content.substring(doIdx, correctEnd).trim();
+                }
+            }
+            if (memory.solution == null || memory.solution.isEmpty()) {
+                memory.solution = "正确做法：" + matcher.group("correct").trim();
+            }
+            memory.title = generateCorrectionTitle(memory.problem, memory.solution);
+            return memory;
         }
-        
-        // 如果以上都没匹配到有效的解决方案，返回null表示不应保存
-        log.debug("未找到有效的错误解决方案，跳过保存: {}", content.substring(0, Math.min(50, content.length())));
+
+        // 模式4: "我说的不是X，我说的/其实是Y"
+        matcher = I_MEANT_PATTERN.matcher(content);
+        if (matcher.find()) {
+            memory.problem = "AI误解为：" + matcher.group("wrong").trim();
+            memory.solution = "用户实际意思：" + matcher.group("correct").trim();
+            memory.title = generateCorrectionTitle(matcher.group("wrong").trim(), matcher.group("correct").trim());
+            return memory;
+        }
+
+        // 模式5: "X不行/不对...应该Y"
+        matcher = X_BAD_Y_GOOD_PATTERN.matcher(content);
+        if (matcher.find()) {
+            memory.problem = "AI的错误方案：" + matcher.group("wrong").trim();
+            memory.solution = "正确方案：" + matcher.group("correct").trim();
+            memory.title = generateCorrectionTitle(matcher.group("wrong").trim(), matcher.group("correct").trim());
+            return memory;
+        }
+
+        // 模式6: "注意/记住不要X" — 约束纠正
+        matcher = CONSTRAINT_PATTERN.matcher(content);
+        if (matcher.find()) {
+            memory.problem = "AI的约束违规：" + matcher.group("wrong").trim();
+            memory.solution = "约束要求：" + content.substring(0, Math.min(content.indexOf("不要") > -1 ?
+                content.indexOf("不要") + 100 : 80, content.length())).trim();
+            memory.title = generateCorrectionTitle(matcher.group("wrong").trim(), null);
+            return memory;
+        }
+
+        // 兜底：如果内容包含纠正关键词但没匹配到具体模式，保存原始内容
+        // 检查是否含有高置信度纠正词
+        if (containsStrongCorrectionMarker(content)) {
+            memory.problem = "用户纠正";
+            memory.solution = content.trim();
+            memory.title = generateCorrectionTitle(null, content.trim());
+            return memory;
+        }
+
+        log.debug("未提取到有效的错误纠正内容，跳过保存: {}",
+            content.substring(0, Math.min(50, content.length())));
         return null;
+    }
+
+    /**
+     * 检查是否包含强纠正标记（兜底用）
+     */
+    private boolean containsStrongCorrectionMarker(String content) {
+        String[] strongMarkers = {
+            "搞反了", "搞错了", "方向错了", "你理解错了", "你搞错了",
+            "你理解反了", "不是这样的", "不是这个意思", "完全不对",
+            "理解错了", "弄反了", "搞混了"
+        };
+        String lower = content.toLowerCase();
+        for (String marker : strongMarkers) {
+            if (lower.contains(marker.toLowerCase())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 生成错误纠正标题
+     */
+    private String generateCorrectionTitle(String wrongPart, String correctPart) {
+        if (wrongPart != null && !wrongPart.isEmpty() && correctPart != null && !correctPart.isEmpty()) {
+            String shortWrong = wrongPart.length() > 20 ? wrongPart.substring(0, 20) + "..." : wrongPart;
+            return "纠正：" + shortWrong;
+        } else if (correctPart != null && !correctPart.isEmpty()) {
+            String shortCorrect = correctPart.length() > 25 ? correctPart.substring(0, 25) + "..." : correctPart;
+            return "纠正：" + shortCorrect;
+        } else if (wrongPart != null && !wrongPart.isEmpty()) {
+            String shortWrong = wrongPart.length() > 25 ? wrongPart.substring(0, 25) + "..." : wrongPart;
+            return "纠正：" + shortWrong;
+        }
+        return "错误纠正";
     }
     
     /**

@@ -21,7 +21,7 @@
             :prefix-icon="Search"
             clearable
             @keyup.enter="handleSearch"
-            style="width: 280px"
+            style="width: 220px"
             size="default"
             round
           />
@@ -75,6 +75,12 @@
               <el-icon><Connection /></el-icon>
             </el-tooltip>
             <span class="menu-label">会话摘要</span>
+          </el-menu-item>
+          <el-menu-item index="chat">
+            <el-tooltip content="对话" placement="bottom">
+              <el-icon><ChatDotRound /></el-icon>
+            </el-tooltip>
+            <span class="menu-label">对话</span>
           </el-menu-item>
           <el-menu-item index="settings" class="settings-menu-item">
             <el-tooltip content="设置" placement="bottom">
@@ -226,6 +232,7 @@
             <el-select v-model="selectedAgent" placeholder="选择 Agent" clearable style="width: 150px">
               <el-option v-for="agent in agents" :key="agent.name" :label="agent.displayName || agent.name" :value="agent.name" />
             </el-select>
+            <el-tag type="info" size="small" style="margin-left: 4px;">{{ filteredSessions.length }} 条</el-tag>
             <el-button @click="showAddAgentDialog = true" title="添加自定义 Agent">
               <el-icon><Plus /></el-icon>
             </el-button>
@@ -548,7 +555,10 @@
           </template>
         </el-dialog>
       </div>
-      
+
+      <!-- 对话页面 -->
+      <ChatView v-if="activeMenu === 'chat'" />
+
       <!-- 设置页面 -->
       <div v-if="activeMenu === 'settings'" class="content-panel full">
         <div class="panel-header">
@@ -883,6 +893,7 @@ import Practices from './views/Practices.vue'
 import Contexts from './views/Contexts.vue'
 import Skills from './views/Skills.vue'
 import Setup from './views/Setup.vue'
+import ChatView from './components/ChatView.vue'
 
 // 使用 Vite 环境变量，支持运行时配置
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8082/api'
@@ -890,7 +901,7 @@ const EMBED_BASE = import.meta.env.VITE_EMBED_BASE || 'http://localhost:8100'
 
 // 数据
 const activeMenu = ref('dashboard')
-const showSetup = ref(true)  // 默认显示初始化向导
+const showSetup = ref(localStorage.getItem('agentmemory_setup_done') !== 'true')
 const agents = ref<any[]>([])
 const sessions = ref<any[]>([])
 const messages = ref<any[]>([])
@@ -1300,18 +1311,34 @@ const providerPresets: Record<string, { baseUrl: string; model: string }> = {
 // Agent名称映射：将agent表中的name映射到session表中的agentType
 const agentNameMapping: Record<string, string> = {
   'Claude Code': 'claude',
+  'Crush CLI': 'crush',
   'iFlow CLI': 'iflow',
   'Nanobot': 'nanobot',
   'OpenClaw': 'openclaw',
   'Qoder CLI': 'qoder',
-  'Qwen CLI': 'qwen'
+  'Qwen CLI': 'qwen',
+  'workbuddy': 'workbuddy'
 }
 
 const filteredSessions = computed(() => {
+  // 调试：显示各 agentType 计数
+  const counts: Record<string, number> = {}
+  sessions.value.forEach(s => { counts[s.agentType] = (counts[s.agentType] || 0) + 1 })
+  console.log('[filter-debug] totalSessions=', sessions.value.length, 'counts=', counts)
+
   if (!selectedAgent.value) return sessions.value
   // 将选中的agent名称转换为agentType格式
   const targetType = agentNameMapping[selectedAgent.value] || selectedAgent.value.toLowerCase().replace(' ', '').replace('cli', '')
-  return sessions.value.filter(s => s.agentType === targetType)
+  console.log('[filter] selectedAgent=', selectedAgent.value, 'targetType=', targetType, 'totalSessions=', sessions.value.length)
+  const result = sessions.value.filter(s => {
+    const match = s.agentType === targetType
+    if (s.agentType === 'workbuddy' || s.agentType === 'crush') {
+      console.log('[filter] check', s.agentType, 'vs', targetType, 'match=', match, 'id=', s.id)
+    }
+    return match
+  })
+  console.log('[filter] result count=', result.length)
+  return result
 })
 
 // 过滤空消息（工具调用等）
@@ -1476,7 +1503,7 @@ const getTypeTagType = (type: string) => {
 // LLM 配置
 const loadEmbeddingStatus = async () => {
   try {
-    const res = await axios.get(`${EMBED_BASE}/health`)
+    const res = await axios.get(`${API_BASE}/embedding/health`)
     embeddingStatus.value = res.data
     
     // 同步 LLM 配置
@@ -1500,7 +1527,7 @@ const loadEmbeddingStatus = async () => {
 const loadEmbeddingModels = async () => {
   loadingEmbeddingModels.value = true
   try {
-    const res = await axios.get(`${EMBED_BASE}/embedding/models`)
+    const res = await axios.get(`${API_BASE}/embedding/models`)
     embeddingModels.value = res.data.models || []
     selectedEmbeddingModel.value = res.data.current || ''
   } catch (e) {
@@ -1530,7 +1557,7 @@ const currentEmbeddingModelName = computed(() => {
 const downloadModel = async (modelId: string) => {
   downloadingModel.value = modelId
   try {
-    const res = await axios.post(`${EMBED_BASE}/embedding/model/download`, {
+    const res = await axios.post(`${API_BASE}/embedding/model/download`, {
       model_id: modelId
     })
     
@@ -1553,7 +1580,7 @@ const startDownloadPolling = () => {
   
   downloadPollingInterval.value = setInterval(async () => {
     try {
-      const res = await axios.get(`${EMBED_BASE}/embedding/model/download/status`)
+      const res = await axios.get(`${API_BASE}/embedding/model/download/status`)
       const statuses = res.data.models
       
       // 检查是否所有下载都完成了
@@ -1609,7 +1636,7 @@ const formatEta = (seconds: number): string => {
 const selectAndSwitchModel = async (modelId: string) => {
   switchingEmbeddingModel.value = true
   try {
-    const res = await axios.post(`${EMBED_BASE}/embedding/model`, {
+    const res = await axios.post(`${API_BASE}/embedding/model`, {
       model_id: modelId
     })
     
@@ -1678,7 +1705,7 @@ const saveLLMConfig = async () => {
     }
     
     // 1. 同步保存到 Embedding 服务
-    await axios.post(`${EMBED_BASE}/config`, {
+    await axios.post(`${API_BASE}/embedding/config`, {
       llm_mode: llmConfig.value.mode,
       llm_api_provider: providerName,
       llm_api_base: baseUrl,
@@ -1754,13 +1781,13 @@ const testLocalModel = async () => {
   
   try {
     // 先保存配置
-    await axios.post(`${EMBED_BASE}/config`, {
+    await axios.post(`${API_BASE}/embedding/config`, {
       llm_mode: 'local',
       llm_local_model: llmConfig.value.localModel
     })
-    
+
     // 测试提取
-    const res = await axios.post(`${EMBED_BASE}/extract`, {
+    const res = await axios.post(`${API_BASE}/embedding/extract`, {
       content: '这是一个测试：成功解决了 Python 导入错误。'
     })
     
@@ -1865,6 +1892,7 @@ const exportSingleSession = async (sessionId: string) => {
 // 初始化完成处理
 const handleSetupComplete = () => {
   showSetup.value = false
+  localStorage.setItem('agentmemory_setup_done', 'true')
   loadAllData()
   loadEmbeddingStatus()
   loadEmbeddingModels()
@@ -1935,7 +1963,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
   color: #409eff;
   flex-shrink: 0;
@@ -1943,7 +1971,7 @@ onUnmounted(() => {
 }
 
 .logo .el-icon {
-  font-size: 28px;
+  font-size: 22px;
 }
 
 /* 搜索框 */
@@ -1962,7 +1990,7 @@ onUnmounted(() => {
 }
 
 .main-menu .el-menu-item {
-  padding: 0 16px;
+  padding: 0 10px;
   height: 60px;
   line-height: 60px;
   display: flex;
@@ -1977,11 +2005,11 @@ onUnmounted(() => {
 }
 
 .main-menu .el-menu-item .el-icon {
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .menu-label {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 500;
 }
 

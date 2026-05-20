@@ -263,6 +263,8 @@ public class FileWatcherService {
                 message = parseOpenClawMessage(node, file);
             } else if ("qwen".equals(parserType)) {
                 message = parseQwenMessage(node, file);
+            } else if ("nanobot".equals(parserType)) {
+                message = parseNanobotMessage(node, file);
             }
             
             if (message != null) {
@@ -626,13 +628,69 @@ public class FileWatcherService {
         message.setContent(content);
         message.setRawJson(node.toString());
         message.setAgentType("openclaw");
-        
+
         // 从第一条 user 消息提取 projectPath
         JsonNode cwdNode = node.get("cwd");
         if (cwdNode != null) {
             message.setProjectName(cwdNode.asText());
         }
-        
+
+        return message;
+    }
+
+    /**
+     * 解析 Nanobot 消息格式
+     * Nanobot 格式: {"role":"user/assistant","content":"文本","timestamp":"ISO时间"}
+     * 元数据行: {"_type":"metadata","key":"session-id",...}
+     */
+    private Message parseNanobotMessage(JsonNode node, Path file) {
+        // 跳过元数据行
+        String type = getTextOrEmpty(node, "_type");
+        if ("metadata".equals(type)) {
+            return null;
+        }
+
+        String role = getTextOrEmpty(node, "role");
+
+        // 只处理 user 和 assistant
+        if (!"user".equals(role) && !"assistant".equals(role)) {
+            return null;
+        }
+
+        Message message = new Message();
+        message.setParentId(getTextOrEmpty(node, "parentId"));
+        message.setRole(role);
+        message.setTimestamp(getTextOrEmpty(node, "timestamp"));
+
+        // 从文件名提取 sessionId
+        String fileName = file.getFileName().toString();
+        String sessionId = fileName.replace(".jsonl", "");
+        message.setSessionId(sessionId);
+
+        // nanobot 消息没有唯一 ID，需要生成
+        String msgId = getTextOrEmpty(node, "id");
+        if (msgId.isEmpty()) {
+            msgId = getTextOrEmpty(node, "key");
+        }
+        if (msgId.isEmpty()) {
+            // 使用 sessionId + timestamp + role 生成唯一 ID
+            String ts = getTextOrEmpty(node, "timestamp");
+            msgId = sessionId + "-" + role + "-" + (ts != null ? ts.replaceAll("[^0-9]", "") : String.valueOf(System.nanoTime()));
+        }
+        message.setId(msgId);
+
+        // 解析消息内容 - Nanobot 使用直接的 content 字符串
+        String content = getTextOrEmpty(node, "content");
+
+        // 跳过空消息
+        if (content.isEmpty()) {
+            return null;
+        }
+
+        message.setContent(content);
+        message.setRawJson(node.toString());
+        message.setAgentType("nanobot");
+
         return message;
     }
     
@@ -799,16 +857,60 @@ public class FileWatcherService {
     /**
      * 手动触发重新扫描指定目录（用于 Setup 向导）
      * @param directory 要扫描的目录路径
+     * @param agentType Agent 类型（用于标记消息归属）
+     * @param parserType 解析器类型（iflow/claude/openclaw/qwen/nanobot）
      */
-    public void rescanDirectory(String directory) {
+    public void rescanDirectory(String directory, String agentType, String parserType) {
         Path path = Paths.get(directory);
         if (Files.exists(path) && Files.isDirectory(path)) {
             executor.submit(() -> {
-                log.info("手动触发重新扫描: {}", directory);
-                scanExistingFiles("manual", "unknown", path);
+                log.info("手动触发重新扫描: {} (agent={}, parser={})", directory, agentType, parserType);
+                // 清除该目录下的文件位置记录，确保从头重新读取
+                clearFilePositionsForDirectory(path);
+                scanExistingFiles(agentType, parserType, path);
                 log.info("重新扫描完成: {}", directory);
             });
         }
+    }
+
+    /**
+     * 清除指定目录下所有文件的位置追踪记录，使后续扫描从头开始
+     * 同时处理正斜杠和反斜杠路径（Windows 兼容）
+     */
+    private void clearFilePositionsForDirectory(Path directory) {
+        String dirNormalized = directory.toString().replace("\\", "/");
+        int cleared = 0;
+        for (String filePath : filePositions.keySet()) {
+            if (filePath.replace("\\", "/").startsWith(dirNormalized)) {
+                filePositions.remove(filePath);
+                cleared++;
+            }
+        }
+        // 同时清除数据库中的记录
+        // 使用 REPLACE + LIKE 避免 Windows 反斜杠被 LIKE 当作转义字符的问题
+        try (Connection conn = databaseService.getConnection()) {
+            try (PreparedStatement stmt = conn.prepareStatement(
+                 "DELETE FROM file_positions WHERE REPLACE(file_path, '\\', '/') LIKE ?")) {
+                stmt.setString(1, dirNormalized + "%");
+                int dbCleared = stmt.executeUpdate();
+                log.info("已从数据库清除 {} 条文件位置记录 (目录: {})", dbCleared, directory);
+            }
+        } catch (Exception e) {
+            log.warn("清除数据库文件位置记录失败: {}", e.getMessage());
+        }
+        if (cleared > 0) {
+            log.info("已从内存清除 {} 条文件位置记录 (目录: {})", cleared, directory);
+        }
+    }
+
+    /**
+     * 手动触发重新扫描指定目录（兼容旧调用）
+     * @param directory 要扫描的目录路径
+     * @deprecated 使用 {@link #rescanDirectory(String, String, String)} 代替
+     */
+    @Deprecated
+    public void rescanDirectory(String directory) {
+        rescanDirectory(directory, "manual", "unknown");
     }
     
     /**

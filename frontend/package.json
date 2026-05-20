@@ -16,6 +16,8 @@
     "@element-plus/icons-vue": "^2.3.2",
     "@vitejs/plugin-vue": "^6.0.5",
     "axios": "^1.13.6",
-    "element-plus": "^2.13.6"
+    "element-plus": "^2.13.6",
+    "highlight.js": "^11.11.1",
+    "marked": "^18.0.4"
   }
 }

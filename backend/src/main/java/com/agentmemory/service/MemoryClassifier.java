@@ -38,8 +38,11 @@ public class MemoryClassifier {
     // 触发关键词配置
     private static final Map<MemoryType, List<String>> TRIGGER_KEYWORDS = Map.of(
         MemoryType.ERROR_CORRECTION, List.of(
-            "失败", "报错", "错误", "不行", "问题", "bug", "异常", "崩溃",
-            "缺少", "找不到", "无法", "不能"
+            "不对", "错了", "不是", "不应该", "搞反了", "搞错了", "别这样",
+            "不能用", "不要用", "不是这样", "不对的", "方向错了",
+            "你理解错了", "你搞错了", "你没理解", "不对吧", "怎么会",
+            "我说的不是", "不是这个意思", "不要这样", "不应该这样",
+            "重新看", "注意不要", "记住不要", "别忘了"
         ),
         MemoryType.USER_PROFILE, List.of(
             "我喜欢", "我习惯", "我用", "不用", "偏好", "喜欢用",
@@ -61,7 +64,7 @@ public class MemoryClassifier {
     
     // 反关键词（出现这些词时不归类到对应类型）
     private static final Map<MemoryType, List<String>> ANTI_KEYWORDS = Map.of(
-        MemoryType.ERROR_CORRECTION, List.of("成功", "完成", "好了", "没问题", "可以了"),
+        MemoryType.ERROR_CORRECTION, List.of(),
         MemoryType.USER_PROFILE, List.of("不需要", "不用管"),
         MemoryType.BEST_PRACTICE, List.of("错误", "失败", "问题")
     );
@@ -69,9 +72,16 @@ public class MemoryClassifier {
     // 正则模式
     private static final Map<MemoryType, List<Pattern>> PATTERNS = Map.of(
         MemoryType.ERROR_CORRECTION, List.of(
-            Pattern.compile("(失败|报错|错误|异常).{0,20}(解决|修复|改|方案)"),
-            Pattern.compile("(缺少|找不到|没有).{0,10}(dll|文件|模块|依赖)"),
-            Pattern.compile("打包.{0,20}(失败|错误|问题)")
+            // "不是X，是Y" 模式
+            Pattern.compile("不是.{2,30}?[，,。;；][\\s]*(是|应该是|要用|要改|应该是|应该是)"),
+            // "不对/错了...应该" 模式
+            Pattern.compile("(不对|错了|搞错了|搞反了).{2,40}?(应该是|应该是|应该用|要改成|要用|改为)"),
+            // "不要X，要Y" 模式
+            Pattern.compile("(不要|别|不能用|不能这样).{2,30}?(要|应该|改成|改用)"),
+            // "我说的不是X，(我说的)是Y" 模式
+            Pattern.compile("(我说的是?|我的意思是|我指的是).{2,50}?(不是|而是).{0,20}"),
+            // "注意不要/记住不要" 约束纠正模式
+            Pattern.compile("(注意|记住|切记|千万).{0,10}(不要|别|不能|不可以)")
         ),
         MemoryType.USER_PROFILE, List.of(
             Pattern.compile("我(喜欢|习惯|偏好).{0,20}(用|使|不)"),
@@ -83,11 +93,19 @@ public class MemoryClassifier {
         )
     );
     
-    // "已解决"标记词 - 出现这些词表示问题已被解决，是值得保存的错误纠正
-    private static final List<String> RESOLVED_MARKERS = List.of(
-        "后来发现", "原来是", "原因找到了", "问题是", "解决办法是", "解决方法是",
-        "这样就行", "就好了", "改好了", "修好了", "搞定了", "弄好了",
-        "是因为", "原来是因为", "问题出在", "根本原因是", "所以要用", "得用"
+    // "纠正"标记词 - 出现这些词表示用户在纠正AI的错误
+    private static final List<String> CORRECTION_MARKERS = List.of(
+        "不对", "错了", "不是", "不应该", "搞反了", "搞错了", "方向错了",
+        "不是这样", "不是这个", "你理解错了", "你搞错了", "你没理解",
+        "不要这样", "不应该这样", "别这样", "不能用",
+        "我说的不是", "不是这个意思", "我的意思是", "我指的是",
+        "不要用", "不要这样", "注意不要", "记住不要"
+    );
+
+    // "纠正+正确答案"标记词 - 既有否定又有正确指引
+    private static final List<String> CORRECTION_WITH_ANSWER_MARKERS = List.of(
+        "应该是", "应该是", "应该用", "要改成", "要用", "改为", "改成",
+        "而是", "应该是这个", "正确的是", "其实", "实际上"
     );
     
     // "求助"标记词 - 出现这些词表示这是提问求助，不是已解决的经验
@@ -108,15 +126,22 @@ public class MemoryClassifier {
     
     /**
      * 分类消息
+     * 错误纠正 = 用户纠正AI的错误，优先级最高
      */
     public MemoryType classify(String content) {
         if (content == null || content.trim().isEmpty()) {
             return MemoryType.UNKNOWN;
         }
-        
+
         String lowerContent = content.toLowerCase();
-        
-        // 特殊检查：如果是求助请求，不应保存为错误纠正
+
+        // 最高优先级：检查是否是用户纠正AI的错误
+        // 纠正检测在求助检测之前，因为"帮我改成X"虽然含"帮我"但本质是纠正
+        if (hasCorrectionMarker(content)) {
+            return MemoryType.ERROR_CORRECTION;
+        }
+
+        // 特殊检查：如果是求助请求，不应保存
         if (isHelpRequest(content)) {
             // 检查是否是用户偏好
             if (hasPreferenceMarkers(content)) {
@@ -129,40 +154,40 @@ public class MemoryClassifier {
             // 其他求助请求不保存
             return MemoryType.UNKNOWN;
         }
-        
+
         // 检查是否是技能/步骤描述
         if (hasSkillMarkers(content)) {
             return MemoryType.SKILL;
         }
-        
+
         // 检查是否是最佳实践/经验
         if (hasPracticeMarkers(content)) {
             return MemoryType.BEST_PRACTICE;
         }
-        
+
         // 检查是否是用户偏好
         if (hasPreferenceMarkers(content)) {
             return MemoryType.USER_PROFILE;
         }
-        
+
         // 检查是否是项目上下文
         if (hasProjectContextMarkers(content)) {
             return MemoryType.PROJECT_CONTEXT;
         }
-        
+
         Map<MemoryType, Integer> scores = new EnumMap<>(MemoryType.class);
-        
+
         // 1. 关键词匹配打分
         for (Map.Entry<MemoryType, List<String>> entry : TRIGGER_KEYWORDS.entrySet()) {
             MemoryType type = entry.getKey();
             int score = 0;
-            
+
             for (String keyword : entry.getValue()) {
                 if (lowerContent.contains(keyword.toLowerCase())) {
                     score += 1;
                 }
             }
-            
+
             // 检查反关键词
             List<String> antiKeywords = ANTI_KEYWORDS.getOrDefault(type, List.of());
             for (String anti : antiKeywords) {
@@ -170,10 +195,10 @@ public class MemoryClassifier {
                     score -= 2;
                 }
             }
-            
+
             scores.put(type, score);
         }
-        
+
         // 2. 正则模式匹配加成
         for (Map.Entry<MemoryType, List<Pattern>> entry : PATTERNS.entrySet()) {
             MemoryType type = entry.getKey();
@@ -183,15 +208,8 @@ public class MemoryClassifier {
                 }
             }
         }
-        
-        // 3. 特殊检查：ERROR_CORRECTION 必须有"已解决"标记
-        if (scores.getOrDefault(MemoryType.ERROR_CORRECTION, 0) > 0) {
-            if (!hasResolvedMarker(content)) {
-                scores.put(MemoryType.ERROR_CORRECTION, 0);
-            }
-        }
-        
-        // 4. 找出得分最高的类型
+
+        // 3. 找出得分最高的类型
         return scores.entrySet().stream()
             .filter(e -> e.getValue() > 0)
             .max(Map.Entry.comparingByValue())
@@ -213,11 +231,11 @@ public class MemoryClassifier {
     }
     
     /**
-     * 检查是否有已解决标记
+     * 检查是否有纠正标记（用户在纠正AI）
      */
-    private boolean hasResolvedMarker(String content) {
+    private boolean hasCorrectionMarker(String content) {
         String lower = content.toLowerCase();
-        for (String marker : RESOLVED_MARKERS) {
+        for (String marker : CORRECTION_MARKERS) {
             if (lower.contains(marker.toLowerCase())) {
                 return true;
             }
@@ -347,10 +365,10 @@ public class MemoryClassifier {
             return false;
         }
         
-        // 纯提问不保存（以问号结尾且没有解决方案）
+        // 纯提问不保存（以问号结尾且没有纠正标记）
         if (content.endsWith("？") || content.endsWith("?")) {
-            // 除非包含已解决标记
-            if (!hasResolvedMarker(content)) {
+            // 除非包含纠正标记
+            if (!hasCorrectionMarker(content)) {
                 return false;
             }
         }

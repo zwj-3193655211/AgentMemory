@@ -171,25 +171,24 @@ public class SetupHandler implements HttpHandler {
 
     private int importFromAgent(Connection conn, String logPath, String agentType, String since) throws SQLException {
         int count = 0;
-        
+
         // 根据 agentType 确定解析器类型
-        String parserType = agentType;
-        if ("iflow".equals(agentType)) {
-            parserType = "iflow";
-        } else if ("claude".equals(agentType)) {
-            parserType = "claude";
-        } else if ("openclaw".equals(agentType)) {
-            parserType = "openclaw";
-        } else if ("qwen".equals(agentType)) {
-            parserType = "qwen";
+        String parserType;
+        switch (agentType) {
+            case "iflow":    parserType = "iflow"; break;
+            case "claude":   parserType = "claude"; break;
+            case "openclaw": parserType = "openclaw"; break;
+            case "qwen":     parserType = "qwen"; break;
+            case "nanobot":  parserType = "nanobot"; break;
+            default:         parserType = agentType; break;
         }
-        
+
         // 查询已有的会话数量（用于对比）
         String countSql = "SELECT COUNT(*) FROM sessions WHERE agent_type = ?";
         if (since != null && !since.isEmpty()) {
             countSql += " AND created_at >= ?";
         }
-        
+
         try (PreparedStatement stmt = conn.prepareStatement(countSql)) {
             stmt.setString(1, agentType);
             if (since != null && !since.isEmpty()) {
@@ -200,13 +199,13 @@ public class SetupHandler implements HttpHandler {
                 count = rs.getInt(1);
             }
         }
-        
-        // 触发 FileWatcherService 重新扫描该目录
+
+        // 触发 FileWatcherService 重新扫描该目录（传入正确的 agentType 和 parserType）
         if (logPath != null && !logPath.isEmpty()) {
-            fileWatcherService.rescanDirectory(logPath);
-            log.info("已触发重新扫描 Agent [{}] 目录: {}", agentType, logPath);
+            fileWatcherService.rescanDirectory(logPath, agentType, parserType);
+            log.info("已触发重新扫描 Agent [{}] 目录: {} (parser={})", agentType, logPath, parserType);
         }
-        
+
         return count;
     }
 

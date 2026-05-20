@@ -68,11 +68,12 @@ public class AgentDetectorService {
         addIfNotNull(agents, detectAgent("iFlow CLI", "iflow", ".iflow", "projects"));
         addIfNotNull(agents, detectClaudeCode());
         addIfNotNull(agents, detectAgent("OpenClaw", "openclaw", ".openclaw", "agents", "main", "sessions"));
-        addIfNotNull(agents, detectAgent("Nanobot", "nanobot", ".nanobot"));
+        addIfNotNull(agents, detectAgent("Nanobot", "nanobot", ".nanobot", "workspace", "sessions"));
         addIfNotNull(agents, detectAgent("Qwen CLI", "qwen", ".qwen", "projects"));
         addIfNotNull(agents, detectAgent("Qoder CLI", "qoder", ".qoder", "projects"));
         addIfNotNull(agents, detectAgent("Crush CLI", "crush", ".crush"));
-        
+        addIfNotNull(agents, detectAgent("WorkBuddy", "workbuddy", ".workbuddy", "projects"));
+
         log.info("检测到 {} 个 Agent", agents.size());
         return agents;
     }

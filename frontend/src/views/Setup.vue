@@ -99,6 +99,14 @@
 
         <div v-if="loadingModels" v-loading="loadingModels" style="min-height: 200px"></div>
 
+        <div v-else-if="modelLoadError" class="empty-models">
+          <el-alert type="warning" :title="modelLoadError" show-icon :closable="false" />
+          <div style="margin-top: 16px; display: flex; gap: 12px; justify-content: center;">
+            <el-button size="small" @click="loadModels">重试</el-button>
+            <el-button size="small" type="warning" @click="handleComplete('')">跳过，稍后在设置中配置</el-button>
+          </div>
+        </div>
+
         <div v-else class="model-list">
           <el-radio-group v-model="selectedModel">
             <el-radio v-for="model in modelList" :key="model.id" :value="model.id" border>
@@ -112,7 +120,7 @@
           </el-radio-group>
         </div>
 
-        <div v-if="!loadingModels && modelList.length === 0" class="empty-models">
+        <div v-if="!loadingModels && !modelLoadError && modelList.length === 0" class="empty-models">
           <el-alert type="info">
             暂无可用模型，请确保 Embedding 服务已启动
           </el-alert>
@@ -120,7 +128,7 @@
 
         <div class="step-actions">
           <el-button @click="currentStep = 1">上一步</el-button>
-          <el-button type="primary" :disabled="!selectedModel" @click="handleComplete">
+          <el-button type="primary" :disabled="!selectedModel && !modelLoadError" @click="handleComplete(selectedModel)">
             完成设置
           </el-button>
         </div>
@@ -185,6 +193,7 @@ const importResult = ref<{ imported: number } | null>(null)
 
 // 模型选择
 const loadingModels = ref(false)
+const modelLoadError = ref('')
 const modelList = ref<any[]>([])
 const selectedModel = ref('')
 
@@ -253,14 +262,23 @@ const handleImport = async () => {
 // 加载模型列表
 const loadModels = async () => {
   loadingModels.value = true
+  modelLoadError.value = ''
   try {
     const result = await apiService.getEmbeddingModels()
     if (result?.models) {
       modelList.value = result.models
       const downloaded = modelList.value.find((m: any) => m.downloaded)
       selectedModel.value = downloaded?.id || modelList.value[0]?.id || ''
+    } else {
+      modelLoadError.value = '模型列表为空，请确保 Embedding 服务已启动（端口 8100）'
     }
-  } catch (error) {
+  } catch (error: any) {
+    const msg = error?.message || ''
+    if (msg.includes('Network Error') || msg.includes('CORS') || msg.includes('timeout')) {
+      modelLoadError.value = '无法连接 Embedding 服务（端口 8100），请检查服务是否已启动'
+    } else {
+      modelLoadError.value = '加载模型失败: ' + msg
+    }
     console.error('加载模型失败:', error)
   } finally {
     loadingModels.value = false
@@ -273,9 +291,10 @@ const disabledFutureDate = (date: Date) => {
 }
 
 // 完成设置
-const handleComplete = async () => {
+const handleComplete = async (modelId?: string) => {
+  const mid = modelId || selectedModel.value || ''
   try {
-    await apiService.completeSetup(selectedModel.value)
+    await apiService.completeSetup(mid)
     currentStep.value = 3
     const status = await apiService.getSetupStatus()
     stats.value = status

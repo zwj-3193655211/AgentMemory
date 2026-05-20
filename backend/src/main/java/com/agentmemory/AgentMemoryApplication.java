@@ -7,6 +7,7 @@ import com.agentmemory.service.FileWatcherService;
 import com.agentmemory.service.AgentDetectorService;
 import com.agentmemory.service.CleanupService;
 import com.agentmemory.service.CrushDatabaseWatcher;
+import com.agentmemory.service.WorkBuddyWatcher;
 import com.agentmemory.service.SessionCompressionService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,6 +40,7 @@ public class AgentMemoryApplication {
     private final ApiServer apiServer;
     private List<AgentInfo> detectedAgents;
     private CrushDatabaseWatcher crushDatabaseWatcher;
+    private WorkBuddyWatcher workBuddyWatcher;
 
     public AgentMemoryApplication(ApplicationConfig config) {
         this.config = config;
@@ -68,9 +70,12 @@ public class AgentMemoryApplication {
         }
         databaseService.registerAgents(detectedAgents);
 
-        // 3. 启动文件监控
+        // 3. 启动文件监控（WorkBuddy 使用独立 Watcher，跳过）
         log.info("[3/6] 启动文件监控服务...");
         for (AgentInfo agent : detectedAgents) {
+            if ("workbuddy".equals(agent.getType())) {
+                continue;  // WorkBuddy 由 WorkBuddyWatcher 独立监控
+            }
             Path watchPath = expandHomePath(agent.getLogPath());
             if (watchPath.toFile().exists()) {
                 String parserType = agent.getParserType() != null ? agent.getParserType() : agent.getType();
@@ -91,17 +96,21 @@ public class AgentMemoryApplication {
         compressionService.start();
 
         // 6. 启动 Crush 数据库监控服务
-        log.info("[6/7] 启动 Crush 数据库监控服务...");
+        log.info("[6/8] 启动 Crush 数据库监控服务...");
         startCrushDatabaseWatcher();
 
-        // 7. 启动 API 服务
-        log.info("[7/7] 启动 API 服务...");
+        // 7. 启动 WorkBuddy 对话监控服务
+        log.info("[7/8] 启动 WorkBuddy 对话监控服务...");
+        startWorkBuddyWatcher();
+
+        // 8. 启动 API 服务
+        log.info("[8/8] 启动 API 服务...");
         apiServer.setCompressionService(compressionService);
         apiServer.start();
         log.info("      API 地址: http://localhost:{}", config.getApiPort());
 
-        // 8. 启动完成
-        log.info("[8/8] AgentMemory 已就绪");
+        // 9. 启动完成
+        log.info("AgentMemory 已就绪");
         log.info("========================================");
         log.info("正在监控 {} 个 Agent 的会话日志...", detectedAgents.size());
         log.info("前端界面: http://localhost:{}", config.getApiPort());
@@ -114,6 +123,9 @@ public class AgentMemoryApplication {
             log.info("正在关闭...");
             if (crushDatabaseWatcher != null) {
                 crushDatabaseWatcher.stop();
+            }
+            if (workBuddyWatcher != null) {
+                workBuddyWatcher.stop();
             }
             apiServer.stop();
             compressionService.stop();
@@ -152,6 +164,25 @@ public class AgentMemoryApplication {
             }
         }
         log.info("      Crush 数据库未配置，跳过");
+    }
+
+    /**
+     * 启动 WorkBuddy 对话监控服务
+     */
+    private void startWorkBuddyWatcher() {
+        for (AgentInfo agent : detectedAgents) {
+            if ("workbuddy".equals(agent.getType())) {
+                String projectsDir = agent.getLogPath();
+                if (projectsDir != null && !projectsDir.isEmpty()) {
+                    projectsDir = expandHomePath(projectsDir).toString();
+                    workBuddyWatcher = new WorkBuddyWatcher(databaseService, projectsDir);
+                    workBuddyWatcher.start();
+                    log.info("      WorkBuddy 对话监控: {} (每 60 秒检查)", projectsDir);
+                    return;
+                }
+            }
+        }
+        log.info("      WorkBuddy 未配置，跳过");
     }
     
     public static void main(String[] args) {

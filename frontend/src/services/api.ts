@@ -233,30 +233,31 @@ export class ApiService {
   // ============== Embedding API ==============
 
   /**
-   * 鑾峰彇 Embedding 妯″瀷鍒楄〃
+   * Get Embedding models list (proxied via backend)
    */
   async getEmbeddingModels() {
-    return this.get<any>('/embedding/models', EMBED_BASE)
+    return this.get<any>('/embedding/models')
   }
 
   /**
-   * 涓嬭浇 Embedding 妯″瀷
+   * Download Embedding model (proxied via backend)
    */
   async downloadEmbeddingModel(modelId: string) {
-    return this.post('/embedding/model/download', { model_id: modelId }, EMBED_BASE)
+    return this.post('/embedding/model/download', { model_id: modelId })
   }
 
   /**
-   * 鑾峰彇 Embedding 妯″瀷涓嬭浇鐘舵€?   */
+   * Get Embedding model download status (proxied via backend)
+   */
   async getEmbeddingModelDownloadStatus() {
-    return this.get<any>('/embedding/model/download/status', EMBED_BASE)
+    return this.get<any>('/embedding/model/download/status')
   }
 
   /**
-   * 鍒囨崲 Embedding 妯″瀷
+   * Switch Embedding model (proxied via backend)
    */
   async switchEmbeddingModel(modelId: string) {
-    return this.post('/embedding/model', { model_id: modelId }, EMBED_BASE)
+    return this.post('/embedding/model', { model_id: modelId })
   }
 
   // ============== 鍒濆鍖?API ==============

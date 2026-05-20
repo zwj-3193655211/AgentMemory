@@ -4,6 +4,7 @@ import com.agentmemory.service.DatabaseService;
 import com.agentmemory.service.FileWatcherService;
 import com.agentmemory.service.SessionCompressionService;
 import com.agentmemory.service.AgentDetectorService;
+import com.agentmemory.service.ChatService;
 import com.agentmemory.api.SetupHandler;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -17,11 +18,16 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.*;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -94,6 +100,60 @@ public class ApiServer {
         server.createContext("/api/cleanup", new CleanupHandler());
         server.createContext("/api/setup", new SetupHandler(databaseService, agentDetectorService, fileWatcherService));
         server.createContext("/api/import", new SetupHandler(databaseService, agentDetectorService, fileWatcherService));
+        server.createContext("/api/chat", new ChatHandler(databaseService, agentDetectorService));
+
+        // Embedding 服务代理（解决前端 CORS 问题）
+        String embedBase = System.getenv().getOrDefault("EMBEDDING_BASE_URL", "http://localhost:8100");
+        HttpClient embedClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .build();
+        server.createContext("/api/embedding", exchange -> {
+            try {
+                String path = exchange.getRequestURI().getPath();
+                String subPath = path.substring("/api/embedding".length()); // e.g., "/models"
+                String targetUrl = embedBase + subPath;
+                if (exchange.getRequestURI().getQuery() != null) {
+                    targetUrl += "?" + exchange.getRequestURI().getQuery();
+                }
+                
+                log.debug("代理 Embedding 请求: {} -> {}", path, targetUrl);
+                
+                HttpRequest.Builder reqBuilder = HttpRequest.newBuilder()
+                    .uri(URI.create(targetUrl))
+                    .timeout(Duration.ofSeconds(30));
+                
+                String method = exchange.getRequestMethod();
+                if ("POST".equals(method)) {
+                    String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+                    reqBuilder.header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(body));
+                } else {
+                    reqBuilder.GET();
+                }
+                
+                HttpResponse<String> resp = embedClient.send(reqBuilder.build(),
+                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+                
+                byte[] respBody = resp.body().getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "application/json");
+                exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+                exchange.sendResponseHeaders(resp.statusCode(), respBody.length);
+                try (OutputStream os = exchange.getResponseBody()) {
+                    os.write(respBody);
+                }
+            } catch (Exception e) {
+                log.error("Embedding 代理错误: {}", e.getMessage());
+                String errorJson = "{\"error\":\"" + e.getMessage().replace("\"", "'") + "\"}";
+                byte[] errorBytes = errorJson.getBytes(StandardCharsets.UTF_8);
+                try {
+                    exchange.getResponseHeaders().set("Content-Type", "application/json");
+                    exchange.sendResponseHeaders(502, errorBytes.length);
+                    try (OutputStream os = exchange.getResponseBody()) {
+                        os.write(errorBytes);
+                    }
+                } catch (IOException ignored) {}
+            }
+        });
         
         // 静态文件服务（前端）
         server.createContext("/", new StaticFileHandler());
@@ -572,7 +632,7 @@ public class ApiServer {
             }
 
             String query = exchange.getRequestURI().getQuery();
-            int limit = 50;
+            int limit = 200;
             int offset = 0;
             String agentType = null;
 
@@ -595,7 +655,7 @@ public class ApiServer {
                 "FROM sessions s WHERE s.deleted = false ";
             String filterSql = (agentType != null && !agentType.isEmpty())
                 ? "AND s.agent_type = ? " : "";
-            String orderSql = "ORDER BY s.created_at DESC LIMIT ? OFFSET ?";
+            String orderSql = "ORDER BY COALESCE(s.created_at, '1970-01-01') DESC NULLS LAST LIMIT ? OFFSET ?";
             String sql = baseSql + filterSql + orderSql;
 
             try (Connection conn = databaseService.getConnection();
@@ -1895,15 +1955,15 @@ public class ApiServer {
                     try (Connection conn = databaseService.getConnection();
                          Statement stmt = conn.createStatement();
                          ResultSet rs = stmt.executeQuery(
-                             "SELECT session_id, summary, compression_type, original_message_count, compressed_at " +
-                             "FROM session_summaries ORDER BY compressed_at DESC LIMIT 50")) {
+                             "SELECT session_id, summary, compression_type, original_message_count, created_at " +
+                             "FROM session_summaries ORDER BY created_at DESC LIMIT 50")) {
                         while (rs.next()) {
                             Map<String, Object> row = new HashMap<>();
                             row.put("sessionId", rs.getString("session_id"));
                             row.put("summary", rs.getString("summary"));
                             row.put("compressionType", rs.getString("compression_type"));
                             row.put("messageCount", rs.getInt("original_message_count"));
-                            row.put("compressedAt", rs.getTimestamp("compressed_at").toString());
+                            row.put("compressedAt", rs.getTimestamp("created_at").toString());
                             summaries.add(row);
                         }
                     }
