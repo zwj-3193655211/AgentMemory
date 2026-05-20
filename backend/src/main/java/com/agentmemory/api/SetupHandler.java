@@ -266,6 +266,22 @@ public class SetupHandler implements HttpHandler {
         if (sessionId == null || sessionId.isEmpty()) {
             sessionId = UUID.randomUUID().toString();
         }
+        // 验证 sessionId 长度，防止超长输入
+        if (sessionId.length() > 100) {
+            sessionId = sessionId.substring(0, 100);
+        }
+
+        // 内容长度验证，防止超长内容
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> messages = (List<Map<String, Object>>) sessionData.get("messages");
+        if (messages != null) {
+            for (Map<String, Object> msg : messages) {
+                Object content = msg.get("content");
+                if (content instanceof String && ((String) content).length() > 10000) {
+                    msg.put("content", ((String) content).substring(0, 10000));
+                }
+            }
+        }
 
         PreparedStatement stmt = conn.prepareStatement(
             "INSERT INTO sessions (id, agent_type, project_path, message_count, created_at, updated_at) " +
@@ -278,8 +294,6 @@ public class SetupHandler implements HttpHandler {
         stmt.executeUpdate();
         stmt.close();
 
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> messages = (List<Map<String, Object>>) sessionData.get("messages");
         if (messages != null) {
             importMessages(conn, sessionId, messages);
         }

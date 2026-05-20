@@ -385,26 +385,16 @@
               <!-- 快速配置：选择已有 Provider 或新建 -->
               <el-form-item label="使用 Provider">
                 <el-select v-model="compressionConfig.llmProvider" placeholder="选择 LLM Provider" style="width: 250px" @change="onLLMProviderSelect">
-                  <el-option label="内置模型 (Qwen3-0.6B)" value="__builtin__" />
                   <el-option v-for="p in llmProviders.filter(x => x.enabled)" :key="p.id" :label="`${p.displayName || p.providerName} (${p.model})`" :value="p.providerName" />
                 </el-select>
                 <el-button type="primary" size="small" style="margin-left: 10px" @click="showAddLLMProvider = true">新建</el-button>
-                <el-button v-if="compressionConfig.llmProvider && compressionConfig.llmProvider !== '__builtin__'" type="success" size="small" style="margin-left: 5px" @click="testLLMProvider(compressionConfig.llmProvider)" :loading="testingLLMConnection">
+                <el-button v-if="compressionConfig.llmProvider" type="success" size="small" style="margin-left: 5px" @click="testLLMProvider(compressionConfig.llmProvider)" :loading="testingLLMConnection">
                   测试连接
                 </el-button>
               </el-form-item>
               
-              <!-- 内置模型信息 -->
-              <el-form-item v-if="compressionConfig.llmProvider === '__builtin__'" label="">
-                <el-tag type="success">✓ 使用内置模型</el-tag>
-                <span style="margin-left: 10px; color: #606266;">
-                  模型: <el-tag size="small" type="info">Qwen3-0.6B</el-tag>
-                  <span style="margin-left: 10px;">http://localhost:8100/v1</span>
-                </span>
-              </el-form-item>
-              
               <!-- 其他 Provider 信息 -->
-              <el-form-item v-if="compressionConfig.llmProvider && compressionConfig.llmProvider !== '__builtin__' && getLLMProvider(compressionConfig.llmProvider)" label="">
+              <el-form-item v-if="compressionConfig.llmProvider && getLLMProvider(compressionConfig.llmProvider)" label="">
                 <el-tag type="success" v-if="llmConnectionTestResult === true">✓ 连接正常</el-tag>
                 <el-tag type="danger" v-else-if="llmConnectionTestResult === false">✗ 连接失败</el-tag>
                 <span style="margin-left: 10px; color: #606266;">

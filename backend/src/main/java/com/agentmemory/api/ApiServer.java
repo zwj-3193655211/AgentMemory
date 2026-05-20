@@ -1770,13 +1770,26 @@ public class ApiServer {
             if (path.equals("/") || path.isEmpty()) {
                 path = "/index.html";
             }
-            
+
             // 使用绝对路径
             java.io.File file = new java.io.File(projectRoot + "/frontend/dist" + path);
             if (!file.exists()) {
                 file = new java.io.File(projectRoot + "/frontend" + path);
             }
-            
+
+            // 路径安全验证：防止路径遍历攻击
+            try {
+                String canonicalPath = file.getCanonicalPath();
+                String allowedRoot = new java.io.File(projectRoot + "/frontend").getCanonicalPath();
+                if (!canonicalPath.startsWith(allowedRoot)) {
+                    sendError(exchange, 403, "Access denied");
+                    return;
+                }
+            } catch (Exception e) {
+                sendError(exchange, 403, "Invalid path");
+                return;
+            }
+
             if (file.exists() && file.isFile()) {
                 String contentType = getContentType(path);
                 exchange.getResponseHeaders().set("Content-Type", contentType);
@@ -1838,13 +1851,21 @@ public class ApiServer {
                     String providerName = (String) input.get("providerName");
                     String baseUrl = (String) input.get("baseUrl");
                     String model = (String) input.get("model");
-                    
+
+                    // 兜底：Ollama/本地模型未填 baseUrl 时默认使用 localhost:11434
+                    if ((baseUrl == null || baseUrl.isBlank()) &&
+                        ("ollama".equalsIgnoreCase(providerName) || "local".equalsIgnoreCase(providerName))) {
+                        baseUrl = "http://localhost:11434";
+                    }
+
+                    if (baseUrl == null || baseUrl.isBlank()) {
+                        sendJson(exchange, Map.of("success", false, "error", "Base URL 不能为空"));
+                        return;
+                    }
+
                     try {
                         // 标准化 baseUrl（移除末尾的 /api/* 路径）
-                        String cleanBaseUrl = baseUrl;
-                        if (baseUrl != null) {
-                            cleanBaseUrl = baseUrl.replaceAll("/(api/[^/]*|v1)/?$", "");
-                        }
+                        String cleanBaseUrl = baseUrl.replaceAll("/(api/[^/]*|v1)/?$", "");
                         
                         // 简单测试：发送一个简单的请求到 LLM 服务
                         java.net.http.HttpClient httpClient = java.net.http.HttpClient.newBuilder()
@@ -2124,6 +2145,7 @@ public class ApiServer {
                                 p.put("thinkMode", false);
                             }
                             // 不返回 apiKey
+                            p.put("apiKey", "[REDACTED]");
                             return p;
                         }
                     );

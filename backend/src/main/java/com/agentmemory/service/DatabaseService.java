@@ -203,8 +203,8 @@ public class DatabaseService {
             
             // 插入默认 LLM Provider
             stmt.executeUpdate("""
-                INSERT INTO llm_providers (provider_name, display_name, model, enabled, is_default) 
-                VALUES ('ollama', '本地 Qwen3', 'qwen3:0.6b', true, true)
+                INSERT INTO llm_providers (provider_name, display_name, base_url, model, enabled, is_default)
+                VALUES ('ollama', '本地 Ollama', 'http://localhost:11434', 'qwen3.5:2b', true, true)
                 ON CONFLICT (provider_name) DO NOTHING
                 """);
             

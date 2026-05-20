@@ -358,7 +358,7 @@ public class SessionCompressionService extends ScheduledServiceBase {
     private void markMessagesAsDeleted(Connection conn, String sessionId, int keepCount) throws SQLException {
         String sql = """
             UPDATE messages
-            SET deleted = 1, expires_at = NOW()
+            SET deleted = true, expires_at = NOW()
             WHERE session_id = ? AND id NOT IN (
                 SELECT id FROM messages
                 WHERE session_id = ?
