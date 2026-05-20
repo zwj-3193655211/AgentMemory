@@ -19,7 +19,7 @@ REM Defaults
 if not defined JAVA_HOME set "JAVA_HOME=D:\JDK\jdk_21"
 if not defined DATABASE_PASSWORD set "DATABASE_PASSWORD=agentmemory"
 if not defined BACKEND_PORT set "BACKEND_PORT=8082"
-if not defined FRONTEND_PORT set "FRONTEND_PORT=5173"
+if not defined FRONTEND_PORT set "FRONTEND_PORT=5175"
 if not defined EMBEDDING_PORT set "EMBEDDING_PORT=8100"
 
 echo [INFO] JAVA_HOME: %JAVA_HOME%
