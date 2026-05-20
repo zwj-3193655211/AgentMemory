@@ -82,13 +82,13 @@ goto pg_wait_loop
 echo [INFO] PostgreSQL is ready.
 
 echo [4/6] Starting Embedding Service...
-start "Embedding" cmd /k "cd /d %~dp0embedding_service && python embed_server.py"
+start "Embedding" cmd /k "chcp 65001 >nul && cd /d "%~dp0embedding_service" && python embed_server.py"
 
 echo [5/6] Starting Backend...
-start "Backend" cmd /k "set "JAVA_HOME=%JAVA_HOME%" && set "DATABASE_PASSWORD=%DATABASE_PASSWORD%" && cd /d "%~dp0backend" && "%JAVA_HOME%\bin\java.exe" -Dfile.encoding=UTF-8 -Dconsole.encoding=UTF-8 -cp "target\classes;target\lib\*" com.agentmemory.AgentMemoryApplication"
+start "Backend" cmd /k "chcp 65001 >nul && set "JAVA_HOME=%JAVA_HOME%" && set "DATABASE_PASSWORD=%DATABASE_PASSWORD%" && cd /d "%~dp0backend" && "%JAVA_HOME%\bin\java.exe" -Dfile.encoding=UTF-8 -cp "target\classes;target\lib\*" com.agentmemory.AgentMemoryApplication"
 
 echo [6/6] Starting Frontend...
-start "Frontend" cmd /k "cd /d %~dp0frontend && npm run dev"
+start "Frontend" cmd /k "chcp 65001 >nul && cd /d "%~dp0frontend" && npm run dev"
 
 echo.
 echo ========================================
