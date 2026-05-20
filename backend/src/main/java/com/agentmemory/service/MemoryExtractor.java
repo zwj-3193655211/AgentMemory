@@ -56,25 +56,47 @@ public class MemoryExtractor {
     
     // 截取到句子结束的辅助方法
     private String extractToSentenceEnd(String text, int start, int maxLen) {
+        if (start >= text.length()) return "";
+        if (start < 0) start = 0;
+
         // 先尝试找到最近的句子结束符
         int endIdx = text.indexOf("。", start);
         int qIdx = text.indexOf("？", start);
         int exIdx = text.indexOf("！", start);
         int semiIdx = text.indexOf("；", start);
-        
+        int nlIdx = text.indexOf("\n", start);
+
         // 找最近的结束符
         int nearest = start + maxLen;
-        if (endIdx > start && endIdx < nearest) nearest = endIdx + 1;
-        if (qIdx > start && qIdx < nearest) nearest = qIdx + 1;
-        if (exIdx > start && exIdx < nearest) nearest = exIdx + 1;
-        if (semiIdx > start && semiIdx < nearest) nearest = semiIdx + 1;
-        
+        if (endIdx >= start && endIdx < nearest) nearest = endIdx;      // 不包含句号本身
+        if (qIdx >= start && qIdx < nearest) nearest = qIdx;
+        if (exIdx >= start && exIdx < nearest) nearest = exIdx;
+        if (semiIdx >= start && semiIdx < nearest) nearest = semiIdx;
+        if (nlIdx >= start && nlIdx < nearest) nearest = nlIdx;
+
         String result = text.substring(start, Math.min(nearest, text.length())).trim();
         // 如果没有找到结束符但超过最大长度，截断
-        if (result.length() > maxLen && result.length() < text.length() - start) {
+        if (result.length() > maxLen && nearest >= start + maxLen) {
             result = result.substring(0, maxLen);
         }
         return result;
+    }
+
+    /**
+     * 检查提取结果是否像垃圾内容
+     */
+    private boolean looksLikeGarbage(String text) {
+        if (text == null || text.length() < 3) return true;
+        // 如果包含大量 markdown/代码符号，可能是垃圾
+        int specialCount = 0;
+        for (char c : text.toCharArray()) {
+            if (c == '|' || c == '*' || c == '`' || c == '#' || c == '>' || c == '<'
+                || c == '[' || c == ']' || c == '{' || c == '}') {
+                specialCount++;
+            }
+        }
+        // 特殊字符占比过高则认为是垃圾
+        return specialCount > text.length() * 0.25;
     }
 
     // "不是X，(而)是Y" 模式：提取AI的错误X和正确答案Y
@@ -145,11 +167,10 @@ public class MemoryExtractor {
         matcher = NOT_X_IS_Y_PATTERN.matcher(content);
         if (matcher.find()) {
             String matched = matcher.group();
-            // 提取"而是/是/应该用/要用"之后的内容作为正确做法
             String correctPart = extractCorrectPart(matched);
-            if (!correctPart.isEmpty()) {
+            if (!correctPart.isEmpty() && !looksLikeGarbage(correctPart)) {
                 memory.solution = correctPart;
-                memory.title = generateCorrectionTitle(null, correctPart);
+                memory.title = generateCorrectionTitle(correctPart);
                 return memory;
             }
         }
@@ -159,9 +180,9 @@ public class MemoryExtractor {
         if (matcher.find()) {
             String matched = matcher.group();
             String correctPart = extractCorrectPart(matched);
-            if (!correctPart.isEmpty()) {
+            if (!correctPart.isEmpty() && !looksLikeGarbage(correctPart)) {
                 memory.solution = correctPart;
-                memory.title = generateCorrectionTitle(null, correctPart);
+                memory.title = generateCorrectionTitle(correctPart);
                 return memory;
             }
         }
@@ -171,9 +192,9 @@ public class MemoryExtractor {
         if (matcher.find()) {
             String matched = matcher.group();
             String correctPart = extractCorrectPart(matched);
-            if (!correctPart.isEmpty()) {
+            if (!correctPart.isEmpty() && !looksLikeGarbage(correctPart)) {
                 memory.solution = correctPart;
-                memory.title = generateCorrectionTitle(null, correctPart);
+                memory.title = generateCorrectionTitle(correctPart);
                 return memory;
             }
         }
@@ -183,9 +204,9 @@ public class MemoryExtractor {
         if (matcher.find()) {
             String matched = matcher.group();
             String correctPart = extractCorrectPart(matched);
-            if (!correctPart.isEmpty()) {
+            if (!correctPart.isEmpty() && !looksLikeGarbage(correctPart)) {
                 memory.solution = correctPart;
-                memory.title = generateCorrectionTitle(null, correctPart);
+                memory.title = generateCorrectionTitle(correctPart);
                 return memory;
             }
         }
@@ -195,9 +216,9 @@ public class MemoryExtractor {
         if (matcher.find()) {
             String matched = matcher.group();
             String correctPart = extractCorrectPart(matched);
-            if (!correctPart.isEmpty()) {
+            if (!correctPart.isEmpty() && !looksLikeGarbage(correctPart)) {
                 memory.solution = correctPart;
-                memory.title = generateCorrectionTitle(null, correctPart);
+                memory.title = generateCorrectionTitle(correctPart);
                 return memory;
             }
         }
@@ -206,25 +227,23 @@ public class MemoryExtractor {
         matcher = CONSTRAINT_PATTERN.matcher(content);
         if (matcher.find()) {
             String matched = matcher.group();
-            // 提取"不要/别/不能"之后的内容
             String constraintPart = extractCorrectPart(matched);
-            if (!constraintPart.isEmpty()) {
+            if (!constraintPart.isEmpty() && !looksLikeGarbage(constraintPart)) {
                 memory.solution = constraintPart;
-                memory.title = generateCorrectionTitle(null, constraintPart);
+                memory.title = generateCorrectionTitle(constraintPart);
                 return memory;
             }
         }
 
-        // 兜底：如果内容包含纠正关键词但没匹配到具体模式
+        // 兜底：如果内容包含强纠正关键词但没匹配到具体模式
         if (containsStrongCorrectionMarker(content)) {
-            // 直接保存整个内容作为正确做法
             String trimmed = content.trim();
-            if (trimmed.length() > 200) {
-                trimmed = trimmed.substring(0, 200);
+            if (trimmed.length() > 200) trimmed = trimmed.substring(0, 200);
+            if (!looksLikeGarbage(trimmed)) {
+                memory.solution = trimmed;
+                memory.title = generateCorrectionTitle(trimmed);
+                return memory;
             }
-            memory.solution = trimmed;
-            memory.title = generateCorrectionTitle(null, trimmed);
-            return memory;
         }
 
         log.debug("未提取到有效的错误纠正内容，跳过保存: {}",
@@ -234,29 +253,108 @@ public class MemoryExtractor {
 
     /**
      * 从匹配的内容中提取"正确做法"部分
-     * 查找"而是/是/应该/要用/要/应该/改成/改用/其实是"等关键词之后的内容
+     * 查找转折/正确指示词之后的内容，不包含关键词本身
      */
     private String extractCorrectPart(String text) {
-        // 按优先级查找正确做法开始的关键词
-        String[] keywords = {"而是", "其实", "应该用", "要用", "应该", "要改成", "改为", 
-                            "改成", "改用", "我说的", "我的意思是", "我指的是",
-                            "不要", "别", "不能", "不可以"};
-        
-        int bestIdx = -1;
-        for (String kw : keywords) {
-            int idx = text.indexOf(kw);
-            if (idx > bestIdx) {
-                bestIdx = idx;
+        // 1. 最明确的转折词（优先级最高）
+        if (text.contains("而是")) {
+            int idx = text.indexOf("而是");
+            return extractToSentenceEnd(text, idx + 2, 100).trim();
+        }
+        if (text.contains("其实")) {
+            int idx = text.indexOf("其实");
+            return extractToSentenceEnd(text, idx + 2, 100).trim();
+        }
+
+        // 2. 正确做法指示词（用 lastIndexOf，正确做法通常在句子后半部分）
+        if (text.contains("应该用")) {
+            int idx = text.lastIndexOf("应该用");
+            return extractToSentenceEnd(text, idx + 3, 100).trim();
+        }
+        if (text.contains("要用")) {
+            int idx = text.lastIndexOf("要用");
+            return extractToSentenceEnd(text, idx + 2, 100).trim();
+        }
+        if (text.contains("应该")) {
+            int idx = text.lastIndexOf("应该");
+            return extractToSentenceEnd(text, idx + 2, 100).trim();
+        }
+        if (text.contains("要改成")) {
+            int idx = text.lastIndexOf("要改成");
+            return extractToSentenceEnd(text, idx + 3, 100).trim();
+        }
+        if (text.contains("改为")) {
+            int idx = text.lastIndexOf("改为");
+            return extractToSentenceEnd(text, idx + 2, 100).trim();
+        }
+        if (text.contains("改成")) {
+            int idx = text.lastIndexOf("改成");
+            return extractToSentenceEnd(text, idx + 2, 100).trim();
+        }
+        if (text.contains("改用")) {
+            int idx = text.lastIndexOf("改用");
+            return extractToSentenceEnd(text, idx + 2, 100).trim();
+        }
+        // 处理 "不是X，是Y" 模式中的 "是"
+        int isIdx = text.lastIndexOf("是");
+        if (isIdx >= 0) {
+            // 避免 "不是" 中的 "是" 和 "是不是"
+            boolean isNot = isIdx >= 1 && text.charAt(isIdx - 1) == '不';
+            boolean isDouble = isIdx + 1 < text.length() && text.charAt(isIdx + 1) == '是';
+            if (!isNot && !isDouble) {
+                return extractToSentenceEnd(text, isIdx + 1, 100).trim();
+            }
+            // 如果是 "不是"，找前面有没有另一个 "是"
+            if (isNot) {
+                int prevIs = text.lastIndexOf("是", isIdx - 2);
+                if (prevIs >= 0) {
+                    boolean prevNot = prevIs >= 1 && text.charAt(prevIs - 1) == '不';
+                    if (!prevNot) {
+                        return extractToSentenceEnd(text, prevIs + 1, 100).trim();
+                    }
+                }
             }
         }
-        
-        if (bestIdx < 0) {
-            return text.trim();
+
+        // 3. 意思澄清
+        if (text.contains("我的意思是")) {
+            int idx = text.indexOf("我的意思是");
+            return extractToSentenceEnd(text, idx + 5, 100).trim();
         }
-        
-        // 从关键词后开始截取，截取到句子结束
-        String result = extractToSentenceEnd(text, bestIdx, 100);
-        return result.trim();
+        if (text.contains("我指的是")) {
+            int idx = text.indexOf("我指的是");
+            return extractToSentenceEnd(text, idx + 4, 100).trim();
+        }
+        if (text.contains("我说的")) {
+            int idx = text.indexOf("我说的");
+            return extractToSentenceEnd(text, idx + 3, 100).trim();
+        }
+
+        // 4. 约束/否定词 — 提取约束内容本身
+        if (text.contains("不要")) {
+            int idx = text.indexOf("不要");
+            // 检查后面是否有"要/应该/改成"作为正面指示
+            String after = text.substring(idx + 2);
+            int wantIdx = after.indexOf("要");
+            if (wantIdx >= 0 && wantIdx < 30) {
+                return extractToSentenceEnd(text, idx + 2 + wantIdx + 1, 100).trim();
+            }
+            return extractToSentenceEnd(text, idx + 2, 100).trim();
+        }
+        if (text.contains("不能")) {
+            int idx = text.indexOf("不能");
+            return extractToSentenceEnd(text, idx + 2, 100).trim();
+        }
+        if (text.contains("不可以")) {
+            int idx = text.indexOf("不可以");
+            return extractToSentenceEnd(text, idx + 3, 100).trim();
+        }
+        if (text.contains("别")) {
+            int idx = text.indexOf("别");
+            return extractToSentenceEnd(text, idx + 1, 100).trim();
+        }
+
+        return text.trim();
     }
 
     /**
@@ -280,12 +378,10 @@ public class MemoryExtractor {
     /**
      * 生成错误纠正标题
      */
-    private String generateCorrectionTitle(String wrongPart, String correctPart) {
-        // 优先使用正确做法作为标题
-        String source = correctPart != null && !correctPart.isEmpty() ? correctPart : wrongPart;
-        if (source != null && !source.isEmpty()) {
-            // 移除前缀词
-            String clean = source.replaceAll("^(而是|其实|应该用|要用|应该|要改成|改为|改成|改用|我说的|我的意思是|我指的是|不要|别|不能|不可以)\\s*", "");
+    private String generateCorrectionTitle(String correctPart) {
+        if (correctPart != null && !correctPart.isEmpty()) {
+            // 移除残留前缀词
+            String clean = correctPart.replaceAll("^(而是|其实|应该用|要用|应该|要改成|改为|改成|改用|我说的|我的意思是|我指的是|不要|别|不能|不可以)\\s*", "");
             if (clean.length() > 30) {
                 clean = clean.substring(0, 30) + "...";
             }
