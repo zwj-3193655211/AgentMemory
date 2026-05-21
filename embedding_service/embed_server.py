@@ -1409,6 +1409,12 @@ def list_embedding_models():
     })
 
 
+@app.route('/models', methods=['GET'])
+def list_models_alias():
+    """/models 别名路由（代理层使用）"""
+    return list_embedding_models()
+
+
 @app.route('/embedding/model', methods=['GET'])
 def get_embedding_model_info():
     """获取当前 embedding 模型信息"""

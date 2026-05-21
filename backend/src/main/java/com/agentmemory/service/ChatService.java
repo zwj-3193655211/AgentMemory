@@ -57,7 +57,7 @@ public class ChatService {
 
         // 1. 从数据库加载 LLM providers
         try (Connection conn = databaseService.getConnection()) {
-            String sql = "SELECT id, provider_name, display_name, base_url, model, enabled " +
+            String sql = "SELECT id, provider_name, display_name, base_url, api_key, model, enabled " +
                     "FROM llm_providers WHERE enabled = true ORDER BY is_default DESC";
             try (PreparedStatement stmt = conn.prepareStatement(sql);
                  ResultSet rs = stmt.executeQuery()) {
@@ -391,11 +391,11 @@ public class ChatService {
                 cmd = List.of("claude", "-p", "--output-format", "text", userMessage);
             }
         } else if ("crush".equalsIgnoreCase(command)) {
-            // Crush: 使用 run 子命令进行非交互式调用
+            // Crush: 使用 run 子命令 + --quiet 禁用 spinner，避免 ANSI 控制码干扰
             if (os.contains("windows")) {
-                cmd = List.of("cmd", "/c", "crush", "run", userMessage);
+                cmd = List.of("cmd", "/c", "crush", "run", "--quiet", userMessage);
             } else {
-                cmd = List.of("crush", "run", userMessage);
+                cmd = List.of("crush", "run", "--quiet", userMessage);
             }
         } else if ("aider".equalsIgnoreCase(command) || "continue".equalsIgnoreCase(command)
                 || "goose".equalsIgnoreCase(command)) {
@@ -417,28 +417,58 @@ public class ChatService {
         log.info("执行 CLI: {}", cmd);
 
         ProcessBuilder pb = new ProcessBuilder(cmd);
-        pb.redirectErrorStream(true);
+        // 不合并 stderr — crush 的 spinner 走 stderr，合并会导致 stdout 读取混乱
+        pb.redirectErrorStream(false);
+        pb.directory(new java.io.File(System.getProperty("user.home")));
+        pb.environment().put("NO_COLOR", "1");
         Process process = pb.start();
 
         StringBuilder fullOutput = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                fullOutput.append(line).append("\n");
-                // SSE 推送
-                String sseData = objectMapper.writeValueAsString(Map.of("content", line + "\n"));
-                outputStream.write(("data: " + sseData + "\n\n").getBytes(StandardCharsets.UTF_8));
-                outputStream.flush();
+
+        // 使用独立线程读取 stdout，避免缓冲区满导致死锁
+        CompletableFuture<String> stdoutFuture = CompletableFuture.supplyAsync(() -> {
+            StringBuilder sb = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    sb.append(line).append("\n");
+                    // SSE 推送
+                    String sseData = objectMapper.writeValueAsString(Map.of("content", line + "\n"));
+                    outputStream.write(("data: " + sseData + "\n\n").getBytes(StandardCharsets.UTF_8));
+                    outputStream.flush();
+                }
+            } catch (Exception e) {
+                log.warn("CLI stdout 读取异常: {}", e.getMessage());
             }
+            return sb.toString();
+        });
+
+        // 消费 stderr（直接丢弃，避免缓冲区满）
+        CompletableFuture.runAsync(() -> {
+            try (BufferedReader errReader = new BufferedReader(
+                    new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
+                while (errReader.readLine() != null) {
+                    // 丢弃 stderr
+                }
+            } catch (Exception e) {
+                // ignore
+            }
+        });
+
+        // 带超时的等待（120秒）
+        boolean finished = process.waitFor(120, java.util.concurrent.TimeUnit.SECONDS);
+        if (!finished) {
+            process.destroyForcibly();
+            throw new IOException("CLI 命令执行超时（120秒），已强制终止");
         }
 
-        int exitCode = process.waitFor();
+        int exitCode = process.exitValue();
         if (exitCode != 0) {
             throw new IOException("CLI 命令执行失败，退出码: " + exitCode);
         }
 
-        return fullOutput.toString().trim();
+        return stdoutFuture.get().trim();
     }
 
     // ===== 导入历史对话 =====
