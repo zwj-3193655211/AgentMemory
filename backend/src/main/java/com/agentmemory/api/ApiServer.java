@@ -109,19 +109,28 @@ public class ApiServer {
             .build();
         server.createContext("/api/embedding", exchange -> {
             try {
+                // 处理 CORS 预检请求（OPTIONS）
+                if ("OPTIONS".equals(exchange.getRequestMethod())) {
+                    exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+                    exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+                    exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
+                    exchange.sendResponseHeaders(200, -1);
+                    return;
+                }
+
                 String path = exchange.getRequestURI().getPath();
                 String subPath = path.substring("/api/embedding".length()); // e.g., "/models"
                 String targetUrl = embedBase + subPath;
                 if (exchange.getRequestURI().getQuery() != null) {
                     targetUrl += "?" + exchange.getRequestURI().getQuery();
                 }
-                
+
                 log.debug("代理 Embedding 请求: {} -> {}", path, targetUrl);
-                
+
                 HttpRequest.Builder reqBuilder = HttpRequest.newBuilder()
                     .uri(URI.create(targetUrl))
                     .timeout(Duration.ofSeconds(30));
-                
+
                 String method = exchange.getRequestMethod();
                 if ("POST".equals(method)) {
                     String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
@@ -130,10 +139,10 @@ public class ApiServer {
                 } else {
                     reqBuilder.GET();
                 }
-                
+
                 HttpResponse<String> resp = embedClient.send(reqBuilder.build(),
                     HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-                
+
                 byte[] respBody = resp.body().getBytes(StandardCharsets.UTF_8);
                 exchange.getResponseHeaders().set("Content-Type", "application/json");
                 exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
