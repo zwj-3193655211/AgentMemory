@@ -53,7 +53,7 @@ public class ApiServer {
     
     // CORS 配置：允许的源列表（可通过系统属性配置）
     private static final String ALLOWED_ORIGINS = System.getProperty("api.cors.origins", 
-        "http://localhost:8082,http://localhost:5173,http://127.0.0.1:8082,http://127.0.0.1:5173");
+        "http://localhost:8082,http://localhost:5173,http://localhost:5175,http://127.0.0.1:8082,http://127.0.0.1:5173,http://127.0.0.1:5175");
     
     /**
      * 获取允许的 CORS 源
