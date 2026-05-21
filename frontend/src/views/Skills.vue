@@ -115,7 +115,7 @@ const getSkillTypeTagType = (type: string) => {
     pattern: 'info',
     bestpractice: 'danger'
   }
-  return types[type] || ''
+  return types[type] || 'info'
 }
 
 // 格式化时间

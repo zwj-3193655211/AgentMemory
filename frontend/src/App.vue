@@ -1359,9 +1359,11 @@ const getAgentTagType = (type: string) => {
     qwen: 'warning',
     qoder: 'danger',
     openclaw: 'info',
-    nanobot: ''
+    nanobot: 'info',
+    crush: 'danger',
+    workbuddy: 'primary'
   }
-  return types[type] || ''
+  return types[type] || 'info'
 }
 
 const formatTime = (time: string | Date) => {
@@ -1487,7 +1489,7 @@ const getTypeTagType = (type: string) => {
     PROJECT_CONTEXT: 'warning',
     SKILL: 'info'
   }
-  return types[type] || ''
+  return types[type] || 'info'
 }
 
 // LLM 配置

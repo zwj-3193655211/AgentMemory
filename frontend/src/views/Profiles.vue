@@ -111,9 +111,9 @@ const getCategoryTagType = (category: string) => {
     behavior: 'success',
     techstack: 'warning',
     workhabit: 'info',
-    other: ''
+    other: 'info'
   }
-  return types[category] || ''
+  return types[category] || 'info'
 }
 
 // 解析 JSON 内容
