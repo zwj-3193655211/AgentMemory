@@ -390,12 +390,27 @@ public class ChatService {
             } else {
                 cmd = List.of("claude", "-p", "--output-format", "text", userMessage);
             }
-        } else {
-            // 通用 CLI: 直接传消息作为参数
+        } else if ("crush".equalsIgnoreCase(command)) {
+            // Crush: 使用 run 子命令进行非交互式调用
             if (os.contains("windows")) {
-                cmd = List.of("cmd", "/c", command, userMessage);
+                cmd = List.of("cmd", "/c", "crush", "run", userMessage);
             } else {
-                cmd = List.of(command, userMessage);
+                cmd = List.of("crush", "run", userMessage);
+            }
+        } else if ("aider".equalsIgnoreCase(command) || "continue".equalsIgnoreCase(command)
+                || "goose".equalsIgnoreCase(command)) {
+            // 其他支持 stdin 输入的 CLI，通过管道传递消息
+            if (os.contains("windows")) {
+                cmd = List.of("cmd", "/c", "echo", userMessage, "|", command);
+            } else {
+                cmd = List.of("sh", "-c", "echo " + escapeShell(userMessage) + " | " + command);
+            }
+        } else {
+            // 通用 CLI: 传 --message 参数，兼容多数 AI CLI 工具
+            if (os.contains("windows")) {
+                cmd = List.of("cmd", "/c", command, "--message", userMessage);
+            } else {
+                cmd = List.of(command, "--message", userMessage);
             }
         }
 
@@ -545,6 +560,11 @@ public class ChatService {
     }
 
     // ===== 辅助方法 =====
+
+    /** 对 shell 参数中的单引号进行转义 */
+    private static String escapeShell(String s) {
+        return "'" + s.replace("'", "'\\''") + "'";
+    }
 
     private void saveMessage(String sessionId, String role, String content) {
         try (Connection conn = databaseService.getConnection()) {
