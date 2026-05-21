@@ -38,6 +38,7 @@ public class FileWatcherService {
     
     // 文件级锁：防止同一文件并发处理
     private final ConcurrentHashMap<String, ReentrantLock> fileLocks = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, CodexSessionMeta> codexSessionMetaCache = new ConcurrentHashMap<>();
     
     // ========== 语义切分相关 ==========
     // 话题转换关键词（检测到这些词时，触发一次处理）
@@ -98,7 +99,7 @@ public class FileWatcherService {
     /**
      * 开始监控指定目录
      * @param agentType Agent类型名称（用于标识和存储）
-     * @param parserType 解析器类型（iflow/claude/openclaw/qwen）
+     * @param parserType 解析器类型（iflow/claude/openclaw/qwen/nanobot/codex）
      * @param directory 监控目录
      */
     public void watchDirectory(String agentType, String parserType, Path directory) {
@@ -246,7 +247,7 @@ public class FileWatcherService {
     /**
      * 解析 JSONL 行并存储
      * @param agentType Agent类型名称（用于标识和存储）
-     * @param parserType 解析器类型（iflow/claude/openclaw/qwen）
+     * @param parserType 解析器类型（iflow/claude/openclaw/qwen/nanobot/codex）
      */
     private void processJsonlLine(String agentType, String parserType, Path file, String line) {
         try {
@@ -265,6 +266,8 @@ public class FileWatcherService {
                 message = parseQwenMessage(node, file);
             } else if ("nanobot".equals(parserType)) {
                 message = parseNanobotMessage(node, file);
+            } else if ("codex".equals(parserType)) {
+                message = parseCodexMessage(node, file);
             }
             
             if (message != null) {
@@ -693,6 +696,156 @@ public class FileWatcherService {
 
         return message;
     }
+
+    private Message parseCodexMessage(JsonNode node, Path file) {
+        String filePath = file.toString();
+        String eventType = getTextOrEmpty(node, "type");
+        JsonNode payload = node.get("payload");
+
+        if ("session_meta".equals(eventType)) {
+            cacheCodexSessionMeta(filePath, payload);
+            return null;
+        }
+
+        String sessionId = extractCodexSessionId(node, filePath, file);
+        if (sessionId.isEmpty()) {
+            return null;
+        }
+
+        if (payload == null || !payload.isObject()) {
+            return null;
+        }
+
+        String role;
+        String content;
+
+        if ("event_msg".equals(eventType)) {
+            if (!"user_message".equals(getTextOrEmpty(payload, "type"))) {
+                return null;
+            }
+            role = "user";
+            content = getTextOrEmpty(payload, "message");
+        } else if ("response_item".equals(eventType)) {
+            if (!"message".equals(getTextOrEmpty(payload, "type"))) {
+                return null;
+            }
+            role = getTextOrEmpty(payload, "role");
+            if (!"assistant".equals(role)) {
+                return null;
+            }
+            content = extractCodexMessageText(payload.get("content"), "output_text");
+        } else {
+            return null;
+        }
+
+        content = content != null ? content.trim() : "";
+        if (content.isEmpty()) {
+            return null;
+        }
+
+        Message message = new Message();
+        message.setSessionId(sessionId);
+        message.setRole(role);
+        message.setTimestamp(getTextOrEmpty(node, "timestamp"));
+        message.setProjectName(extractCodexProjectPath(filePath, payload));
+        message.setContent(content);
+        message.setRawJson(node.toString());
+        message.setId(buildCodexMessageId(sessionId, node, role, content, payload));
+        message.setAgentType("codex");
+        return message;
+    }
+
+    private void cacheCodexSessionMeta(String filePath, JsonNode payload) {
+        if (payload == null || !payload.isObject()) {
+            return;
+        }
+        String id = getTextOrEmpty(payload, "id");
+        String cwd = getTextOrEmpty(payload, "cwd");
+        if (id.isEmpty() && cwd.isEmpty()) {
+            return;
+        }
+        codexSessionMetaCache.put(filePath, new CodexSessionMeta(id, cwd));
+    }
+
+    private String extractCodexSessionId(JsonNode node, String filePath, Path file) {
+        JsonNode payload = node.get("payload");
+        if (payload != null && payload.isObject()) {
+            String payloadId = getTextOrEmpty(payload, "id");
+            if (!payloadId.isEmpty()) {
+                return payloadId;
+            }
+        }
+
+        CodexSessionMeta meta = codexSessionMetaCache.get(filePath);
+        if (meta != null && !meta.sessionId().isEmpty()) {
+            return meta.sessionId();
+        }
+
+        String fileName = file.getFileName().toString();
+        if (!fileName.endsWith(".jsonl")) {
+            return "";
+        }
+
+        String base = fileName.substring(0, fileName.length() - ".jsonl".length());
+        int idx = base.lastIndexOf("-019");
+        if (idx > 0 && idx + 1 < base.length()) {
+            return base.substring(idx + 1);
+        }
+        return base;
+    }
+
+    private String extractCodexProjectPath(String filePath, JsonNode payload) {
+        if (payload != null && payload.isObject()) {
+            String cwd = getTextOrEmpty(payload, "cwd");
+            if (!cwd.isEmpty()) {
+                return cwd;
+            }
+        }
+
+        CodexSessionMeta meta = codexSessionMetaCache.get(filePath);
+        if (meta != null && !meta.cwd().isEmpty()) {
+            return meta.cwd();
+        }
+        return "";
+    }
+
+    private String extractCodexMessageText(JsonNode contentNode, String expectedPartType) {
+        if (contentNode == null) {
+            return "";
+        }
+        if (contentNode.isTextual()) {
+            return contentNode.asText();
+        }
+        if (!contentNode.isArray()) {
+            return "";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        for (JsonNode part : contentNode) {
+            if (!part.isObject()) {
+                continue;
+            }
+            if (expectedPartType.equals(getTextOrEmpty(part, "type"))) {
+                String text = getTextOrEmpty(part, "text");
+                if (!text.isEmpty()) {
+                    if (sb.length() > 0) {
+                        sb.append("\n\n");
+                    }
+                    sb.append(text);
+                }
+            }
+        }
+        return sb.toString();
+    }
+
+    private String buildCodexMessageId(String sessionId, JsonNode node, String role, String content, JsonNode payload) {
+        String timestamp = getTextOrEmpty(node, "timestamp");
+        String itemId = payload != null ? getTextOrEmpty(payload, "id") : "";
+        String callId = payload != null ? getTextOrEmpty(payload, "call_id") : "";
+        String turnId = payload != null ? getTextOrEmpty(payload, "turn_id") : "";
+        String seed = sessionId + "|" + timestamp + "|" + role + "|" + itemId + "|" + callId + "|" + turnId + "|" + content;
+        return java.util.UUID.nameUUIDFromBytes(seed.getBytes(StandardCharsets.UTF_8)).toString();
+    }
     
     /**
      * 清理不存在的文件位置记录
@@ -704,6 +857,7 @@ public class FileWatcherService {
             boolean exists = Files.exists(file);
             if (!exists) {
                 log.debug("清理不存在的文件位置记录: {}", entry.getKey());
+                codexSessionMetaCache.remove(entry.getKey());
             }
             return !exists;
         });
@@ -858,7 +1012,7 @@ public class FileWatcherService {
      * 手动触发重新扫描指定目录（用于 Setup 向导）
      * @param directory 要扫描的目录路径
      * @param agentType Agent 类型（用于标记消息归属）
-     * @param parserType 解析器类型（iflow/claude/openclaw/qwen/nanobot）
+     * @param parserType 解析器类型（iflow/claude/openclaw/qwen/nanobot/codex）
      */
     public void rescanDirectory(String directory, String agentType, String parserType) {
         Path path = Paths.get(directory);
@@ -883,6 +1037,7 @@ public class FileWatcherService {
         for (String filePath : filePositions.keySet()) {
             if (filePath.replace("\\", "/").startsWith(dirNormalized)) {
                 filePositions.remove(filePath);
+                codexSessionMetaCache.remove(filePath);
                 cleared++;
             }
         }
@@ -912,6 +1067,8 @@ public class FileWatcherService {
     public void rescanDirectory(String directory) {
         rescanDirectory(directory, "manual", "unknown");
     }
+
+    private record CodexSessionMeta(String sessionId, String cwd) {}
     
     /**
      * 内部类：缓冲消息
@@ -1149,6 +1306,7 @@ public class FileWatcherService {
         
         // 先刷新所有缓冲
         flushAllBuffers();
+        codexSessionMetaCache.clear();
         
         // 关闭主线程池
         executor.shutdown();

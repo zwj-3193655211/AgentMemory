@@ -49,6 +49,7 @@
 - Claude Code
 - iFlow CLI
 - Qwen CLI
+- Codex CLI
 
 #### 技术栈
 - Java 17

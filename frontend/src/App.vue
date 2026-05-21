@@ -855,6 +855,7 @@
             <el-option label="Claude Code 格式" value="claude" />
             <el-option label="iFlow CLI 格式" value="iflow" />
             <el-option label="Qwen/Qoder 格式" value="qwen" />
+            <el-option label="Codex 格式" value="codex" />
           </el-select>
         </el-form-item>
         <el-form-item label="启用监控">
@@ -1301,6 +1302,7 @@ const providerPresets: Record<string, { baseUrl: string; model: string }> = {
 // Agent名称映射：将agent表中的name映射到session表中的agentType
 const agentNameMapping: Record<string, string> = {
   'Claude Code': 'claude',
+  'Codex CLI': 'codex',
   'Crush CLI': 'crush',
   'iFlow CLI': 'iflow',
   'Nanobot': 'nanobot',
@@ -1361,7 +1363,8 @@ const getAgentTagType = (type: string) => {
     openclaw: 'info',
     nanobot: 'info',
     crush: 'danger',
-    workbuddy: 'primary'
+    workbuddy: 'primary',
+    codex: 'success'
   }
   return types[type] || 'info'
 }

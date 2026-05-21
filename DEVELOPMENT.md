@@ -113,6 +113,7 @@ AgentMemory/
 | Qwen CLI | ~/.qwen/projects/ | ✅ |
 | Qoder CLI | ~/.qoder/projects/ | ✅ |
 | OpenClaw | ~/.openclaw/ | ✅ |
+| Codex CLI | ~/.codex/sessions/ | ✅ |
 
 ---
 

@@ -17,7 +17,7 @@
           <el-icon :size="64" color="#409EFF"><Promotion /></el-icon>
           <h2>欢迎使用 AgentMemory</h2>
           <p class="intro">
-            AgentMemory 可以从你本地安装的 Claude Code、Crush CLI 等工具自动导入会话历史，并提供语义搜索功能。
+            AgentMemory 可以从你本地安装的 Claude Code、Codex CLI、Crush CLI 等工具自动导入会话历史，并提供语义搜索功能。
           </p>
           <div class="features">
             <div class="feature-item">
