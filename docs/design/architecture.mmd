@@ -1,0 +1,75 @@
+```mermaid
+graph TD
+    subgraph 表现层 [表现层]
+        Frontend[前端界面\nVue 3 + Element Plus\n端口: 5173]
+    end
+    
+    subgraph 应用层 [应用层]
+        ApiServer[ApiServer\nHTTP API服务\n端口: 8080]
+        
+        subgraph 核心服务
+            FileWatcher[FileWatcherService\n文件监控]
+            MemoryService[MemoryService\n记忆管理]
+            Classifier[MemoryClassifier\n智能分类]
+            Extractor[MemoryExtractor\n信息提取]
+            Cleanup[CleanupService\n数据清理]
+            Compression[SessionCompressionService\n会话压缩]
+        end
+    end
+    
+    subgraph 数据层 [数据层]
+        Database[(PostgreSQL + pgvector\n端口: 5500)]
+        
+        subgraph 五大记忆库
+            Error[error_corrections\n错误纠正]
+            Profile[user_profiles\n用户画像]
+            Practice[best_practices\n最佳实践]
+            Context[project_contexts\n项目上下文]
+            Skill[skills\n技能沉淀]
+        end
+    end
+    
+    subgraph 外部服务 [外部服务]
+        Embedding[Embedding Service\nPython Flask\n端口: 8100\n模型: bge-small-zh-v1.5]
+    end
+    
+    subgraph 数据源 [数据源]
+        Claude[Claude Code]
+        iFlow[iFlow CLI]
+        Qwen[Qwen CLI]
+        OpenClaw[OpenClaw]
+    end
+    
+    %% 连接关系
+    Claude --> FileWatcher
+    iFlow --> FileWatcher
+    Qwen --> FileWatcher
+    OpenClaw --> FileWatcher
+    
+    FileWatcher --> MemoryService
+    MemoryService --> Classifier
+    MemoryService --> Extractor
+    MemoryService --> Embedding
+    
+    Classifier --> Database
+    Extractor --> Database
+    
+    Database --> Error
+    Database --> Profile
+    Database --> Practice
+    Database --> Context
+    Database --> Skill
+    
+    ApiServer --> MemoryService
+    ApiServer --> Database
+    
+    Cleanup --> Database
+    Compression --> Database
+    
+    Frontend --> ApiServer
+    
+    style Frontend fill:#E8F4FD,stroke:#2563EB,stroke-width:2px
+    style ApiServer fill:#FEF3C7,stroke:#D97706,stroke-width:2px
+    style Database fill:#DCFCE7,stroke:#16A34A,stroke-width:2px
+    style Embedding fill:#FCE7F3,stroke:#DB2777,stroke-width:2px
+```

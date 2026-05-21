@@ -192,6 +192,15 @@ public class LLMClient {
         return model;
     }
 
+    public String generateWithSystemPrompt(String systemPrompt, String userPrompt) {
+        try {
+            return provider.generateWithSystemPrompt(systemPrompt, userPrompt);
+        } catch (Exception e) {
+            log.error("LLM生成失败: {}", e.getMessage());
+            throw new RuntimeException("LLM生成失败: " + e.getMessage(), e);
+        }
+    }
+
     // ===== LLM Provider 接口 =====
 
     interface LLMProvider {
