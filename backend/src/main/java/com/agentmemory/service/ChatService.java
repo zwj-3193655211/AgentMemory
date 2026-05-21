@@ -468,7 +468,13 @@ public class ChatService {
             throw new IOException("CLI 命令执行失败，退出码: " + exitCode);
         }
 
-        return stdoutFuture.get().trim();
+        String stdoutResult;
+        try {
+            stdoutResult = stdoutFuture.get();
+        } catch (java.util.concurrent.ExecutionException e) {
+            throw new IOException("CLI stdout 读取异常: " + e.getCause().getMessage(), e.getCause());
+        }
+        return stdoutResult.trim();
     }
 
     // ===== 导入历史对话 =====
