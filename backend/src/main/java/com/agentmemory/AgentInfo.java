@@ -10,7 +10,7 @@ public class AgentInfo {
     private String cliPath;
     private String version;
     private boolean enabled;
-    private String parserType;  // 解析器类型：iflow, claude, openclaw, qwen
+    private String parserType;  // 解析器类型：iflow, claude, openclaw, qwen, nanobot, codex
     
     public AgentInfo() {}
     

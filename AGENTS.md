@@ -167,6 +167,7 @@ public class CleanupService extends ScheduledServiceBase {
 | iFlow CLI | `~/.iflow/projects/` | Markdown |
 | Qwen/Qoder | `~/.qwen/projects/` | Markdown |
 | OpenClaw | `~/.openclaw/` | Multi-line JSON |
+| Codex CLI | `~/.codex/sessions/` | JSONL Event Stream |
 
 ---
 

@@ -86,6 +86,7 @@ start.bat
 | iFlow CLI | `~/.iflow/projects/` | ✅ 已支持 |
 | Qwen/Qoder | `~/.qwen/projects/` | ✅ 已支持 |
 | OpenClaw | `~/.openclaw/` | ✅ 已支持 |
+| Codex CLI | `~/.codex/sessions/` | ✅ 已支持 |
 
 ## 📖 使用示例
 

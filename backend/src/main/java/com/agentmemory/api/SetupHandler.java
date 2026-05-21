@@ -180,6 +180,7 @@ public class SetupHandler implements HttpHandler {
             case "openclaw": parserType = "openclaw"; break;
             case "qwen":     parserType = "qwen"; break;
             case "nanobot":  parserType = "nanobot"; break;
+            case "codex":    parserType = "codex"; break;
             default:         parserType = agentType; break;
         }
 

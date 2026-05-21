@@ -67,6 +67,7 @@ public class AgentDetectorService {
         // 使用统一方法检测各 Agent
         addIfNotNull(agents, detectAgent("iFlow CLI", "iflow", ".iflow", "projects"));
         addIfNotNull(agents, detectClaudeCode());
+        addIfNotNull(agents, detectAgent("Codex CLI", "codex", ".codex", "sessions"));
         addIfNotNull(agents, detectAgent("OpenClaw", "openclaw", ".openclaw", "agents", "main", "sessions"));
         addIfNotNull(agents, detectAgent("Nanobot", "nanobot", ".nanobot", "workspace", "sessions"));
         addIfNotNull(agents, detectAgent("Qwen CLI", "qwen", ".qwen", "projects"));
