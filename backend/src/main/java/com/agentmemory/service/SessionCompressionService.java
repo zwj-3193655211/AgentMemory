@@ -274,8 +274,7 @@ public class SessionCompressionService extends ScheduledServiceBase {
                 }
             }
 
-            // 4. 标记原消息为已删除（软删除）
-            markMessagesAsDeleted(conn, sessionId, windowSize);
+            // 4. 不再删除原消息 — 压缩仅生成摘要，保留全部原始数据
 
             // 5. 保存压缩摘要
             saveSessionSummary(conn, sessionId, summary, compressionType,
