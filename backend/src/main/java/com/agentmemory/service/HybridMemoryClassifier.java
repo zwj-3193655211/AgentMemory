@@ -1,6 +1,7 @@
 package com.agentmemory.service;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,10 +41,21 @@ public class HybridMemoryClassifier {
     // 分类统计（用于监控和调优）
     private final Map<String, Counter> stats = new ConcurrentHashMap<>();
 
+    public HybridMemoryClassifier(DatabaseService databaseService, EmbeddingClient embeddingClient) {
+        this(databaseService, embeddingClient, null);
+    }
+
     public HybridMemoryClassifier(DatabaseService databaseService, EmbeddingClient embeddingClient, LLMClient llmClient) {
         this.ruleClassifier = new RuleClassifier();
         this.vectorClassifier = new VectorClassifier(databaseService, embeddingClient);
-        this.llmClassifier = new LLMClassifier(llmClient);
+        
+        if (llmClient != null) {
+            this.llmClassifier = new LLMClassifier(llmClient);
+        } else {
+            this.llmClassifier = null;
+            this.llmEnabled = false;
+            log.warn("LLMClient 未提供，LLM分类器已禁用");
+        }
 
         // 初始化统计计数器
         stats.put("rule", new Counter());
@@ -336,6 +348,14 @@ public class HybridMemoryClassifier {
         public long getTotal() { return total; }
         public long getSuccess() { return success; }
         public double getSuccessRate() { return successRate; }
+
+        public Map<String, Object> toMap() {
+            Map<String, Object> map = new HashMap<>();
+            map.put("total", total);
+            map.put("success", success);
+            map.put("successRate", successRate);
+            return map;
+        }
 
         @Override
         public String toString() {

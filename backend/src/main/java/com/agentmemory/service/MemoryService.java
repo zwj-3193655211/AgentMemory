@@ -1,12 +1,9 @@
 package com.agentmemory.service;
 
-import com.agentmemory.service.MemoryClassifier.MemoryType;
-import com.agentmemory.service.MemoryExtractor.ExtractedMemory;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -14,6 +11,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.agentmemory.service.MemoryClassifier.MemoryType;
+import com.agentmemory.service.MemoryExtractor.ExtractedMemory;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * 记忆管理服务
@@ -37,6 +41,8 @@ public class MemoryService {
     private final MemoryClassifier classifier;
     private final MemoryExtractor extractor;
     private final ObjectMapper objectMapper;
+    private final HybridMemoryClassifier hybridClassifier;
+    private volatile boolean useHybridClassifier = true;
 
     // 错误计数器（用于监控）
     private volatile int embeddingFailureCount = 0;
@@ -66,6 +72,9 @@ public class MemoryService {
         this.classifier = new MemoryClassifier();
         this.extractor = new MemoryExtractor();
         this.objectMapper = new ObjectMapper();
+        
+        LLMClient llmClient = new LLMClient();
+        this.hybridClassifier = new HybridMemoryClassifier(databaseService, embeddingClient, llmClient);
     }
 
     /**
@@ -79,33 +88,62 @@ public class MemoryService {
     }
     
     /**
-     * 处理消息，判断是否需要提取记忆（优先使用 LLM 分类）
+     * 启用/禁用混合分类器
+     */
+    public void setUseHybridClassifier(boolean enabled) {
+        this.useHybridClassifier = enabled;
+        log.info("混合分类器状态: {}", enabled ? "启用" : "禁用");
+    }
+    
+    /**
+     * 获取混合分类器状态
+     */
+    public boolean isUseHybridClassifier() {
+        return useHybridClassifier;
+    }
+    
+    /**
+     * 获取混合分类器统计信息
+     */
+    public Map<String, Object> getHybridClassifierStats() {
+        if (hybridClassifier != null) {
+            Map<String, HybridMemoryClassifier.ClassificationStats> rawStats = hybridClassifier.getStats();
+            Map<String, Object> result = new HashMap<>();
+            for (Map.Entry<String, HybridMemoryClassifier.ClassificationStats> entry : rawStats.entrySet()) {
+                result.put(entry.getKey(), entry.getValue().toMap());
+            }
+            return result;
+        }
+        return Map.of("error", "混合分类器未初始化");
+    }
+    
+    /**
+     * 处理消息，判断是否需要提取记忆（使用混合智能分类系统）
      */
     public void processMessage(String sessionId, String content, String agentType) {
         if (content == null || content.trim().isEmpty()) {
             return;
         }
         
-        // 优先使用 LLM 分类（更准确）
+        // 使用混合智能分类系统
         MemoryType type = null;
-        boolean usedLLM = false;
+        String classifyMethod = "unknown";
         
-        if (embeddingClient.isHealthy()) {
-            String llmType = embeddingClient.classifyWithLLM(content);
-            if (llmType != null) {
-                try {
-                    type = MemoryType.valueOf(llmType);
-                    usedLLM = true;
-                    log.debug("LLM 分类结果: {}", type);
-                } catch (IllegalArgumentException e) {
-                    log.warn("LLM 返回未知类型: {}, 回退到关键词分类", llmType);
-                }
+        if (useHybridClassifier && hybridClassifier != null) {
+            HybridMemoryClassifier.ClassificationResult result = hybridClassifier.classify(content);
+            type = result.getType();
+            classifyMethod = result.getMethod();
+            log.debug("混合分类结果: type={}, method={}, confidence={}", type, classifyMethod, result.getConfidence());
+            
+            if (type == MemoryType.UNKNOWN) {
+                log.debug("混合分类返回 UNKNOWN，跳过");
+                return;
             }
-        }
-        
-        // LLM 不可用或分类失败，使用关键词方法
-        if (type == null) {
+        } else {
+            // 回退到传统分类方式
             type = classifier.classify(content);
+            classifyMethod = "rule-fallback";
+            
             if (type == MemoryType.UNKNOWN) {
                 log.debug("消息未匹配任何记忆类型，跳过");
                 return;
@@ -124,16 +162,14 @@ public class MemoryService {
         
         ExtractedMemory memory;
         
-        if (usedLLM && llmResult != null && !"SKIP".equals(llmResult.type) && llmResult.extracted != null) {
-            // 使用 LLM 提取结果
+        if (llmResult != null && !"SKIP".equals(llmResult.type) && llmResult.extracted != null) {
             try {
-                type = MemoryType.valueOf(llmResult.type);  // 使用提取时的类型
+                type = MemoryType.valueOf(llmResult.type);
                 memory = convertFromLLMResult(llmResult);
             } catch (IllegalArgumentException e) {
                 memory = extractWithKeywords(content, type);
             }
         } else {
-            // 使用关键词提取
             memory = extractWithKeywords(content, type);
         }
         
@@ -198,27 +234,36 @@ public class MemoryService {
         ExtractedMemory memory;
         
         if (llmResult != null && !"SKIP".equals(llmResult.type) && llmResult.extracted != null) {
-            // 使用 LLM 提取结果
             try {
                 type = MemoryType.valueOf(llmResult.type);
                 memory = convertFromLLMResult(llmResult);
             } catch (IllegalArgumentException e) {
-                log.warn("LLM 返回未知类型: {}, 回退到关键词分类", llmResult.type);
-                type = classifier.classify(currentContent);
+                log.warn("LLM 返回未知类型: {}, 使用混合分类器", llmResult.type);
+                HybridMemoryClassifier.ClassificationResult result = hybridClassifier.classify(currentContent);
+                type = result.getType();
                 memory = extractWithKeywords(currentContent, type);
             }
         } else {
-            // 回退到关键词方法
-            type = classifier.classify(currentContent);
-            if (type == MemoryType.UNKNOWN) {
-                log.debug("消息未匹配任何记忆类型，跳过");
-                return;
+            if (useHybridClassifier && hybridClassifier != null) {
+                HybridMemoryClassifier.ClassificationResult result = hybridClassifier.classify(currentContent);
+                type = result.getType();
+                if (type == MemoryType.UNKNOWN) {
+                    log.debug("消息未匹配任何记忆类型，跳过");
+                    return;
+                }
+                memory = extractWithKeywords(currentContent, type);
+            } else {
+                type = classifier.classify(currentContent);
+                if (type == MemoryType.UNKNOWN) {
+                    log.debug("消息未匹配任何记忆类型，跳过");
+                    return;
+                }
+                if (!classifier.isWorthRemembering(currentContent, type)) {
+                    log.debug("消息不值得保存为记忆，跳过");
+                    return;
+                }
+                memory = extractWithKeywords(currentContent, type);
             }
-            if (!classifier.isWorthRemembering(currentContent, type)) {
-                log.debug("消息不值得保存为记忆，跳过");
-                return;
-            }
-            memory = extractWithKeywords(currentContent, type);
         }
         
         if (memory == null) {

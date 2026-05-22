@@ -1,15 +1,20 @@
 package com.agentmemory.service;
 
-import com.agentmemory.model.Message;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.File;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.Instant;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.sql.*;
-import java.time.Instant;
-import java.util.concurrent.TimeUnit;
+import com.agentmemory.model.Message;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Crush 数据库监控服务
@@ -66,18 +71,56 @@ public class CrushDatabaseWatcher extends ScheduledServiceBase {
         }
 
         Path dbPath = Paths.get(crushDbPath);
-        if (!dbPath.toFile().exists()) {
-            log.debug("Crush 数据库不存在: {}", crushDbPath);
+        String originalPath = dbPath.toString();
+        
+        // 如果路径是目录，自动查找 crush.db 文件
+        if (dbPath.toFile().isDirectory()) {
+            dbPath = dbPath.resolve("crush.db");
+            log.debug("Crush 路径是目录，使用数据库文件: {} -> {}", originalPath, dbPath);
+        }
+        
+        File dbFile = dbPath.toFile();
+        if (!dbFile.exists()) {
+            log.debug("Crush 数据库不存在: {}", dbPath);
             return;
         }
+        
+        if (!dbFile.canRead()) {
+            log.warn("Crush 数据库文件不可读: {}", dbPath);
+            return;
+        }
+        
+        log.debug("尝试连接 Crush 数据库: {}", dbPath);
 
         Connection localConn = null;
         try {
             // 连接 Crush 的 SQLite 数据库
-            localConn = DriverManager.getConnection("jdbc:sqlite:" + crushDbPath);
+            // 将 Windows 路径转换为正确的 JDBC URL 格式（使用正斜杠）
+            String absolutePath = dbPath.toAbsolutePath().toString();
+            String jdbcUrl = "jdbc:sqlite:" + absolutePath.replace("\\", "/");
+            log.info("尝试连接 Crush 数据库: {}", jdbcUrl);
+            
+            // 创建临时副本避免被锁定
+            File tempFile = null;
+            String finalJdbcUrl = jdbcUrl;
+            try {
+                tempFile = File.createTempFile("crush_db_", ".db");
+                tempFile.deleteOnExit();
+                java.nio.file.Files.copy(dbPath, tempFile.toPath(), 
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                finalJdbcUrl = "jdbc:sqlite:" + tempFile.getAbsolutePath().replace("\\", "/");
+                log.info("使用临时副本: {}", finalJdbcUrl);
+            } catch (Exception copyEx) {
+                log.warn("无法创建临时副本，直接连接原文件: {}", copyEx.getMessage());
+            }
+            
+            localConn = DriverManager.getConnection(finalJdbcUrl);
+            log.info("Crush 数据库连接成功");
 
             // 检查新会话
             checkNewSessions(localConn);
+            
+            log.info("Crush 数据库检查完成");
 
         } catch (SQLException e) {
             log.warn("连接 Crush 数据库失败: {}", e.getMessage());
@@ -150,9 +193,9 @@ public class CrushDatabaseWatcher extends ScheduledServiceBase {
      * 导入单个会话
      */
     private boolean importSession(Connection crushConn, String sessionId) throws SQLException {
-        // 查询会话信息
+        // 查询会话信息（不包含可能不存在的 cwd 列）
         String sessionSql = """
-            SELECT id, title, message_count, updated_at, created_at, cwd
+            SELECT id, title, message_count, updated_at, created_at
             FROM sessions WHERE id = ?
             """;
 
@@ -174,7 +217,7 @@ public class CrushDatabaseWatcher extends ScheduledServiceBase {
                 String title = rs.getString("title");
                 long updatedAt = rs.getLong("updated_at");
                 long createdAt = rs.getLong("created_at");
-                String cwd = rs.getString("cwd");
+                String cwd = null; // Crush 数据库可能没有 cwd 列
 
                 // 保存会话
                 databaseService.saveSessionIfNotExists(sessionId, "crush", cwd, title);
