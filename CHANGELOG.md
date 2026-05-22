@@ -4,6 +4,34 @@
 
 ---
 
+## [2.1.0] - 2026-05-22
+
+### ✨ 新功能
+- **混合智能分类系统**: 集成规则分类、向量分类和 LLM 分类
+  - 规则分类：快速关键词匹配
+  - 向量分类：语义相似度匹配
+  - LLM 分类：深度上下文理解（支持 Ollama）
+  - 置信度聚合：自动选择最佳分类结果
+- **Crush Agent 支持**: 新增 Crush CLI 数据库监控
+- **WorkBuddy 支持**: 新增 WorkBuddy 对话监控
+
+### 🚀 性能优化
+- **Crush 数据库监控**: 使用临时副本解决 SQLite 文件锁定问题
+- **向量分类器**: 添加数据库连接池初始化检查
+
+### 🐛 Bug 修复
+- 修复 CrushDatabaseWatcher 的 `cwd` 列不存在错误
+- 修复 SQLite 文件被其他进程锁定导致无法读取的问题
+- 修复 VectorClassifier 初始化时 dataSource 为 null 的问题
+- 修复 HybridMemoryClassifier 向量分类器未正确初始化的问题
+- 改进日志输出，添加明确的成功/失败状态
+
+### 📝 文档
+- 更新 AGENTS.md 添加混合分类系统说明
+- 添加 HybridClassifierTest 测试脚本
+
+---
+
 ## [2.0.0] - 2026-03-23
 
 ### ✨ 新功能

@@ -157,6 +157,41 @@ public class CleanupService extends ScheduledServiceBase {
 - Uses pgvector with HNSW index for 10-1000x performance
 - Embedding dimension: 512 (bge-small-zh-v1.5)
 
+### Hybrid Classification System
+
+AgentMemory uses a three-tier hybrid classification system:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Hybrid Classification                     │
+├─────────────────────────────────────────────────────────────┤
+│  1. Rule Classification (Fast)                              │
+│     └─ Keyword matching, pattern recognition                │
+│                                                              │
+│  2. Vector Classification (Semantic)                        │
+│     └─ Embedding similarity via pgvector                    │
+│                                                              │
+│  3. LLM Classification (Deep Understanding)                 │
+│     └─ Context-aware classification via Ollama              │
+│                                                              │
+│  Result: Confidence-based aggregation                       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Key Classes:**
+- `HybridMemoryClassifier`: Main orchestrator
+- `RuleClassifier`: Keyword-based classification
+- `VectorClassifier`: Semantic similarity classification
+- `LLMClient`: LLM provider integration (Ollama/OpenAI)
+
+**Configuration:**
+```java
+LLMClient llmClient = new LLMClient();
+llmClient.setProvider("ollama", "http://localhost:11434", null, "qwen3.5:2b");
+
+HybridMemoryClassifier classifier = new HybridMemoryClassifier(dbService, embeddingClient, llmClient);
+```
+
 ---
 
 ## 🎯 Supported Agents
