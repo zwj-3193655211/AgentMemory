@@ -12,7 +12,52 @@
       </div>
     </div>
 
-    <el-table :data="dataList" stripe v-loading="loading">
+    <!-- 查询工具栏 -->
+    <div class="filter-toolbar">
+      <el-input
+        v-model="filters.searchText"
+        placeholder="搜索标题、描述..."
+        clearable
+        style="width: 280px"
+        @input="handleFilterChange"
+      >
+        <template #prefix><el-icon><Search /></el-icon></template>
+      </el-input>
+
+      <el-select
+        v-model="filters.skillType"
+        placeholder="按类型筛选"
+        clearable
+        style="width: 160px"
+        @change="handleFilterChange"
+      >
+        <el-option label="技术" value="technique" />
+        <el-option label="方法" value="method" />
+        <el-option label="工具" value="tool" />
+        <el-option label="模式" value="pattern" />
+        <el-option label="最佳实践" value="bestpractice" />
+      </el-select>
+
+      <el-input
+        v-model="filters.tag"
+        placeholder="搜索标签..."
+        clearable
+        style="width: 160px"
+        @input="handleFilterChange"
+      >
+        <template #prefix><el-icon><PriceTag /></el-icon></template>
+      </el-input>
+
+      <el-button @click="clearFilters">
+        <el-icon><Refresh /></el-icon> 重置
+      </el-button>
+
+      <div class="filter-stats">
+        共 {{ filteredData.length }} 条记录
+      </div>
+    </div>
+
+    <el-table :data="filteredData" stripe v-loading="loading">
       <el-table-column prop="title" label="标题" min-width="200" />
       <el-table-column prop="skillType" label="类型" width="120">
         <template #default="{ row }">
@@ -20,6 +65,13 @@
         </template>
       </el-table-column>
       <el-table-column prop="description" label="描述" min-width="300" show-overflow-tooltip />
+      <el-table-column prop="tags" label="标签" width="200">
+        <template #default="{ row }">
+          <el-tag v-for="tag in parseTags(row.tags)" :key="tag" size="small" class="skill-tag">
+            {{ tag }}
+          </el-tag>
+        </template>
+      </el-table-column>
       <el-table-column prop="createdAt" label="创建时间" width="180">
         <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
       </el-table-column>
@@ -65,9 +117,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Download } from '@element-plus/icons-vue'
+import { Plus, Download, Search, Refresh, PriceTag } from '@element-plus/icons-vue'
 import { apiService, API_BASE_URL } from '../services/api'
 import type { Skill } from '../types'
 
@@ -87,6 +139,67 @@ const tagsInput = ref('')
 
 // 表单引用
 const formRef = ref()
+
+// 查询过滤器
+const filters = reactive({
+  searchText: '',
+  skillType: '',
+  tag: ''
+})
+
+// 过滤后的数据
+const filteredData = computed(() => {
+  let result = dataList.value
+
+  // 文本搜索
+  if (filters.searchText) {
+    const keyword = filters.searchText.toLowerCase()
+    result = result.filter(item =>
+      (item.title && item.title.toLowerCase().includes(keyword)) ||
+      (item.description && item.description.toLowerCase().includes(keyword)) ||
+      (item.steps && item.steps.toLowerCase().includes(keyword))
+    )
+  }
+
+  // 技能类型过滤
+  if (filters.skillType) {
+    result = result.filter(item => item.skillType === filters.skillType)
+  }
+
+  // 标签过滤
+  if (filters.tag) {
+    const tagKeyword = filters.tag.toLowerCase()
+    result = result.filter(item => {
+      if (Array.isArray(item.tags)) {
+        return item.tags.some(t => t.toLowerCase().includes(tagKeyword))
+      }
+      return false
+    })
+  }
+
+  return result
+})
+
+// 处理过滤变化
+const handleFilterChange = () => {
+  // 使用 computed 自动处理
+}
+
+// 清空过滤器
+const clearFilters = () => {
+  filters.searchText = ''
+  filters.skillType = ''
+  filters.tag = ''
+}
+
+// 解析标签
+const parseTags = (tags: string | string[]) => {
+  if (Array.isArray(tags)) return tags
+  if (typeof tags === 'string' && tags) {
+    return tags.split(',').map(t => t.trim()).filter(t => t)
+  }
+  return []
+}
 
 // 表单验证规则
 const formRules = {
@@ -156,7 +269,7 @@ const openEdit = (row: Skill) => {
 // 提交表单
 const handleSubmit = async () => {
   if (!formRef.value) return
-  
+
   await formRef.value.validate(async (valid: boolean) => {
     if (!valid) return
 
@@ -182,7 +295,7 @@ const handleSubmit = async () => {
 // 删除记录
 const handleDelete = async (row: Skill) => {
   if (!row.id) return
-  
+
   try {
     await ElMessageBox.confirm('确定要删除这条记录吗？', '确认删除', { type: 'warning' })
     await apiService.deleteSkill(row.id)
@@ -249,5 +362,34 @@ loadData()
   font-size: 20px;
   font-weight: 600;
   color: #1a1a2e;
+}
+
+.filter-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: #f8f9fb;
+  border-radius: 10px;
+  flex-wrap: wrap;
+}
+
+.filter-stats {
+  margin-left: auto;
+  font-size: 13px;
+  color: #606266;
+  background: #fff;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #e8eaed;
+}
+
+.skill-tag {
+  margin-right: 4px;
+  margin-bottom: 2px;
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  border: none;
+  color: #fff;
 }
 </style>

@@ -55,7 +55,7 @@ export interface ProjectContext {
   title: string
   projectName: string
   projectPath?: string
-  techStack?: string
+  techStack?: string | string[]
   keyDecisions?: string
   structure?: string
   createdAt?: string

@@ -17,6 +17,7 @@ import java.util.concurrent.TimeUnit;
 public class CleanupService extends ScheduledServiceBase {
     
     private final DatabaseService databaseService;
+    @SuppressWarnings("unused")
     private final int retentionDays;
     private final int hardDeleteDays;
     private final Logger log = LoggerFactory.getLogger(CleanupService.class);

@@ -12,10 +12,59 @@
       </div>
     </div>
 
-    <el-table :data="dataList" stripe v-loading="loading">
+    <!-- 查询工具栏 -->
+    <div class="filter-toolbar">
+      <el-input
+        v-model="filters.searchText"
+        placeholder="搜索标题、场景、实践..."
+        clearable
+        style="width: 280px"
+        @input="handleFilterChange"
+      >
+        <template #prefix><el-icon><Search /></el-icon></template>
+      </el-input>
+
+      <el-input
+        v-model="filters.tag"
+        placeholder="搜索标签..."
+        clearable
+        style="width: 160px"
+        @input="handleFilterChange"
+      >
+        <template #prefix><el-icon><PriceTag /></el-icon></template>
+      </el-input>
+
+      <el-date-picker
+        v-model="filters.dateRange"
+        type="daterange"
+        range-separator="至"
+        start-placeholder="开始日期"
+        end-placeholder="结束日期"
+        value-format="YYYY-MM-DD"
+        style="width: 260px"
+        @change="handleFilterChange"
+      />
+
+      <el-button @click="clearFilters">
+        <el-icon><Refresh /></el-icon> 重置
+      </el-button>
+
+      <div class="filter-stats">
+        共 {{ filteredData.length }} 条记录
+      </div>
+    </div>
+
+    <el-table :data="filteredData" stripe v-loading="loading">
       <el-table-column prop="title" label="标题" min-width="200" />
       <el-table-column prop="scenario" label="场景" min-width="200" />
       <el-table-column prop="practice" label="实践" min-width="200" show-overflow-tooltip />
+      <el-table-column prop="tags" label="标签" width="200">
+        <template #default="{ row }">
+          <el-tag v-for="tag in parseTags(row.tags)" :key="tag" size="small" class="practice-tag">
+            {{ tag }}
+          </el-tag>
+        </template>
+      </el-table-column>
       <el-table-column prop="createdAt" label="创建时间" width="180">
         <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
       </el-table-column>
@@ -55,9 +104,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Download } from '@element-plus/icons-vue'
+import { Plus, Download, Search, Refresh, PriceTag } from '@element-plus/icons-vue'
 import { apiService, API_BASE_URL } from '../services/api'
 import type { BestPractice } from '../types'
 
@@ -77,6 +126,73 @@ const tagsInput = ref('')
 
 // 表单引用
 const formRef = ref()
+
+// 查询过滤器
+const filters = reactive({
+  searchText: '',
+  tag: '',
+  dateRange: [] as string[]
+})
+
+// 过滤后的数据
+const filteredData = computed(() => {
+  let result = dataList.value
+
+  // 文本搜索
+  if (filters.searchText) {
+    const keyword = filters.searchText.toLowerCase()
+    result = result.filter(item =>
+      (item.title && item.title.toLowerCase().includes(keyword)) ||
+      (item.scenario && item.scenario.toLowerCase().includes(keyword)) ||
+      (item.practice && item.practice.toLowerCase().includes(keyword)) ||
+      (item.rationale && item.rationale.toLowerCase().includes(keyword))
+    )
+  }
+
+  // 标签过滤
+  if (filters.tag) {
+    const tagKeyword = filters.tag.toLowerCase()
+    result = result.filter(item => {
+      if (Array.isArray(item.tags)) {
+        return item.tags.some(t => t.toLowerCase().includes(tagKeyword))
+      }
+      return false
+    })
+  }
+
+  // 日期范围过滤
+  if (filters.dateRange && filters.dateRange.length === 2) {
+    const [startDate, endDate] = filters.dateRange
+    result = result.filter(item => {
+      if (!item.createdAt) return false
+      const date = new Date(item.createdAt).toISOString().split('T')[0]
+      return date >= startDate && date <= endDate
+    })
+  }
+
+  return result
+})
+
+// 处理过滤变化
+const handleFilterChange = () => {
+  // 使用 computed 自动处理
+}
+
+// 清空过滤器
+const clearFilters = () => {
+  filters.searchText = ''
+  filters.tag = ''
+  filters.dateRange = []
+}
+
+// 解析标签
+const parseTags = (tags: string | string[]) => {
+  if (Array.isArray(tags)) return tags
+  if (typeof tags === 'string' && tags) {
+    return tags.split(',').map(t => t.trim()).filter(t => t)
+  }
+  return []
+}
 
 // 表单验证规则
 const formRules = {
@@ -123,7 +239,7 @@ const openEdit = (row: BestPractice) => {
 // 提交表单
 const handleSubmit = async () => {
   if (!formRef.value) return
-  
+
   await formRef.value.validate(async (valid: boolean) => {
     if (!valid) return
 
@@ -149,7 +265,7 @@ const handleSubmit = async () => {
 // 删除记录
 const handleDelete = async (row: BestPractice) => {
   if (!row.id) return
-  
+
   try {
     await ElMessageBox.confirm('确定要删除这条记录吗？', '确认删除', { type: 'warning' })
     await apiService.deletePractice(row.id)
@@ -216,5 +332,34 @@ loadData()
   font-size: 20px;
   font-weight: 600;
   color: #1a1a2e;
+}
+
+.filter-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: #f8f9fb;
+  border-radius: 10px;
+  flex-wrap: wrap;
+}
+
+.filter-stats {
+  margin-left: auto;
+  font-size: 13px;
+  color: #606266;
+  background: #fff;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #e8eaed;
+}
+
+.practice-tag {
+  margin-right: 4px;
+  margin-bottom: 2px;
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  border: none;
+  color: #fff;
 }
 </style>

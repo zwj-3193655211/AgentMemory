@@ -174,26 +174,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick, watch, computed } from 'vue'
+import { ref, onMounted, nextTick, computed } from 'vue'
 import { ChatDotRound, Search, Loading } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { marked } from 'marked'
-import hljs from 'highlight.js'
+import { marked, type MarkedOptions } from 'marked'
 import 'highlight.js/styles/github-dark.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8082/api'
 
 // 配置 marked
-marked.setOptions({
-  highlight(code: string, lang: string) {
-    if (lang && hljs.getLanguage(lang)) {
-      return hljs.highlight(code, { language: lang }).value
-    }
-    return hljs.highlightAuto(code).value
-  },
+const markedOptions: MarkedOptions = {
   breaks: true,
   gfm: true
-})
+}
 
 // 状态
 const selectedAgentId = ref('')
@@ -249,7 +242,7 @@ async function triggerRescan() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ agentTypes })
     })
-    const result = await res.json()
+    await res.json()
 
     ElMessage.success(`已触发 ${agentTypes.length} 个 Agent 的重新扫描，请稍等片刻后刷新列表`)
 
@@ -316,10 +309,10 @@ async function confirmImport() {
         sourceSessionIds: Array.from(selectedImportIds.value)
       })
     })
-    const result = await res.json()
+    const data = await res.json()
 
-    if (result.status === 'ok') {
-      ElMessage.success(`成功导入 ${result.importedCount} 个会话`)
+    if (data.status === 'ok') {
+      ElMessage.success(`成功导入 ${data.importedCount} 个会话`)
       importDialogVisible.value = false
       // 重新加载当前会话消息
       await loadSession(currentSessionId.value)
@@ -516,7 +509,8 @@ function handleKeyDown(e: KeyboardEvent) {
 function renderMarkdown(content: string): string {
   if (!content) return ''
   try {
-    return marked.parse(content) as string
+    const result = marked(content, markedOptions) as string
+    return result.replace(/<pre>/g, '<pre><code>').replace(/<\/pre>/g, '</code></pre>')
   } catch {
     return content.replace(/\n/g, '<br>')
   }
@@ -561,21 +555,22 @@ onMounted(() => {
 
 /* 左侧边栏 */
 .chat-sidebar {
-  width: 280px;
-  min-width: 280px;
-  border-right: 1px solid #e8eaed;
+  width: 300px;
+  min-width: 300px;
+  border-right: 1px solid #e5e7eb;
   display: flex;
   flex-direction: column;
-  background: #fafbfc;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
 }
 
 .agent-selector {
-  padding: 14px 12px 12px;
-  border-bottom: 1px solid #e8eaed;
+  padding: 16px 14px;
+  border-bottom: 1px solid #e5e7eb;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  background: #fff;
+  gap: 10px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 
 .btn-row {
@@ -598,45 +593,52 @@ onMounted(() => {
 .session-list {
   flex: 1;
   overflow-y: auto;
-  padding: 6px 0;
+  padding: 8px 8px;
 }
 
 .session-item {
-  padding: 10px 14px;
+  padding: 12px 14px;
   cursor: pointer;
-  border-radius: 8px;
-  margin: 2px 6px;
+  border-radius: 10px;
+  margin: 4px 4px;
   position: relative;
-  transition: background 0.15s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid transparent;
 }
 
 .session-item:hover {
-  background: #eef0f3;
+  background: #ffffff;
+  border-color: #e2e8f0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  transform: translateY(-1px);
 }
 
 .session-item.active {
-  background: #e8f0fe;
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  border-color: #93c5fd;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
 }
 
 .session-item.active .session-title {
-  color: #1a73e8;
+  color: #1d4ed8;
+  font-weight: 600;
 }
 
 .session-title {
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  padding-right: 22px;
-  color: #202124;
+  padding-right: 24px;
+  color: #1e293b;
   line-height: 1.4;
 }
 
 .session-meta {
-  font-size: 11.5px;
-  color: #80868b;
-  margin-top: 3px;
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 4px;
 }
 
 .delete-btn {
@@ -665,7 +667,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  background: #fff;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
 }
 
 .no-session {
@@ -674,25 +676,37 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 14px;
-  color: #9aa0a6;
+  gap: 20px;
+  color: #64748b;
+}
+
+.no-session .el-icon {
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  padding: 20px;
+  border-radius: 50%;
+  color: white;
+}
+
+.no-session p {
+  font-size: 16px;
+  color: #475569;
 }
 
 /* 消息区域 */
 .messages-area {
   flex: 1;
   overflow-y: auto;
-  padding: 24px 0;
+  padding: 32px 20px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
   scroll-behavior: smooth;
 }
 
 .message-row {
   display: flex;
   gap: 0;
-  padding: 6px 24px;
+  padding: 8px 4px;
 }
 
 .message-row.user {
@@ -704,15 +718,16 @@ onMounted(() => {
 }
 
 .message-avatar {
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: 18px;
   flex-shrink: 0;
   margin-top: 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
 .message-row.user .message-avatar {
@@ -720,30 +735,32 @@ onMounted(() => {
 }
 
 .message-row.assistant .message-avatar {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  margin-right: 10px;
-  font-size: 14px;
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  margin-right: 14px;
+  font-size: 16px;
+  color: white;
 }
 
 .message-bubble {
-  border-radius: 18px;
-  padding: 10px 16px;
-  max-width: 72%;
+  border-radius: 20px;
+  padding: 14px 18px;
+  max-width: 70%;
   position: relative;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
 }
 
 .message-row.user .message-bubble {
-  background: #1a73e8;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
   color: #fff;
-  border-bottom-right-radius: 4px;
-  box-shadow: 0 1px 3px rgba(26, 115, 232, 0.25);
+  border-bottom-right-radius: 6px;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
 }
 
 .message-row.assistant .message-bubble {
-  background: #f1f3f4;
-  color: #202124;
-  border-bottom-left-radius: 4px;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  color: #1e293b;
+  border-bottom-left-radius: 6px;
+  border: 1px solid #e2e8f0;
 }
 
 .message-row.user .message-role {
@@ -894,36 +911,44 @@ onMounted(() => {
 
 /* 输入区域 */
 .input-area {
-  padding: 12px 20px 16px;
-  border-top: 1px solid #e8eaed;
+  padding: 16px 24px 20px;
+  border-top: 1px solid #e5e7eb;
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: flex-end;
-  background: #fff;
+  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
 }
 
 .input-area :deep(.el-textarea__inner) {
   font-family: inherit;
-  font-size: 14px;
-  line-height: 1.5;
-  border-radius: 20px;
-  padding: 10px 16px;
+  font-size: 15px;
+  line-height: 1.6;
+  border-radius: 24px;
+  padding: 12px 20px;
   resize: none;
-  border-color: #dadce0;
-  box-shadow: none;
-  transition: border-color 0.2s;
+  border-color: #d1d5db;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .input-area :deep(.el-textarea__inner:focus) {
-  border-color: #1a73e8;
-  box-shadow: 0 0 0 2px rgba(26,115,232,0.15);
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
 .send-btn {
-  height: 40px;
-  min-width: 72px;
-  border-radius: 20px;
-  font-weight: 500;
+  height: 44px;
+  min-width: 88px;
+  border-radius: 22px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.send-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.35);
 }
 
 /* 导入消息样式 */
@@ -1052,5 +1077,28 @@ onMounted(() => {
   font-size: 13px;
   color: var(--el-text-color-secondary);
   padding-top: 4px;
+}
+
+/* 滚动条美化 */
+.chat-sidebar ::-webkit-scrollbar,
+.messages-area ::-webkit-scrollbar {
+  width: 8px;
+}
+
+.chat-sidebar ::-webkit-scrollbar-track,
+.messages-area ::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.chat-sidebar ::-webkit-scrollbar-thumb,
+.messages-area ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #94a3b8 0%, #64748b 100%);
+  border-radius: 4px;
+}
+
+.chat-sidebar ::-webkit-scrollbar-thumb:hover,
+.messages-area ::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #64748b 0%, #475569 100%);
 }
 </style>

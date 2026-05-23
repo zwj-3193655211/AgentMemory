@@ -567,26 +567,60 @@ public class MemoryExtractor {
         String projectName = extractProjectName(content, paths);
         memory.extra.put("projectName", projectName);
         
+        // 提取关键决策（从内容中寻找决策相关句式）
+        String keyDecisions = extractKeyDecisions(content);
+        memory.extra.put("keyDecisions", keyDecisions);
+        
+        // 生成工作摘要：取内容的前300字作为摘要
+        String summary = content.trim();
+        if (summary.length() > 300) {
+            summary = summary.substring(0, 300) + "...";
+        }
+        memory.extra.put("summary", summary);
+        memory.description = summary;
+        
         // 只有提取到有价值信息才保存
         if (techStack.isEmpty() && paths.isEmpty() && projectName.isEmpty()) {
             log.debug("未提取到项目技术栈、路径或名称，跳过保存: {}", content.substring(0, Math.min(50, content.length())));
             return null;
         }
         
-        // 生成更有意义的标题
+        // 生成有意义的标题
+        String dateStr = java.time.LocalDate.now().toString();
         if (!projectName.isEmpty()) {
-            memory.title = "项目: " + projectName;
+            memory.title = projectName + " - 工作记录 " + dateStr;
         } else if (!techStack.isEmpty()) {
-            memory.title = "技术栈: " + String.join(" + ", techStack.subList(0, Math.min(3, techStack.size())));
-        } else if (!paths.isEmpty()) {
-            memory.title = "项目路径: " + paths.get(0);
+            memory.title = String.join("/", techStack.subList(0, Math.min(2, techStack.size()))) + " - 工作记录 " + dateStr;
         } else {
-            memory.title = "项目上下文";
+            memory.title = "项目上下文 " + dateStr;
         }
         
-        memory.description = content.trim();
-        
         return memory;
+    }
+    
+    /**
+     * 从内容中提取关键决策（选型、方案选择、配置决定等）
+     */
+    private String extractKeyDecisions(String content) {
+        // 匹配决策相关的句式
+        Pattern[] decisionPatterns = {
+            Pattern.compile("(?:选择|选用|决定用|改用|采用|切换到|配置为|使用)([^，。！？\n]{5,80})", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("(?:方案[是为]|方案选择)[：:]?\\s*([^，。！？\n]{5,80})"),
+            Pattern.compile("(?:技术栈|架构)[是为][：:]?\\s*([^，。！？\n]{5,80})")
+        };
+        
+        StringBuilder decisions = new StringBuilder();
+        for (Pattern pattern : decisionPatterns) {
+            java.util.regex.Matcher matcher = pattern.matcher(content);
+            while (matcher.find()) {
+                String match = matcher.group(1).trim();
+                if (match.length() > 3) {
+                    if (decisions.length() > 0) decisions.append("; ");
+                    decisions.append(match);
+                }
+            }
+        }
+        return decisions.toString();
     }
     
     /**

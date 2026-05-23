@@ -12,7 +12,42 @@
       </div>
     </div>
 
-    <el-table :data="dataList" stripe v-loading="loading">
+    <!-- 查询工具栏 -->
+    <div class="filter-toolbar">
+      <el-input
+        v-model="filters.searchText"
+        placeholder="搜索标题、内容..."
+        clearable
+        style="width: 280px"
+        @input="handleFilterChange"
+      >
+        <template #prefix><el-icon><Search /></el-icon></template>
+      </el-input>
+
+      <el-select
+        v-model="filters.category"
+        placeholder="按类别筛选"
+        clearable
+        style="width: 160px"
+        @change="handleFilterChange"
+      >
+        <el-option label="偏好设置" value="preference" />
+        <el-option label="行为模式" value="behavior" />
+        <el-option label="技术栈" value="techstack" />
+        <el-option label="工作习惯" value="workhabit" />
+        <el-option label="其他" value="other" />
+      </el-select>
+
+      <el-button @click="clearFilters">
+        <el-icon><Refresh /></el-icon> 重置
+      </el-button>
+
+      <div class="filter-stats">
+        共 {{ filteredData.length }} 条记录
+      </div>
+    </div>
+
+    <el-table :data="filteredData" stripe v-loading="loading">
       <el-table-column prop="title" label="标题" min-width="200" />
       <el-table-column prop="category" label="类别" width="120">
         <template #default="{ row }">
@@ -25,6 +60,9 @@
             {{ item.key }}: {{ item.value }}
           </el-tag>
         </template>
+      </el-table-column>
+      <el-table-column prop="updatedAt" label="更新时间" width="180">
+        <template #default="{ row }">{{ formatTime(row.updatedAt) }}</template>
       </el-table-column>
       <el-table-column label="操作" width="150" fixed="right">
         <template #default="{ row }">
@@ -63,9 +101,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Download } from '@element-plus/icons-vue'
+import { Plus, Download, Search, Refresh } from '@element-plus/icons-vue'
 import { apiService, API_BASE_URL } from '../services/api'
 import type { UserProfile } from '../types'
 
@@ -85,6 +123,52 @@ const itemsInput = ref('[{"key": "", "value": ""}]')
 
 // 表单引用
 const formRef = ref()
+
+// 查询过滤器
+const filters = reactive({
+  searchText: '',
+  category: ''
+})
+
+// 过滤后的数据
+const filteredData = computed(() => {
+  let result = dataList.value
+
+  // 文本搜索
+  if (filters.searchText) {
+    const keyword = filters.searchText.toLowerCase()
+    result = result.filter(item => {
+      // 搜索标题
+      if (item.title && item.title.toLowerCase().includes(keyword)) return true
+      // 搜索内容项
+      if (Array.isArray(item.items)) {
+        return item.items.some((i: any) =>
+          (i.key && i.key.toLowerCase().includes(keyword)) ||
+          (i.value && i.value.toLowerCase().includes(keyword))
+        )
+      }
+      return false
+    })
+  }
+
+  // 类别过滤
+  if (filters.category) {
+    result = result.filter(item => item.category === filters.category)
+  }
+
+  return result
+})
+
+// 处理过滤变化
+const handleFilterChange = () => {
+  // 使用 computed 自动处理
+}
+
+// 清空过滤器
+const clearFilters = () => {
+  filters.searchText = ''
+  filters.category = ''
+}
 
 // 表单验证规则
 const formRules = {
@@ -114,6 +198,13 @@ const getCategoryTagType = (category: string) => {
     other: 'info'
   }
   return types[category] || 'info'
+}
+
+// 格式化时间
+const formatTime = (time: string | Date) => {
+  if (!time) return ''
+  const d = new Date(time)
+  return d.toLocaleString('zh-CN')
 }
 
 // 解析 JSON 内容
@@ -157,7 +248,7 @@ const openEdit = (row: UserProfile) => {
 // 提交表单
 const handleSubmit = async () => {
   if (!formRef.value) return
-  
+
   await formRef.value.validate(async (valid: boolean) => {
     if (!valid) return
 
@@ -190,7 +281,7 @@ const handleSubmit = async () => {
 // 删除记录
 const handleDelete = async (row: UserProfile) => {
   if (!row.id) return
-  
+
   try {
     await ElMessageBox.confirm('确定要删除这条记录吗？', '确认删除', { type: 'warning' })
     await apiService.deleteProfile(row.id)
@@ -257,6 +348,27 @@ loadData()
   font-size: 20px;
   font-weight: 600;
   color: #1a1a2e;
+}
+
+.filter-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: #f8f9fb;
+  border-radius: 10px;
+  flex-wrap: wrap;
+}
+
+.filter-stats {
+  margin-left: auto;
+  font-size: 13px;
+  color: #606266;
+  background: #fff;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #e8eaed;
 }
 
 .item-tag {

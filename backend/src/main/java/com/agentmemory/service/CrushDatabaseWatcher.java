@@ -14,7 +14,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.agentmemory.model.Message;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Crush 数据库监控服务
@@ -23,17 +22,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class CrushDatabaseWatcher extends ScheduledServiceBase {
 
     private static final Logger log = LoggerFactory.getLogger(CrushDatabaseWatcher.class);
-    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     private final DatabaseService databaseService;
-    private final MemoryService memoryService;
-
-    private String crushDbPath;
+    private final String crushDbPath;
     private long lastCheckTime;  // 上次检查时间（用于增量检查）
 
     public CrushDatabaseWatcher(DatabaseService databaseService, String crushDbPath) {
         this.databaseService = databaseService;
-        this.memoryService = new MemoryService(databaseService);
         this.crushDbPath = crushDbPath;
         this.lastCheckTime = 0;  // 从 0 开始，导入所有历史会话
     }
@@ -215,8 +210,6 @@ public class CrushDatabaseWatcher extends ScheduledServiceBase {
                 }
 
                 String title = rs.getString("title");
-                long updatedAt = rs.getLong("updated_at");
-                long createdAt = rs.getLong("created_at");
                 String cwd = null; // Crush 数据库可能没有 cwd 列
 
                 // 保存会话

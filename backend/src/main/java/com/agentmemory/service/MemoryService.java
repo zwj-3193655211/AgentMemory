@@ -325,6 +325,16 @@ public class MemoryService {
                 if (extracted.has("project_name")) {
                     memory.extra.put("projectName", extracted.get("project_name").asText());
                 }
+                if (extracted.has("summary")) {
+                    memory.extra.put("summary", extracted.get("summary").asText());
+                    memory.description = extracted.get("summary").asText();
+                }
+                if (extracted.has("key_decisions")) {
+                    memory.extra.put("keyDecisions", extracted.get("key_decisions").asText());
+                }
+                if (extracted.has("next_steps")) {
+                    memory.extra.put("nextSteps", extracted.get("next_steps").asText());
+                }
             }
             case "SKILL" -> {
                 memory.description = extracted.has("skill_name") ? extracted.get("skill_name").asText() : "";
@@ -541,7 +551,7 @@ public class MemoryService {
     }
     
     private void saveProjectContext(Connection conn, String id, ExtractedMemory memory) throws SQLException {
-        String sql = "INSERT INTO project_contexts (id, title, project_name, project_path, tech_stack) VALUES (?, ?, ?, ?, ?::text[])";
+        String sql = "INSERT INTO project_contexts (id, title, project_name, project_path, tech_stack, key_decisions, structure) VALUES (?, ?, ?, ?, ?::text[], ?::jsonb, ?::jsonb)";
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, id);
             stmt.setString(2, memory.title);
@@ -549,12 +559,10 @@ public class MemoryService {
             // 获取项目名称
             String projectName = (String) memory.extra.get("projectName");
             if (projectName == null || projectName.isEmpty()) {
-                // 如果没有提取到项目名称，从路径中提取
                 @SuppressWarnings("unchecked")
                 List<String> paths = (List<String>) memory.extra.get("paths");
                 if (paths != null && !paths.isEmpty()) {
                     String path = paths.get(0);
-                    // 从路径中提取项目名称
                     path = path.replaceAll("[/\\\\]$", "");
                     int lastSlash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
                     if (lastSlash >= 0 && lastSlash < path.length() - 1) {
@@ -580,6 +588,39 @@ public class MemoryService {
             } else {
                 stmt.setArray(5, conn.createArrayOf("text", new String[]{}));
             }
+            
+            // 关键决策
+            String keyDecisions = (String) memory.extra.get("keyDecisions");
+            if (keyDecisions == null || keyDecisions.isEmpty()) {
+                stmt.setString(6, "[]");
+            } else {
+                // 将分号分隔的决策转为 JSON 数组
+                String[] decisions = keyDecisions.split(";");
+                StringBuilder jsonArr = new StringBuilder("[");
+                for (int i = 0; i < decisions.length; i++) {
+                    String d = decisions[i].trim();
+                    if (!d.isEmpty()) {
+                        if (jsonArr.length() > 1) jsonArr.append(",");
+                        jsonArr.append("\"").append(d.replace("\"", "\\\"")).append("\"");
+                    }
+                }
+                jsonArr.append("]");
+                stmt.setString(6, jsonArr.toString());
+            }
+            
+            // structure 字段存放 summary + next_steps
+            String summary = (String) memory.extra.getOrDefault("summary", memory.description);
+            String nextSteps = (String) memory.extra.get("nextSteps");
+            StringBuilder structJson = new StringBuilder("{");
+            if (summary != null && !summary.isEmpty()) {
+                structJson.append("\"summary\":\"").append(summary.replace("\"", "\\\"")).append("\"");
+            }
+            if (nextSteps != null && !nextSteps.isEmpty()) {
+                if (structJson.length() > 1) structJson.append(",");
+                structJson.append("\"next_steps\":\"").append(nextSteps.replace("\"", "\\\"")).append("\"");
+            }
+            structJson.append("}");
+            stmt.setString(7, structJson.toString());
             
             stmt.executeUpdate();
         }

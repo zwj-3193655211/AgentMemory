@@ -423,8 +423,6 @@ public class ChatService {
         pb.environment().put("NO_COLOR", "1");
         Process process = pb.start();
 
-        StringBuilder fullOutput = new StringBuilder();
-
         // 使用独立线程读取 stdout，避免缓冲区满导致死锁
         CompletableFuture<String> stdoutFuture = CompletableFuture.supplyAsync(() -> {
             StringBuilder sb = new StringBuilder();

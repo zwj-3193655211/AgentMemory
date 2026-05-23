@@ -93,7 +93,7 @@
     </header>
 
     <!-- 主内容区 -->
-    <main class="app-main">
+    <main class="app-main" :class="{ 'app-main-chat': activeMenu === 'chat' }">
       <!-- 仪表盘 -->
       <div v-if="activeMenu === 'dashboard'" class="content-panel full">
         <div class="panel-header">
@@ -567,7 +567,9 @@
       </div>
 
       <!-- 对话页面 -->
-      <ChatView v-if="activeMenu === 'chat'" />
+      <div v-if="activeMenu === 'chat'" class="chat-wrapper">
+        <ChatView />
+      </div>
 
       <!-- 设置页面 -->
       <div v-if="activeMenu === 'settings'" class="content-panel full">
@@ -894,7 +896,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, reactive } from 'vue'
 import axios from 'axios'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { Search, Setting, ChatDotRound, WarningFilled, User, DocumentChecked, FolderOpened, Reading, Odometer, Box, Delete, Plus, Download, Close, Connection, InfoFilled, ArrowRight } from '@element-plus/icons-vue'
 
 // ECharts (vue-echarts 按需注册)
@@ -919,7 +921,6 @@ import ChatView from './components/ChatView.vue'
 
 // 使用 Vite 环境变量，支持运行时配置
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8082/api'
-const EMBED_BASE = import.meta.env.VITE_EMBED_BASE || 'http://localhost:8100'
 
 // 数据
 const activeMenu = ref('dashboard')
@@ -1475,14 +1476,6 @@ const formatTime = (time: string | Date) => {
   return d.toLocaleString('zh-CN')
 }
 
-const parseItems = (itemsStr: string) => {
-  try {
-    return JSON.parse(itemsStr || '[]')
-  } catch {
-    return []
-  }
-}
-
 // 添加自定义 Agent
 const addCustomAgent = async () => {
   if (!newAgent.value.name) {
@@ -1526,41 +1519,6 @@ const loadAllData = async () => {
     skills.value = skillsRes.data
   } catch (e) {
     console.error('加载数据失败', e)
-  }
-}
-
-// 保留单独加载方法供特殊情况使用
-const loadData = async () => {
-  try {
-    const [agentsRes, sessionsRes, statsRes] = await Promise.all([
-      axios.get(`${API_BASE}/agents`),
-      axios.get(`${API_BASE}/sessions`),
-      axios.get(`${API_BASE}/stats`)
-    ])
-    agents.value = agentsRes.data
-    sessions.value = sessionsRes.data
-    stats.value = statsRes.data
-  } catch (e) {
-    console.error('加载数据失败', e)
-  }
-}
-
-const loadMemoryData = async () => {
-  try {
-    const [errorsRes, profilesRes, practicesRes, contextsRes, skillsRes] = await Promise.all([
-      axios.get(`${API_BASE}/errors`),
-      axios.get(`${API_BASE}/profiles`),
-      axios.get(`${API_BASE}/practices`),
-      axios.get(`${API_BASE}/contexts`),
-      axios.get(`${API_BASE}/skills`)
-    ])
-    errors.value = errorsRes.data
-    profiles.value = profilesRes.data
-    practices.value = practicesRes.data
-    contexts.value = contextsRes.data
-    skills.value = skillsRes.data
-  } catch (e) {
-    console.error('加载记忆库数据失败', e)
   }
 }
 
@@ -1752,20 +1710,6 @@ const selectAndSwitchModel = async (modelId: string) => {
   }
 }
 
-// 切换 Embedding 模型（保留旧函数以兼容）
-const switchEmbeddingModel = async () => {
-  if (!selectedEmbeddingModel.value) return
-  
-  // 检查模型是否已下载
-  const model = embeddingModels.value.find(m => m.id === selectedEmbeddingModel.value)
-  if (!model?.downloaded) {
-    ElMessage.warning('请先下载该模型')
-    return
-  }
-  
-  await selectAndSwitchModel(selectedEmbeddingModel.value)
-}
-
 const onProviderChange = (provider: string) => {
   const preset = providerPresets[provider]
   if (preset) {
@@ -1868,37 +1812,6 @@ const updateLLMConfig = () => {
   // 切换模式时重置测试状态
   connectionTestSuccess.value = false
   connectionTestResult.value = ''
-}
-
-const testLocalModel = async () => {
-  testingConnection.value = true
-  connectionTestResult.value = ''
-  
-  try {
-    // 先保存配置
-    await axios.post(`${API_BASE}/embedding/config`, {
-      llm_mode: 'local',
-      llm_local_model: llmConfig.value.localModel
-    })
-
-    // 测试提取
-    const res = await axios.post(`${API_BASE}/embedding/extract`, {
-      content: '这是一个测试：成功解决了 Python 导入错误。'
-    })
-    
-    if (res.data.type && res.data.type !== 'SKIP') {
-      connectionTestResult.value = `模型加载成功！提取类型: ${res.data.type}`
-      connectionTestSuccess.value = true
-    } else {
-      connectionTestResult.value = `模型已加载，规则模式下提取: ${res.data.type || 'SKIP'}`
-      connectionTestSuccess.value = true
-    }
-  } catch (e: any) {
-    connectionTestResult.value = `模型加载失败: ${e.response?.data?.detail || e.message || '未知错误'}`
-    connectionTestSuccess.value = false
-  } finally {
-    testingConnection.value = false
-  }
 }
 
 const saveCleanupConfig = async () => {
@@ -2051,6 +1964,17 @@ onUnmounted(() => {
   max-width: 1600px;
   margin: 0 auto;
   box-sizing: border-box;
+}
+
+.app-main.app-main-chat {
+  padding: 0;
+  gap: 0;
+  max-width: 100%;
+}
+
+.chat-wrapper {
+  width: 100%;
+  height: calc(100vh - 60px);
 }
 
 /* Logo */

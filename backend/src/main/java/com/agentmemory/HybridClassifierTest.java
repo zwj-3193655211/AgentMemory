@@ -64,19 +64,21 @@ public class HybridClassifierTest {
                         System.out.println("  → 置信度: " + String.format("%.2f", result.getConfidence()));
 
                         String method = result.getMethod();
-                        if (method.equals("rule")) methodCounts[0]++;
-                        else if (method.equals("rule-correction")) methodCounts[1]++;
-                        else if (method.equals("rule+vector")) methodCounts[2]++;
-                        else if (method.equals("vector")) methodCounts[3]++;
-                        else methodCounts[4]++;
+                        switch (method) {
+                            case "rule" -> methodCounts[0]++;
+                            case "rule-correction" -> methodCounts[1]++;
+                            case "rule+vector" -> methodCounts[2]++;
+                            case "vector" -> methodCounts[3]++;
+                            default -> methodCounts[4]++;
+                        }
 
                         switch (result.getType()) {
-                            case ERROR_CORRECTION: typeCounts[0]++; break;
-                            case USER_PROFILE: typeCounts[1]++; break;
-                            case BEST_PRACTICE: typeCounts[2]++; break;
-                            case PROJECT_CONTEXT: typeCounts[3]++; break;
-                            case SKILL: typeCounts[4]++; break;
-                            case UNKNOWN: typeCounts[5]++; break;
+                            case ERROR_CORRECTION -> typeCounts[0]++;
+                            case USER_PROFILE -> typeCounts[1]++;
+                            case BEST_PRACTICE -> typeCounts[2]++;
+                            case PROJECT_CONTEXT -> typeCounts[3]++;
+                            case SKILL -> typeCounts[4]++;
+                            case UNKNOWN -> typeCounts[5]++;
                         }
                     } catch (Exception e) {
                         System.out.println("  → 分类出错: " + e.getMessage());
@@ -116,7 +118,11 @@ public class HybridClassifierTest {
             e.printStackTrace();
         } finally {
             if (conn != null) {
-                try { conn.close(); } catch (Exception e) {}
+                try { 
+                    conn.close(); 
+                } catch (java.sql.SQLException e) {
+                    // 忽略连接关闭异常
+                }
             }
         }
     }

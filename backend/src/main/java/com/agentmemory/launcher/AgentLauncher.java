@@ -1,16 +1,29 @@
 package com.agentmemory.launcher;
 
-import com.agentmemory.config.ApplicationConfig;
-import com.agentmemory.model.Message;
-import com.agentmemory.service.DatabaseService;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.*;
-import java.nio.charset.StandardCharsets;
-import java.time.Instant;
-import java.util.*;
-import java.util.concurrent.*;
+import com.agentmemory.config.ApplicationConfig;
+import com.agentmemory.model.Message;
+import com.agentmemory.service.DatabaseService;
 
 /**
  * Agent 启动器 - 代理终端模式
@@ -23,6 +36,7 @@ public class AgentLauncher {
     private final DatabaseService databaseService;
     private final ExecutorService executor;
     private final String sessionId;
+    @SuppressWarnings("unused")
     private final String agentType;
     
     private Process process;
@@ -46,7 +60,7 @@ public class AgentLauncher {
         this.databaseService.init();
         this.executor = Executors.newFixedThreadPool(2);
         this.sessionId = "launcher-" + UUID.randomUUID().toString();
-        this.agentType = "unknown";
+        this.agentType = null;
     }
     
     public AgentLauncher(String agentType) {

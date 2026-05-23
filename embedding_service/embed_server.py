@@ -235,8 +235,9 @@ EXTRACTION_PROMPT = """你是记忆提取专家。分析对话内容，提取结
    - 触发词：建议、推荐、应该、最好 + 当...时、在...场景
 
 4. **PROJECT_CONTEXT（项目上下文）**
-   - 核心：项目技术背景、架构决策、目录结构
-   - 触发词：项目、技术栈、框架、目录结构、架构决策
+   - 核心：项目的实际工作进展、技术决策、架构变化
+   - 必须有：工作摘要（具体做了什么，而非仅仅是技术栈列表）
+   - 触发词：项目、技术栈、框架、重构、升级、部署、架构、配置
 
 5. **SKILL（技能沉淀）**
    - 核心：可复用的能力包（脚本、模板、踩坑点）
@@ -253,7 +254,7 @@ EXTRACTION_PROMPT = """你是记忆提取专家。分析对话内容，提取结
 ERROR_CORRECTION extracted: {"problem": "问题现象", "cause": "根因", "solution": "解决方案"}
 USER_PROFILE extracted: {"preference": "偏好内容", "category": "分类", "constraint": "约束条件"}
 BEST_PRACTICE extracted: {"scenario": "适用场景", "practice": "具体做法", "rationale": "原理说明"}
-PROJECT_CONTEXT extracted: {"project_name": "项目名", "tech_stack": ["技术栈"], "key_info": "关键信息"}
+PROJECT_CONTEXT extracted: {"project_name": "项目名", "tech_stack": ["技术栈"], "summary": "一段话概括本次做了什么（具体工作内容，非技术栈罗列）", "key_decisions": "做出的关键决策或技术选型", "next_steps": "接下来的待办或下一步计划"}
 SKILL extracted: {"skill_name": "技能名", "steps": ["步骤1", "步骤2"], "gotchas": "踩坑点"}
 
 无价值内容返回: {"type": "SKIP", "reason": "原因"}"""
@@ -629,7 +630,9 @@ def extract_with_rules(content):
             'extracted': {
                 'project_name': '',
                 'tech_stack': tech_keywords,
-                'key_info': content[:500]
+                'summary': content[:500],
+                'key_decisions': '',
+                'next_steps': ''
             }
         }
     
@@ -1017,8 +1020,9 @@ def call_api_llm_with_context(context: str) -> dict:
    - 触发词：建议、推荐、应该、最好 + 当...时、在...场景
 
 4. **PROJECT_CONTEXT（项目上下文）**
-   - 核心：项目技术背景、架构决策、目录结构
-   - 触发词：项目、技术栈、框架、目录结构、架构决策
+   - 核心：项目的实际工作进展、技术决策、架构变化
+   - 必须有：工作摘要（具体做了什么，而非仅仅是技术栈列表）
+   - 触发词：项目、技术栈、框架、重构、升级、部署、架构、配置
 
 5. **SKILL（技能沉淀）**
    - 核心：可复用的能力包（脚本、模板、踩坑点）
@@ -1107,7 +1111,7 @@ def extract_with_local_llm_with_context(context: str) -> dict:
 1. ERROR_CORRECTION（错误纠正）- 已发生的具体问题 + 验证过的解决方案
 2. USER_PROFILE（用户偏好）- 用户的偏好、习惯、约束
 3. BEST_PRACTICE（最佳实践）- 特定场景下验证过有效的做法
-4. PROJECT_CONTEXT（项目上下文）- 项目技术背景、架构决策
+4. PROJECT_CONTEXT（项目上下文）- 项目的实际工作进展、技术决策、架构变化（必须有工作摘要）
 5. SKILL（技能沉淀）- 可复用的能力包
 
 【对话上下文】
@@ -1121,7 +1125,8 @@ def extract_with_local_llm_with_context(context: str) -> dict:
 - 如果上下文显示用户表达了偏好或约束，应归类为 USER_PROFILE
 
 严格按JSON格式返回：
-{"type": "类型", "title": "简短标题(≤30字)", "tags": ["标签"], "extracted": {...}}
+{"type": "类型", "title": "简短标题(≤30字)", "tags": ["标签"], "extracted": {...具体字段...}, "reason": "判断理由"}
+各类型 extracted 字段：ERROR_CORRECTION: {"problem","cause","solution"} / USER_PROFILE: {"preference","category","constraint"} / BEST_PRACTICE: {"scenario","practice","rationale"} / PROJECT_CONTEXT: {"project_name","tech_stack":["..."],"summary":"工作摘要","key_decisions":"关键决策","next_steps":"下一步计划"} / SKILL: {"skill_name","steps":["..."],"gotchas"}
 
 无价值内容返回: {"type": "SKIP", "reason": "原因"}"""
 
