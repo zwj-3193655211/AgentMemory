@@ -808,6 +808,7 @@ public class ApiServer {
                     item.put("solution", rs.getString("solution"));
                     item.put("example", rs.getString("example"));
                     item.put("tags", sqlArrayToList(rs.getArray("tags")));
+                    item.put("agentType", rs.getString("agent_type"));
                     item.put("createdAt", rs.getTimestamp("created_at"));
                     return item;
                 }
@@ -827,6 +828,7 @@ public class ApiServer {
                     item.put("solution", rs.getString("solution"));
                     item.put("example", rs.getString("example"));
                     item.put("tags", sqlArrayToList(rs.getArray("tags")));
+                    item.put("agentType", rs.getString("agent_type"));
                     item.put("createdAt", rs.getTimestamp("created_at"));
                     return item;
                 },

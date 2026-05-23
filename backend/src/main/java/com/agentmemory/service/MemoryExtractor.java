@@ -549,53 +549,198 @@ public class MemoryExtractor {
     }
     
     /**
-     * 提取项目上下文记忆
+     * 提取项目上下文记忆 - 优化版
+     * 只提取真正有价值的项目上下文信息
      */
     public ExtractedMemory extractProjectContext(String content, List<String> tags) {
         ExtractedMemory memory = new ExtractedMemory();
         memory.tags = tags;
-        
-        // 提取技术栈
-        List<String> techStack = extractTechStack(content);
-        memory.extra.put("techStack", techStack);
-        
-        // 提取路径
-        List<String> paths = extractPaths(content);
-        memory.extra.put("paths", paths);
-        
-        // 提取项目名称（从路径或内容中）
-        String projectName = extractProjectName(content, paths);
-        memory.extra.put("projectName", projectName);
-        
-        // 提取关键决策（从内容中寻找决策相关句式）
-        String keyDecisions = extractKeyDecisions(content);
-        memory.extra.put("keyDecisions", keyDecisions);
-        
-        // 生成工作摘要：取内容的前300字作为摘要
-        String summary = content.trim();
-        if (summary.length() > 300) {
-            summary = summary.substring(0, 300) + "...";
-        }
-        memory.extra.put("summary", summary);
-        memory.description = summary;
-        
-        // 只有提取到有价值信息才保存
-        if (techStack.isEmpty() && paths.isEmpty() && projectName.isEmpty()) {
-            log.debug("未提取到项目技术栈、路径或名称，跳过保存: {}", content.substring(0, Math.min(50, content.length())));
+
+        // 清理内容：去除markdown表格、代码块等噪声
+        String cleanedContent = cleanContent(content);
+        if (cleanedContent.length() < 50) {
+            log.debug("内容过短或全是噪声，跳过: {}", content.substring(0, Math.min(30, content.length())));
             return null;
         }
-        
-        // 生成有意义的标题
-        String dateStr = java.time.LocalDate.now().toString();
-        if (!projectName.isEmpty()) {
-            memory.title = projectName + " - 工作记录 " + dateStr;
-        } else if (!techStack.isEmpty()) {
-            memory.title = String.join("/", techStack.subList(0, Math.min(2, techStack.size()))) + " - 工作记录 " + dateStr;
-        } else {
-            memory.title = "项目上下文 " + dateStr;
+
+        // 提取技术栈（只保留真正的技术栈）
+        List<String> techStack = extractTechStack(cleanedContent);
+        memory.extra.put("techStack", techStack);
+
+        // 提取路径
+        List<String> paths = extractPaths(cleanedContent);
+        memory.extra.put("paths", paths);
+
+        // 提取项目名称
+        String projectName = extractProjectName(cleanedContent, paths);
+        memory.extra.put("projectName", projectName);
+
+        // 提取关键决策
+        List<String> keyDecisions = extractKeyDecisionsList(cleanedContent);
+        memory.extra.put("keyDecisions", keyDecisions);
+
+        // 生成高质量摘要：提取有意义的句子组成
+        String summary = generateSummary(cleanedContent);
+        memory.extra.put("summary", summary);
+        memory.description = summary;
+
+        // 质量检查：只有满足以下条件才保存
+        // 1. 有技术栈 OR 有项目名
+        // 2. 内容是有意义的句子（不是碎片）
+        // 3. 内容长度适中（50-2000字）
+        boolean hasValue = (!techStack.isEmpty() || !projectName.isEmpty());
+        boolean isMeaningful = isMeaningfulContent(cleanedContent);
+        boolean isGoodLength = cleanedContent.length() >= 50 && cleanedContent.length() <= 2000;
+
+        if (!hasValue || !isMeaningful || !isGoodLength) {
+            log.debug("项目上下文质量不达标，跳过保存 - hasValue:{}, isMeaningful:{}, length:{}",
+                hasValue, isMeaningful, cleanedContent.length());
+            return null;
         }
-        
+
+        // 生成有意义的标题
+        if (!projectName.isEmpty()) {
+            memory.title = projectName;
+        } else if (!techStack.isEmpty()) {
+            memory.title = String.join("+", techStack.subList(0, Math.min(2, techStack.size())));
+        } else {
+            memory.title = "项目上下文";
+        }
+
         return memory;
+    }
+
+    /**
+     * 清理内容中的噪声（markdown表格、代码、命令行输出等）
+     */
+    private String cleanContent(String content) {
+        if (content == null) return "";
+
+        String result = content;
+
+        // 去除代码块
+        result = result.replaceAll("```[\\s\\S]*?```", "");
+        result = result.replaceAll("`[^`]+`", "");
+
+        // 去除表格
+        result = result.replaceAll("^\\|.*\\|$", "");
+        result = result.replaceAll("^\\|?\\s*[-:]+\\s*\\|?.*$", "");
+
+        // 去除命令行提示符和命令
+        result = result.replaceAll("^\\$[^\\n]*", "");
+        result = result.replaceAll("^>[^\\n]*", "");
+
+        // 去除markdown标题符号
+        result = result.replaceAll("^#{1,6}\\s*", "");
+
+        // 去除多余空行
+        result = result.replaceAll("\\n{3,}", "\n\n");
+
+        return result.trim();
+    }
+
+    /**
+     * 判断内容是否有意义（不只是碎片）
+     */
+    private boolean isMeaningfulContent(String content) {
+        if (content == null || content.length() < 30) return false;
+
+        // 统计有意义的句子（有完整主谓结构的句子）
+        int sentenceCount = 0;
+        int meaningfulLength = 0;
+
+        for (String sentence : content.split("[。！？\n]")) {
+            sentence = sentence.trim();
+            if (sentence.length() > 10) {
+                // 检查是否包含动词（简单判断）
+                boolean hasVerb = sentence.matches(".*[\\u4e00-\\u9fa5].*[的是在有个做用把被能会]|[a-zA-Z]{3,}.*(is|are|was|were|have|do|use|make|get).*");
+                if (hasVerb || sentence.length() > 30) {
+                    sentenceCount++;
+                    meaningfulLength += sentence.length();
+                }
+            }
+        }
+
+        // 至少2个有意义的句子，且总长度超过100字
+        return sentenceCount >= 2 && meaningfulLength > 100;
+    }
+
+    /**
+     * 生成有意义的摘要
+     */
+    private String generateSummary(String content) {
+        if (content == null || content.isEmpty()) return "";
+
+        StringBuilder summary = new StringBuilder();
+        int count = 0;
+
+        // 提取有意义的句子
+        for (String sentence : content.split("[。！？\n]")) {
+            sentence = sentence.trim();
+            // 跳过太短或太长的句子
+            if (sentence.length() < 15 || sentence.length() > 200) continue;
+            // 跳过包含大量特殊字符的句子
+            if (countSpecialChars(sentence) > sentence.length() * 0.3) continue;
+
+            summary.append(sentence).append("。");
+            count++;
+            if (count >= 3) break;  // 最多3个句子
+        }
+
+        String result = summary.toString();
+        return result.length() > 500 ? result.substring(0, 500) + "..." : result;
+    }
+
+    private int countSpecialChars(String s) {
+        int count = 0;
+        for (char c : s.toCharArray()) {
+            if (c == '|' || c == '*' || c == '`' || c == '#' || c == '>' ||
+                c == '<' || c == '[' || c == ']' || c == '{' || c == '}' ||
+                c == '$' || c == '%' || c == '\\') {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * 从内容中提取关键决策列表
+     */
+    private List<String> extractKeyDecisionsList(String content) {
+        List<String> decisions = new ArrayList<>();
+
+        // 匹配决策相关的句式
+        String[] decisionPatterns = {
+            "(?:采用|使用|选用了|使用了)([^，。！？\\n]{10,60})",
+            "(?:决定|选定|选择了)([^，。！？\\n]{10,60})",
+            "(?:架构|方案|设计)[是为：:]([^，。！？\\n]{10,80})",
+            "(?:技术栈|技术方案)[是为：:]([^，。！？\\n]{10,80})"
+        };
+
+        for (String patternStr : decisionPatterns) {
+            Pattern pattern = Pattern.compile(patternStr, Pattern.CASE_INSENSITIVE);
+            java.util.regex.Matcher matcher = pattern.matcher(content);
+            while (matcher.find() && decisions.size() < 5) {
+                String match = matcher.group(1).trim();
+                if (match.length() > 5 && !isNoiseString(match)) {
+                    decisions.add(match);
+                }
+            }
+        }
+
+        return decisions;
+    }
+
+    /**
+     * 判断是否为噪声字符串
+     */
+    private boolean isNoiseString(String s) {
+        if (s == null || s.isEmpty()) return true;
+        // 包含大量特殊字符
+        if (countSpecialChars(s) > s.length() * 0.4) return true;
+        // 全是技术术语堆砌没有实际意义
+        if (s.matches("[a-zA-Z0-9\\s\\-/]+") && s.length() > 50) return true;
+        return false;
     }
     
     /**
