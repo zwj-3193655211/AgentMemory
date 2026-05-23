@@ -541,22 +541,44 @@ public class MemoryService {
     }
     
     private void saveProjectContext(Connection conn, String id, ExtractedMemory memory) throws SQLException {
-        String sql = "INSERT INTO project_contexts (id, title, project_path, tech_stack) VALUES (?, ?, ?, ?::text[])";
+        String sql = "INSERT INTO project_contexts (id, title, project_name, project_path, tech_stack) VALUES (?, ?, ?, ?, ?::text[])";
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, id);
             stmt.setString(2, memory.title);
             
+            // 获取项目名称
+            String projectName = (String) memory.extra.get("projectName");
+            if (projectName == null || projectName.isEmpty()) {
+                // 如果没有提取到项目名称，从路径中提取
+                @SuppressWarnings("unchecked")
+                List<String> paths = (List<String>) memory.extra.get("paths");
+                if (paths != null && !paths.isEmpty()) {
+                    String path = paths.get(0);
+                    // 从路径中提取项目名称
+                    path = path.replaceAll("[/\\\\]$", "");
+                    int lastSlash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+                    if (lastSlash >= 0 && lastSlash < path.length() - 1) {
+                        projectName = path.substring(lastSlash + 1);
+                    }
+                }
+            }
+            if (projectName == null || projectName.isEmpty()) {
+                projectName = "未命名项目";
+            }
+            stmt.setString(3, projectName);
+            
+            // 获取项目路径
             @SuppressWarnings("unchecked")
             List<String> paths = (List<String>) memory.extra.get("paths");
-            String projectPath = (paths != null && !paths.isEmpty()) ? paths.get(0) : "";
-            stmt.setString(3, projectPath);
+            String projectPath = (paths != null && !paths.isEmpty()) ? paths.get(0) : null;
+            stmt.setString(4, projectPath);
             
             @SuppressWarnings("unchecked")
             List<String> techStack = (List<String>) memory.extra.get("techStack");
             if (techStack != null && !techStack.isEmpty()) {
-                stmt.setArray(4, conn.createArrayOf("text", techStack.toArray()));
+                stmt.setArray(5, conn.createArrayOf("text", techStack.toArray()));
             } else {
-                stmt.setArray(4, conn.createArrayOf("text", new String[]{}));
+                stmt.setArray(5, conn.createArrayOf("text", new String[]{}));
             }
             
             stmt.executeUpdate();

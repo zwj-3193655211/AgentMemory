@@ -1,11 +1,14 @@
 package com.agentmemory.service;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * 记忆结构化提取器
@@ -560,14 +563,20 @@ public class MemoryExtractor {
         List<String> paths = extractPaths(content);
         memory.extra.put("paths", paths);
         
+        // 提取项目名称（从路径或内容中）
+        String projectName = extractProjectName(content, paths);
+        memory.extra.put("projectName", projectName);
+        
         // 只有提取到有价值信息才保存
-        if (techStack.isEmpty() && paths.isEmpty()) {
-            log.debug("未提取到项目技术栈或路径，跳过保存: {}", content.substring(0, Math.min(50, content.length())));
+        if (techStack.isEmpty() && paths.isEmpty() && projectName.isEmpty()) {
+            log.debug("未提取到项目技术栈、路径或名称，跳过保存: {}", content.substring(0, Math.min(50, content.length())));
             return null;
         }
         
         // 生成更有意义的标题
-        if (!techStack.isEmpty()) {
+        if (!projectName.isEmpty()) {
+            memory.title = "项目: " + projectName;
+        } else if (!techStack.isEmpty()) {
             memory.title = "技术栈: " + String.join(" + ", techStack.subList(0, Math.min(3, techStack.size())));
         } else if (!paths.isEmpty()) {
             memory.title = "项目路径: " + paths.get(0);
@@ -578,6 +587,102 @@ public class MemoryExtractor {
         memory.description = content.trim();
         
         return memory;
+    }
+    
+    /**
+     * 从内容或路径中提取项目名称
+     * 优先级：1. 从内容中提取项目名称 2. 从路径中提取目录名
+     */
+    private String extractProjectName(String content, List<String> paths) {
+        // 模式1：匹配"项目名称"、"项目名"、"项目叫"等关键词
+        Pattern namePattern = Pattern.compile(
+            "(?:项目名称|项目名|项目叫|项目为|项目名称是|项目名是|项目名称：|项目名：|项目名称:|项目名:)\\s*([^，。！？\\s]{2,50})",
+            Pattern.CASE_INSENSITIVE
+        );
+        Matcher matcher = namePattern.matcher(content);
+        if (matcher.find()) {
+            String name = matcher.group(1).trim();
+            if (!looksLikePath(name)) {
+                return name;
+            }
+        }
+        
+        // 模式2：从路径中提取项目名称（取最后一个目录名）
+        if (!paths.isEmpty()) {
+            String path = paths.get(0);
+            return extractNameFromPath(path);
+        }
+        
+        // 模式3：从内容中查找类似项目名称的文本（不包含空格、特殊字符的连续字符串）
+        Pattern projectPattern = Pattern.compile(
+            "\\b([A-Za-z][A-Za-z0-9_\\-]*[A-Za-z0-9])(?=\\s|\\(|\\)|\\[|\\]|\\{|\\}|,|，|。|！|？|$)",
+            Pattern.CASE_INSENSITIVE
+        );
+        matcher = projectPattern.matcher(content);
+        while (matcher.find()) {
+            String candidate = matcher.group(1);
+            // 排除常见技术术语
+            if (candidate.length() >= 3 && !isCommonTechTerm(candidate.toLowerCase())) {
+                // 检查是否在引号或反引号中
+                int idx = content.indexOf(candidate);
+                if (idx > 0 && (content.charAt(idx - 1) == '"' || content.charAt(idx - 1) == '\'' || content.charAt(idx - 1) == '`')) {
+                    return candidate;
+                }
+            }
+        }
+        
+        return "";
+    }
+    
+    /**
+     * 从路径中提取项目名称
+     */
+    private String extractNameFromPath(String path) {
+        // 移除结尾的分隔符
+        path = path.replaceAll("[/\\\\]$", "");
+        
+        // 查找最后一个分隔符
+        int lastSlash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+        if (lastSlash >= 0 && lastSlash < path.length() - 1) {
+            String name = path.substring(lastSlash + 1);
+            // 移除常见的扩展名
+            name = name.replaceAll("\\.(md|txt|java|py|js|ts|json|yml|yaml|xml)$", "");
+            return name;
+        }
+        
+        return "";
+    }
+    
+    /**
+     * 判断字符串是否看起来像路径
+     */
+    private boolean looksLikePath(String str) {
+        return str.contains("/") || str.contains("\\") || str.matches("^[A-Za-z]:.*");
+    }
+    
+    /**
+     * 判断是否是常见技术术语
+     */
+    private boolean isCommonTechTerm(String term) {
+        String[] commonTerms = {
+            "java", "python", "javascript", "typescript", "node", "nodejs",
+            "vue", "react", "angular", "spring", "springboot", "flask",
+            "django", "postgresql", "mysql", "mongodb", "redis", "docker",
+            "kubernetes", "k8s", "git", "github", "npm", "yarn", "maven",
+            "gradle", "api", "server", "client", "service", "controller",
+            "model", "view", "component", "function", "class", "method",
+            "variable", "const", "let", "var", "if", "else", "for", "while",
+            "return", "import", "export", "package", "module", "file",
+            "project", "app", "application", "system", "tool", "library",
+            "framework", "sdk", "cli", "cmd", "config", "setting",
+            "build", "run", "test", "debug", "deploy", "release"
+        };
+        for (String t : commonTerms) {
+            if (t.equalsIgnoreCase(term)) {
+                return true;
+            }
+        }
+        return false;
     }
     
     /**

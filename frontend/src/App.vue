@@ -206,6 +206,26 @@
           </el-card>
         </div>
 
+        <!-- ECharts 图表区 -->
+        <div class="charts-grid">
+          <el-card class="chart-card" shadow="never">
+            <template #header><span class="chart-title">近30天活跃趋势</span></template>
+            <v-chart class="chart-instance" :option="trendOption" autoresize />
+          </el-card>
+          <el-card class="chart-card" shadow="never">
+            <template #header><span class="chart-title">Agent 使用分布</span></template>
+            <v-chart class="chart-instance" :option="agentPieOption" autoresize />
+          </el-card>
+          <el-card class="chart-card" shadow="never">
+            <template #header><span class="chart-title">记忆库概览</span></template>
+            <v-chart class="chart-instance" :option="memoryBarOption" autoresize />
+          </el-card>
+          <el-card class="chart-card" shadow="never">
+            <template #header><span class="chart-title">消息增长趋势</span></template>
+            <v-chart class="chart-instance" :option="msgAreaOption" autoresize />
+          </el-card>
+        </div>
+
         <!-- 最近活动 -->
         <div class="activity-section">
           <h3>最近会话</h3>
@@ -877,6 +897,17 @@ import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Setting, ChatDotRound, WarningFilled, User, DocumentChecked, FolderOpened, Reading, Odometer, Box, Delete, Plus, Download, Close, Connection, InfoFilled, ArrowRight } from '@element-plus/icons-vue'
 
+// ECharts (vue-echarts 按需注册)
+import VChart from 'vue-echarts'
+import { use } from 'echarts/core'
+import { CanvasRenderer } from 'echarts/renderers'
+import { LineChart, BarChart, PieChart } from 'echarts/charts'
+import {
+  GridComponent, TooltipComponent, LegendComponent,
+  TitleComponent, DataZoomComponent
+} from 'echarts/components'
+use([CanvasRenderer, LineChart, BarChart, PieChart, GridComponent, TooltipComponent, LegendComponent, TitleComponent, DataZoomComponent])
+
 // 导入记忆库组件
 import Errors from './views/Errors.vue'
 import Profiles from './views/Profiles.vue'
@@ -901,8 +932,77 @@ const profiles = ref<any[]>([])
 const practices = ref<any[]>([])
 const contexts = ref<any[]>([])
 const skills = ref<any[]>([])
-const stats = ref({ sessions: 0, messages: 0, errors: 0, profiles: 0, practices: 0, contexts: 0, skills: 0 })
+const stats = ref({ sessions: 0, messages: 0, errors: 0, profiles: 0, practices: 0, contexts: 0, skills: 0, dailySessions: [] as any[], dailyMessages: [] as any[], agentDistribution: [] as any[], memoryDistribution: [] as any[] })
 const selectedAgent = ref('')
+
+// ===== ECharts computed options =====
+const trendOption = computed(() => {
+  const ds: any[] = (stats.value as any).dailySessions || []
+  const dm: any[] = (stats.value as any).dailyMessages || []
+  const dates = Array.from(new Set([...ds.map((r: any) => r.date), ...dm.map((r: any) => r.date)])).sort()
+  const sessionMap = Object.fromEntries(ds.map((r: any) => [r.date, r.count]))
+  const msgMap = Object.fromEntries(dm.map((r: any) => [r.date, r.count]))
+  return {
+    tooltip: { trigger: 'axis' },
+    legend: { data: ['会话数', '消息数'], top: 0 },
+    grid: { left: 40, right: 50, bottom: 30, top: 32 },
+    xAxis: { type: 'category', data: dates, axisLabel: { fontSize: 10, rotate: 30 } },
+    yAxis: [
+      { type: 'value', name: '会话', nameTextStyle: { fontSize: 10 } },
+      { type: 'value', name: '消息', nameTextStyle: { fontSize: 10 } }
+    ],
+    series: [
+      { name: '会话数', type: 'line', smooth: true, data: dates.map(d => sessionMap[d] || 0), yAxisIndex: 0, itemStyle: { color: '#5470c6' } },
+      { name: '消息数', type: 'line', smooth: true, data: dates.map(d => msgMap[d] || 0), yAxisIndex: 1, itemStyle: { color: '#91cc75' } }
+    ]
+  }
+})
+
+const agentPieOption = computed(() => {
+  const dist: any[] = (stats.value as any).agentDistribution || []
+  return {
+    tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+    legend: { orient: 'vertical', right: 10, top: 'center', textStyle: { fontSize: 11 } },
+    series: [{
+      type: 'pie', radius: ['40%', '70%'], center: ['40%', '50%'],
+      label: { show: false },
+      data: dist.map((r: any) => ({ name: r.agentType || '未知', value: r.count }))
+    }]
+  }
+})
+
+const memoryBarOption = computed(() => {
+  const dist: any[] = (stats.value as any).memoryDistribution || []
+  return {
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    grid: { left: 80, right: 20, bottom: 20, top: 20 },
+    xAxis: { type: 'value' },
+    yAxis: { type: 'category', data: dist.map((r: any) => r.type), axisLabel: { fontSize: 11 } },
+    series: [{
+      type: 'bar', data: dist.map((r: any) => r.count),
+      itemStyle: { color: '#5470c6', borderRadius: [0, 4, 4, 0] },
+      label: { show: true, position: 'right', fontSize: 11 }
+    }]
+  }
+})
+
+const msgAreaOption = computed(() => {
+  const dm: any[] = (stats.value as any).dailyMessages || []
+  let cum = 0
+  const dates = dm.map((r: any) => r.date)
+  const cumData = dm.map((r: any) => { cum += r.count; return cum })
+  return {
+    tooltip: { trigger: 'axis' },
+    grid: { left: 50, right: 20, bottom: 30, top: 20 },
+    xAxis: { type: 'category', data: dates, axisLabel: { fontSize: 10, rotate: 30 } },
+    yAxis: { type: 'value' },
+    series: [{
+      type: 'line', smooth: true, data: cumData,
+      areaStyle: { opacity: 0.3 },
+      itemStyle: { color: '#91cc75' }
+    }]
+  }
+})
 const selectedSession = ref<any>(null)
 
 // 搜索
@@ -2214,6 +2314,34 @@ onUnmounted(() => {
 .stat-card.clickable:hover .stat-arrow {
   opacity: 1;
   transform: translateX(0);
+}
+
+/* 图表区域 */
+.charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.chart-card {
+  border-radius: 12px;
+}
+
+.chart-card :deep(.el-card__header) {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.chart-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
+.chart-instance {
+  height: 260px;
+  width: 100%;
 }
 
 /* 活动区域 */

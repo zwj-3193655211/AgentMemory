@@ -107,7 +107,8 @@ CREATE TABLE IF NOT EXISTS best_practices (
 CREATE TABLE IF NOT EXISTS project_contexts (
     id VARCHAR(100) PRIMARY KEY,
     title VARCHAR(500) NOT NULL,
-    project_path TEXT NOT NULL,
+    project_name VARCHAR(500) NOT NULL,
+    project_path TEXT,
     tech_stack TEXT[],
     key_decisions JSONB DEFAULT '[]'::jsonb,
     structure JSONB DEFAULT '{}'::jsonb,
@@ -143,7 +144,7 @@ CREATE INDEX IF NOT EXISTS idx_error_tags ON error_corrections USING GIN(tags);
 CREATE INDEX IF NOT EXISTS idx_error_session ON error_corrections(session_id);
 CREATE INDEX IF NOT EXISTS idx_profile_category ON user_profiles(category);
 CREATE INDEX IF NOT EXISTS idx_practice_tags ON best_practices USING GIN(tags);
-CREATE INDEX IF NOT EXISTS idx_context_path ON project_contexts(project_path);
+CREATE INDEX IF NOT EXISTS idx_context_name ON project_contexts(project_name);
 CREATE INDEX IF NOT EXISTS idx_skill_type ON skills(skill_type);
 CREATE INDEX IF NOT EXISTS idx_skill_tags ON skills USING GIN(tags);
 

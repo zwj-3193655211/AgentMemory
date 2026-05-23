@@ -14,7 +14,7 @@
 
     <el-table :data="dataList" stripe v-loading="loading">
       <el-table-column prop="title" label="标题" min-width="200" />
-      <el-table-column prop="projectPath" label="项目路径" min-width="250" show-overflow-tooltip />
+      <el-table-column prop="projectName" label="项目名称" min-width="200" show-overflow-tooltip />
       <el-table-column prop="techStack" label="技术栈" min-width="200">
         <template #default="{ row }">
           <el-tag v-for="tech in parseTechStack(row.techStack)" :key="tech" size="small" class="tech-tag">{{ tech }}</el-tag>
@@ -37,8 +37,8 @@
         <el-form-item label="标题" prop="title">
           <el-input v-model="dialog.formData.title" placeholder="请输入标题" />
         </el-form-item>
-        <el-form-item label="项目路径" prop="projectPath">
-          <el-input v-model="dialog.formData.projectPath" placeholder="例如：/home/user/project" />
+        <el-form-item label="项目名称" prop="projectName">
+          <el-input v-model="dialog.formData.projectName" placeholder="例如：agent-memory" />
         </el-form-item>
         <el-form-item label="技术栈" prop="techStack">
           <el-input v-model="techStackInput" placeholder="逗号分隔，如：React,TypeScript,Node.js" />
@@ -85,7 +85,7 @@ const formRef = ref()
 // 表单验证规则
 const formRules = {
   title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
-  projectPath: [{ required: true, message: '请输入项目路径', trigger: 'blur' }]
+  projectName: [{ required: true, message: '请输入项目名称', trigger: 'blur' }]
 }
 
 // 格式化时间
@@ -119,7 +119,7 @@ const loadData = async () => {
 // 打开新增对话框
 const openCreate = () => {
   dialog.isEdit = false
-  dialog.formData = { title: '', projectPath: '', techStack: '', keyDecisions: '', structure: '' }
+  dialog.formData = { title: '', projectName: '', projectPath: '', techStack: '', keyDecisions: '', structure: '' }
   techStackInput.value = ''
   dialog.visible = true
 }

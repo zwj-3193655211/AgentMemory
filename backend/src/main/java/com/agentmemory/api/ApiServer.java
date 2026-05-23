@@ -1,20 +1,5 @@
 package com.agentmemory.api;
 
-import com.agentmemory.service.DatabaseService;
-import com.agentmemory.service.FileWatcherService;
-import com.agentmemory.service.SessionCompressionService;
-import com.agentmemory.service.AgentDetectorService;
-import com.agentmemory.service.ChatService;
-import com.agentmemory.api.SetupHandler;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpHandler;
-import com.sun.net.httpserver.HttpServer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -26,7 +11,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -34,6 +23,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Executors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.agentmemory.service.AgentDetectorService;
+import com.agentmemory.service.DatabaseService;
+import com.agentmemory.service.FileWatcherService;
+import com.agentmemory.service.SessionCompressionService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpServer;
 
 /**
  * HTTP API 服务
@@ -1238,6 +1241,7 @@ public class ApiServer {
                     Map<String, Object> item = new HashMap<>();
                     item.put("id", rs.getString("id"));
                     item.put("title", rs.getString("title"));
+                    item.put("projectName", rs.getString("project_name"));
                     item.put("projectPath", rs.getString("project_path"));
                     item.put("techStack", sqlArrayToList(rs.getArray("tech_stack")));
                     item.put("keyDecisions", rs.getString("key_decisions"));
@@ -1256,6 +1260,7 @@ public class ApiServer {
                     Map<String, Object> item = new HashMap<>();
                     item.put("id", rs.getString("id"));
                     item.put("title", rs.getString("title"));
+                    item.put("projectName", rs.getString("project_name"));
                     item.put("projectPath", rs.getString("project_path"));
                     item.put("techStack", sqlArrayToList(rs.getArray("tech_stack")));
                     item.put("keyDecisions", rs.getString("key_decisions"));
@@ -1274,21 +1279,22 @@ public class ApiServer {
 
         private void handleCreate(HttpExchange exchange) throws SQLException, IOException {
             Map<String, Object> body = readRequestBody(exchange);
-            validateRequiredFields(body, "title", "projectPath");
+            validateRequiredFields(body, "title", "projectName");
 
             String id = generateId();
             try (Connection conn = databaseService.getConnection()) {
-                String sql = "INSERT INTO project_contexts (id, title, project_path, tech_stack, key_decisions, structure, updated_at, deleted) " +
-                            "VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, false)";
+                String sql = "INSERT INTO project_contexts (id, title, project_name, project_path, tech_stack, key_decisions, structure, updated_at, deleted) " +
+                            "VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, false)";
                 try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                     stmt.setString(1, id);
                     stmt.setString(2, (String) body.get("title"));
-                    stmt.setString(3, (String) body.get("projectPath"));
+                    stmt.setString(3, (String) body.get("projectName"));
+                    stmt.setString(4, (String) body.get("projectPath"));
 
                     List<String> techStackList = (List<String>) body.getOrDefault("techStack", new ArrayList<String>());
-                    stmt.setArray(4, conn.createArrayOf("TEXT", techStackList.toArray()));
-                    stmt.setString(5, (String) body.get("keyDecisions"));
-                    stmt.setString(6, (String) body.get("structure"));
+                    stmt.setArray(5, conn.createArrayOf("TEXT", techStackList.toArray()));
+                    stmt.setString(6, (String) body.get("keyDecisions"));
+                    stmt.setString(7, (String) body.get("structure"));
                     stmt.executeUpdate();
                 }
             }
@@ -1297,19 +1303,20 @@ public class ApiServer {
 
         private void handleUpdate(HttpExchange exchange, String id) throws SQLException, IOException {
             Map<String, Object> body = readRequestBody(exchange);
-            validateRequiredFields(body, "title", "projectPath");
+            validateRequiredFields(body, "title", "projectName");
 
             try (Connection conn = databaseService.getConnection()) {
-                String sql = "UPDATE project_contexts SET title=?, project_path=?, tech_stack=?, key_decisions=?, structure=?, updated_at=CURRENT_TIMESTAMP WHERE id=?";
+                String sql = "UPDATE project_contexts SET title=?, project_name=?, project_path=?, tech_stack=?, key_decisions=?, structure=?, updated_at=CURRENT_TIMESTAMP WHERE id=?";
                 try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                     stmt.setString(1, (String) body.get("title"));
-                    stmt.setString(2, (String) body.get("projectPath"));
+                    stmt.setString(2, (String) body.get("projectName"));
+                    stmt.setString(3, (String) body.get("projectPath"));
 
                     List<String> techStackList = (List<String>) body.getOrDefault("techStack", new ArrayList<String>());
-                    stmt.setArray(3, conn.createArrayOf("TEXT", techStackList.toArray()));
-                    stmt.setString(4, (String) body.get("keyDecisions"));
-                    stmt.setString(5, (String) body.get("structure"));
-                    stmt.setString(6, id);
+                    stmt.setArray(4, conn.createArrayOf("TEXT", techStackList.toArray()));
+                    stmt.setString(5, (String) body.get("keyDecisions"));
+                    stmt.setString(6, (String) body.get("structure"));
+                    stmt.setString(7, id);
                     if (stmt.executeUpdate() == 0) {
                         sendError(exchange, 404, "Not found");
                         return;
@@ -1552,6 +1559,71 @@ public class ApiServer {
                 rsTotalMessages.next();
                 stats.put("totalMessages", rsTotalMessages.getInt(1));
                 
+                // 近30天每日会话数
+                List<Map<String, Object>> dailySessions = new ArrayList<>();
+                try (ResultSet rsDailySessions = stmt.executeQuery(
+                    "SELECT DATE(created_at) as date, COUNT(*) as count FROM sessions " +
+                    "WHERE created_at >= CURRENT_DATE - INTERVAL '30 days' AND deleted = false " +
+                    "GROUP BY DATE(created_at) ORDER BY date")) {
+                    while (rsDailySessions.next()) {
+                        Map<String, Object> row = new HashMap<>();
+                        row.put("date", rsDailySessions.getString("date"));
+                        row.put("count", rsDailySessions.getInt("count"));
+                        dailySessions.add(row);
+                    }
+                } catch (Exception e) { log.warn("dailySessions query failed: {}", e.getMessage()); }
+                stats.put("dailySessions", dailySessions);
+                
+                // 近30天每日消息数
+                List<Map<String, Object>> dailyMessages = new ArrayList<>();
+                try (ResultSet rsDailyMessages = stmt.executeQuery(
+                    "SELECT DATE(timestamp) as date, COUNT(*) as count FROM messages " +
+                    "WHERE timestamp >= CURRENT_DATE - INTERVAL '30 days' AND deleted = false " +
+                    "GROUP BY DATE(timestamp) ORDER BY date")) {
+                    while (rsDailyMessages.next()) {
+                        Map<String, Object> row = new HashMap<>();
+                        row.put("date", rsDailyMessages.getString("date"));
+                        row.put("count", rsDailyMessages.getInt("count"));
+                        dailyMessages.add(row);
+                    }
+                } catch (Exception e) { log.warn("dailyMessages query failed: {}", e.getMessage()); }
+                stats.put("dailyMessages", dailyMessages);
+                
+                // 按 agent_type 分组的会话分布
+                List<Map<String, Object>> agentDistribution = new ArrayList<>();
+                try (ResultSet rsAgentDist = stmt.executeQuery(
+                    "SELECT COALESCE(agent_type, '未知') as agent_type, COUNT(*) as count " +
+                    "FROM sessions WHERE deleted = false GROUP BY agent_type ORDER BY count DESC")) {
+                    while (rsAgentDist.next()) {
+                        Map<String, Object> row = new HashMap<>();
+                        row.put("agentType", rsAgentDist.getString("agent_type"));
+                        row.put("count", rsAgentDist.getInt("count"));
+                        agentDistribution.add(row);
+                    }
+                } catch (Exception e) { log.warn("agentDistribution query failed: {}", e.getMessage()); }
+                stats.put("agentDistribution", agentDistribution);
+                
+                // 各记忆模块数量分布
+                List<Map<String, Object>> memoryDistribution = new ArrayList<>();
+                String[][] memoryTypes = {
+                    {"错误纠正", "SELECT COUNT(*) FROM error_corrections WHERE deleted = false"},
+                    {"用户画像", "SELECT COUNT(*) FROM user_profiles"},
+                    {"实践经验", "SELECT COUNT(*) FROM best_practices WHERE deleted = false"},
+                    {"项目上下文", "SELECT COUNT(*) FROM project_contexts"},
+                    {"技能沉淀", "SELECT COUNT(*) FROM skills"}
+                };
+                for (String[] typeInfo : memoryTypes) {
+                    try (ResultSet rsType = stmt.executeQuery(typeInfo[1])) {
+                        if (rsType.next()) {
+                            Map<String, Object> row = new HashMap<>();
+                            row.put("type", typeInfo[0]);
+                            row.put("count", rsType.getInt(1));
+                            memoryDistribution.add(row);
+                        }
+                    } catch (Exception e) { log.warn("memoryDistribution {} failed: {}", typeInfo[0], e.getMessage()); }
+                }
+                stats.put("memoryDistribution", memoryDistribution);
+                
             } catch (SQLException e) {
                 log.error("查询统计失败", e);
                 stats.put("agents", 0);
@@ -1562,6 +1634,10 @@ public class ApiServer {
                 stats.put("practices", 0);
                 stats.put("contexts", 0);
                 stats.put("skills", 0);
+                stats.put("dailySessions", new ArrayList<>());
+                stats.put("dailyMessages", new ArrayList<>());
+                stats.put("agentDistribution", new ArrayList<>());
+                stats.put("memoryDistribution", new ArrayList<>());
             }
             
             sendJson(exchange, stats);

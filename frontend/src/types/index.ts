@@ -53,6 +53,7 @@ export interface BestPractice {
 export interface ProjectContext {
   id?: string
   title: string
+  projectName: string
   projectPath?: string
   techStack?: string
   keyDecisions?: string
