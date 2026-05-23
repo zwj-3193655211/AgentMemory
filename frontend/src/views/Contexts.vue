@@ -12,7 +12,48 @@
       </div>
     </div>
 
-    <el-table :data="dataList" stripe v-loading="loading">
+    <!-- 查询工具栏 -->
+    <div class="filter-toolbar">
+      <el-input
+        v-model="filters.searchText"
+        placeholder="搜索标题、项目名称..."
+        clearable
+        style="width: 280px"
+        @input="handleFilterChange"
+      >
+        <template #prefix><el-icon><Search /></el-icon></template>
+      </el-input>
+
+      <el-input
+        v-model="filters.techStack"
+        placeholder="搜索技术栈..."
+        clearable
+        style="width: 180px"
+        @input="handleFilterChange"
+      >
+        <template #prefix><el-icon><Monitor /></el-icon></template>
+      </el-input>
+
+      <el-input
+        v-model="filters.projectName"
+        placeholder="项目名称..."
+        clearable
+        style="width: 160px"
+        @input="handleFilterChange"
+      >
+        <template #prefix><el-icon><Folder /></el-icon></template>
+      </el-input>
+
+      <el-button @click="clearFilters">
+        <el-icon><Refresh /></el-icon> 重置
+      </el-button>
+
+      <div class="filter-stats">
+        共 {{ filteredData.length }} 条记录
+      </div>
+    </div>
+
+    <el-table :data="filteredData" stripe v-loading="loading">
       <el-table-column prop="title" label="标题" min-width="200" />
       <el-table-column prop="projectName" label="项目名称" min-width="200" show-overflow-tooltip />
       <el-table-column prop="techStack" label="技术栈" min-width="200">
@@ -43,9 +84,6 @@
         <el-form-item label="技术栈" prop="techStack">
           <el-input v-model="techStackInput" placeholder="逗号分隔，如：React,TypeScript,Node.js" />
         </el-form-item>
-        <el-form-item label="关键决策" prop="keyDecisions">
-          <el-input v-model="dialog.formData.keyDecisions" type="textarea" :rows="2" placeholder="可选：项目中的关键决策" />
-        </el-form-item>
         <el-form-item label="项目结构" prop="structure">
           <el-input v-model="dialog.formData.structure" type="textarea" :rows="3" placeholder="可选：项目结构说明" />
         </el-form-item>
@@ -59,9 +97,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Download } from '@element-plus/icons-vue'
+import { Plus, Download, Search, Refresh, Monitor, Folder } from '@element-plus/icons-vue'
 import { apiService, API_BASE_URL } from '../services/api'
 import type { ProjectContext } from '../types'
 
@@ -82,6 +120,59 @@ const techStackInput = ref('')
 // 表单引用
 const formRef = ref()
 
+// 查询过滤器
+const filters = reactive({
+  searchText: '',
+  techStack: '',
+  projectName: ''
+})
+
+// 过滤后的数据
+const filteredData = computed(() => {
+  let result = dataList.value
+
+  // 文本搜索
+  if (filters.searchText) {
+    const keyword = filters.searchText.toLowerCase()
+    result = result.filter(item =>
+      (item.title && item.title.toLowerCase().includes(keyword)) ||
+      (item.projectName && item.projectName.toLowerCase().includes(keyword)) ||
+      (item.structure && item.structure.toLowerCase().includes(keyword))
+    )
+  }
+
+  // 技术栈过滤
+  if (filters.techStack) {
+    const techKeyword = filters.techStack.toLowerCase()
+    result = result.filter(item => {
+      const techs = parseTechStack(item.techStack)
+      return techs.some(tech => tech.toLowerCase().includes(techKeyword))
+    })
+  }
+
+  // 项目名称过滤
+  if (filters.projectName) {
+    const nameKeyword = filters.projectName.toLowerCase()
+    result = result.filter(item =>
+      item.projectName && item.projectName.toLowerCase().includes(nameKeyword)
+    )
+  }
+
+  return result
+})
+
+// 处理过滤变化
+const handleFilterChange = () => {
+  // 使用 computed 自动处理
+}
+
+// 清空过滤器
+const clearFilters = () => {
+  filters.searchText = ''
+  filters.techStack = ''
+  filters.projectName = ''
+}
+
 // 表单验证规则
 const formRules = {
   title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
@@ -96,7 +187,8 @@ const formatTime = (time: string | Date) => {
 }
 
 // 解析技术栈
-const parseTechStack = (techStack: string | string[]) => {
+const parseTechStack = (techStack: string | string[] | undefined): string[] => {
+  if (!techStack) return []
   if (Array.isArray(techStack)) return techStack
   if (typeof techStack === 'string' && techStack) {
     return techStack.split(',').map(t => t.trim()).filter(t => t)
@@ -119,7 +211,7 @@ const loadData = async () => {
 // 打开新增对话框
 const openCreate = () => {
   dialog.isEdit = false
-  dialog.formData = { title: '', projectName: '', projectPath: '', techStack: '', keyDecisions: '', structure: '' }
+  dialog.formData = { title: '', projectName: '', projectPath: '', techStack: '', structure: '' }
   techStackInput.value = ''
   dialog.visible = true
 }
@@ -128,14 +220,15 @@ const openCreate = () => {
 const openEdit = (row: ProjectContext) => {
   dialog.isEdit = true
   dialog.formData = { ...row }
-  techStackInput.value = Array.isArray(row.techStack) ? row.techStack.join(', ') : (row.techStack || '')
+  const techStackVal = row.techStack
+  techStackInput.value = Array.isArray(techStackVal) ? techStackVal.join(', ') : (techStackVal || '')
   dialog.visible = true
 }
 
 // 提交表单
 const handleSubmit = async () => {
   if (!formRef.value) return
-  
+
   await formRef.value.validate(async (valid: boolean) => {
     if (!valid) return
 
@@ -161,7 +254,7 @@ const handleSubmit = async () => {
 // 删除记录
 const handleDelete = async (row: ProjectContext) => {
   if (!row.id) return
-  
+
   try {
     await ElMessageBox.confirm('确定要删除这条记录吗？', '确认删除', { type: 'warning' })
     await apiService.deleteContext(row.id)
@@ -228,6 +321,27 @@ loadData()
   font-size: 20px;
   font-weight: 600;
   color: #1a1a2e;
+}
+
+.filter-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: #f8f9fb;
+  border-radius: 10px;
+  flex-wrap: wrap;
+}
+
+.filter-stats {
+  margin-left: auto;
+  font-size: 13px;
+  color: #606266;
+  background: #fff;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #e8eaed;
 }
 
 .tech-tag {
