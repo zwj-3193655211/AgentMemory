@@ -3,7 +3,7 @@
 > Documentation for AI agents working on the AgentMemory codebase
 
 **Version**: 2.1.0
-**Last Updated**: 2026-04-20
+**Last Updated**: 2026-05-22
 
 ---
 
@@ -203,6 +203,15 @@ HybridMemoryClassifier classifier = new HybridMemoryClassifier(dbService, embedd
 | Qwen/Qoder | `~/.qwen/projects/` | Markdown |
 | OpenClaw | `~/.openclaw/` | Multi-line JSON |
 | Codex CLI | `~/.codex/sessions/` | JSONL Event Stream |
+| Crush CLI | `~/.crush/crush.db` | SQLite Database |
+| WorkBuddy | `~/.workbuddy/projects/` | Markdown |
+
+### Crush Database Watcher
+
+Crush CLI uses SQLite for local storage. The `CrushDatabaseWatcher` service:
+- Monitors `~/.crush/crush.db` every 30 seconds
+- Creates temporary copy to avoid file locking issues
+- Imports new sessions to PostgreSQL
 
 ---
 
