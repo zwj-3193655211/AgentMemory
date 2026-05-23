@@ -182,7 +182,6 @@ public class ApiServer {
         // DEBUG: 重新计算消息数
         server.createContext("/api/debug/recalc-counts", exchange -> {
             try {
-                int updated = 0;
                 try (Connection conn = databaseService.getConnection();
                      Statement stmt = conn.createStatement()) {
 
@@ -192,9 +191,9 @@ public class ApiServer {
                             SELECT COUNT(*) FROM messages WHERE messages.session_id = sessions.id
                         ) WHERE deleted = false
                         """;
-                    updated = stmt.executeUpdate(sql);
+                    int updated = stmt.executeUpdate(sql);
+                    sendJson(exchange, Map.of("status", "ok", "updated", updated));
                 }
-                sendJson(exchange, Map.of("status", "ok", "updated", updated));
             } catch (Exception e) {
                 sendError(exchange, 500, e.getMessage());
             }
@@ -495,6 +494,7 @@ public class ApiServer {
     /**
      * 读取请求体
      */
+    @SuppressWarnings("unchecked")
     private Map<String, Object> readRequestBody(HttpExchange exchange) throws IOException {
         String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
         if (body.trim().isEmpty()) return new HashMap<>();
@@ -560,7 +560,7 @@ public class ApiServer {
                     String logBasePath = (String) input.get("logBasePath");
                     String cliPath = (String) input.getOrDefault("cliPath", "");
                     String parserType = (String) input.getOrDefault("parserType", "openclaw");
-                    Boolean enabled = input.containsKey("enabled") ? (Boolean) input.get("enabled") : true;
+                    boolean enabled = input.containsKey("enabled") ? Boolean.TRUE.equals(input.get("enabled")) : true;
                     
                     if (name == null || name.isEmpty()) {
                         sendError(exchange, 400, "Agent name is required");
@@ -855,6 +855,7 @@ public class ApiServer {
                     stmt.setString(5, (String) body.get("solution"));
                     stmt.setString(6, (String) body.get("example"));
 
+                    @SuppressWarnings("unchecked")
                     List<String> tagsList = (List<String>) body.getOrDefault("tags", new ArrayList<String>());
                     stmt.setArray(7, conn.createArrayOf("TEXT", tagsList.toArray()));
                     stmt.executeUpdate();
@@ -876,6 +877,7 @@ public class ApiServer {
                     stmt.setString(4, (String) body.get("solution"));
                     stmt.setString(5, (String) body.get("example"));
 
+                    @SuppressWarnings("unchecked")
                     List<String> tagsList = (List<String>) body.getOrDefault("tags", new ArrayList<String>());
                     stmt.setArray(6, conn.createArrayOf("TEXT", tagsList.toArray()));
                     stmt.setString(7, id);
@@ -1141,6 +1143,7 @@ public class ApiServer {
                     stmt.setString(4, (String) body.get("practice"));
                     stmt.setString(5, (String) body.get("rationale"));
 
+                    @SuppressWarnings("unchecked")
                     List<String> tagsList = (List<String>) body.getOrDefault("tags", new ArrayList<String>());
                     stmt.setArray(6, conn.createArrayOf("TEXT", tagsList.toArray()));
                     stmt.executeUpdate();
@@ -1161,6 +1164,7 @@ public class ApiServer {
                     stmt.setString(3, (String) body.get("practice"));
                     stmt.setString(4, (String) body.get("rationale"));
 
+                    @SuppressWarnings("unchecked")
                     List<String> tagsList = (List<String>) body.getOrDefault("tags", new ArrayList<String>());
                     stmt.setArray(5, conn.createArrayOf("TEXT", tagsList.toArray()));
                     stmt.setString(6, id);
@@ -1284,16 +1288,21 @@ public class ApiServer {
             String id = generateId();
             try (Connection conn = databaseService.getConnection()) {
                 String sql = "INSERT INTO project_contexts (id, title, project_name, project_path, tech_stack, key_decisions, structure, updated_at, deleted) " +
-                            "VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, false)";
+                            "VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, CURRENT_TIMESTAMP, false)";
                 try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                     stmt.setString(1, id);
                     stmt.setString(2, (String) body.get("title"));
                     stmt.setString(3, (String) body.get("projectName"));
                     stmt.setString(4, (String) body.get("projectPath"));
 
+                    @SuppressWarnings("unchecked")
                     List<String> techStackList = (List<String>) body.getOrDefault("techStack", new ArrayList<String>());
                     stmt.setArray(5, conn.createArrayOf("TEXT", techStackList.toArray()));
-                    stmt.setString(6, (String) body.get("keyDecisions"));
+                    
+                    String keyDecisions = (String) body.get("keyDecisions");
+                    String keyDecisionsJson = convertToJsonArray(keyDecisions);
+                    stmt.setObject(6, keyDecisionsJson, java.sql.Types.OTHER);
+                    
                     stmt.setString(7, (String) body.get("structure"));
                     stmt.executeUpdate();
                 }
@@ -1306,15 +1315,20 @@ public class ApiServer {
             validateRequiredFields(body, "title", "projectName");
 
             try (Connection conn = databaseService.getConnection()) {
-                String sql = "UPDATE project_contexts SET title=?, project_name=?, project_path=?, tech_stack=?, key_decisions=?, structure=?, updated_at=CURRENT_TIMESTAMP WHERE id=?";
+                String sql = "UPDATE project_contexts SET title=?, project_name=?, project_path=?, tech_stack=?, key_decisions=?, structure=?::jsonb, updated_at=CURRENT_TIMESTAMP WHERE id=?";
                 try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                     stmt.setString(1, (String) body.get("title"));
                     stmt.setString(2, (String) body.get("projectName"));
                     stmt.setString(3, (String) body.get("projectPath"));
 
+                    @SuppressWarnings("unchecked")
                     List<String> techStackList = (List<String>) body.getOrDefault("techStack", new ArrayList<String>());
                     stmt.setArray(4, conn.createArrayOf("TEXT", techStackList.toArray()));
-                    stmt.setString(5, (String) body.get("keyDecisions"));
+                    
+                    String keyDecisions = (String) body.get("keyDecisions");
+                    String keyDecisionsJson = convertToJsonArray(keyDecisions);
+                    stmt.setObject(5, keyDecisionsJson, java.sql.Types.OTHER);
+                    
                     stmt.setString(6, (String) body.get("structure"));
                     stmt.setString(7, id);
                     if (stmt.executeUpdate() == 0) {
@@ -1357,6 +1371,27 @@ public class ApiServer {
                 }
             );
             exportAsJson(exchange, items, "project_contexts");
+        }
+
+        private String convertToJsonArray(String input) {
+            if (input == null || input.trim().isEmpty()) {
+                return "[]";
+            }
+            input = input.trim();
+            if (input.startsWith("[") && input.endsWith("]")) {
+                return input;
+            }
+            String[] items = input.split("[,，]");
+            StringBuilder sb = new StringBuilder("[");
+            for (int i = 0; i < items.length; i++) {
+                String item = items[i].trim();
+                if (!item.isEmpty()) {
+                    if (i > 0) sb.append(",");
+                    sb.append("\"").append(item.replace("\"", "\\\"")).append("\"");
+                }
+            }
+            sb.append("]");
+            return sb.toString();
         }
     }
     
@@ -1443,6 +1478,7 @@ public class ApiServer {
                     stmt.setString(4, (String) body.get("description"));
                     stmt.setString(5, (String) body.get("steps"));
 
+                    @SuppressWarnings("unchecked")
                     List<String> tagsList = (List<String>) body.getOrDefault("tags", new ArrayList<String>());
                     stmt.setArray(6, conn.createArrayOf("TEXT", tagsList.toArray()));
                     stmt.executeUpdate();
@@ -1463,6 +1499,7 @@ public class ApiServer {
                     stmt.setString(3, (String) body.get("description"));
                     stmt.setString(4, (String) body.get("steps"));
 
+                    @SuppressWarnings("unchecked")
                     List<String> tagsList = (List<String>) body.getOrDefault("tags", new ArrayList<String>());
                     stmt.setArray(5, conn.createArrayOf("TEXT", tagsList.toArray()));
                     stmt.setString(6, id);
@@ -1655,6 +1692,7 @@ public class ApiServer {
             try {
                 // 读取请求体
                 String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+                @SuppressWarnings("unchecked")
                 Map<String, Object> request = objectMapper.readValue(body, Map.class);
 
                 String query = (String) request.get("query");
@@ -1669,7 +1707,7 @@ public class ApiServer {
 
                 // 尝试语义搜索
                 try {
-                    java.net.URL embedUrl = new java.net.URL("http://localhost:8100/embed");
+                    java.net.URL embedUrl = URI.create("http://localhost:8100/embed").toURL();
                     java.net.HttpURLConnection embedConn = (java.net.HttpURLConnection) embedUrl.openConnection();
                     embedConn.setRequestMethod("POST");
                     embedConn.setRequestProperty("Content-Type", "application/json");
@@ -1686,6 +1724,7 @@ public class ApiServer {
                         // Embedding 服务可用，使用语义搜索
                         String embedResponse = new String(embedConn.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
                         Map<String, Object> embedResult = objectMapper.readValue(embedResponse, Map.class);
+                        @SuppressWarnings("unchecked")
                         List<List<Double>> embeddings = (List<List<Double>>) embedResult.get("embeddings");
 
                         if (embeddings != null && !embeddings.isEmpty()) {
@@ -1935,7 +1974,6 @@ public class ApiServer {
                     Map<String, Object> input = readRequestBody(exchange);
                     String providerName = (String) input.get("providerName");
                     String baseUrl = (String) input.get("baseUrl");
-                    String model = (String) input.get("model");
 
                     // 兜底：Ollama/本地模型未填 baseUrl 时默认使用 localhost:11434
                     if ((baseUrl == null || baseUrl.isBlank()) &&
@@ -2319,7 +2357,6 @@ public class ApiServer {
             }
             
             String method = exchange.getRequestMethod();
-            String path = exchange.getRequestURI().getPath();
             
             try {
                 if ("POST".equalsIgnoreCase(method)) {
