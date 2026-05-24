@@ -61,11 +61,6 @@
           <el-tag v-for="tech in parseTechStack(row.techStack)" :key="tech" size="small" class="tech-tag">{{ tech }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="工作摘要" min-width="280" show-overflow-tooltip>
-        <template #default="{ row }">
-          <span class="summary-text">{{ getSummary(row) }}</span>
-        </template>
-      </el-table-column>
       <el-table-column prop="updatedAt" label="更新时间" width="180">
         <template #default="{ row }">{{ formatTime(row.updatedAt) }}</template>
       </el-table-column>
@@ -199,17 +194,6 @@ const parseTechStack = (techStack: string | string[] | undefined): string[] => {
     return techStack.split(',').map(t => t.trim()).filter(t => t)
   }
   return []
-}
-
-// 从 structure JSON 中提取工作摘要
-const getSummary = (row: any): string => {
-  if (row.structure) {
-    try {
-      const s = typeof row.structure === 'string' ? JSON.parse(row.structure) : row.structure
-      return s.summary || ''
-    } catch { /* ignore */ }
-  }
-  return ''
 }
 
 // 加载数据

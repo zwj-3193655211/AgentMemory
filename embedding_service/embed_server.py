@@ -220,9 +220,10 @@ EXTRACTION_PROMPT = """你是记忆提取专家。分析对话内容，提取结
 【五大记忆库定义】
 
 1. **ERROR_CORRECTION（错误纠正）**
-   - 核心：已发生的具体问题 + 验证过的解决方案
-   - 必须有：问题现象 + 根因分析 + 解决方案
-   - 触发词：错误、报错、失败、异常 + 解决了、原因是、改成
+   - 核心：用户纠正 Agent 的错误认知或错误输出
+   - 场景：Agent 说错了 → 用户纠正 → 记录"正确是什么"
+   - 必须有：Agent 的错误 + 用户的纠正 + 正确结论
+   - 触发词：不对、错了、应该是、其实是、正确的是、你搞错了
 
 2. **USER_PROFILE（用户偏好）**
    - 核心：用户的偏好、习惯、约束
@@ -251,7 +252,7 @@ EXTRACTION_PROMPT = """你是记忆提取专家。分析对话内容，提取结
 严格按JSON格式返回：
 {"type": "类型", "title": "简短标题(≤30字)", "tags": ["标签"], "extracted": {...具体字段...}}
 
-ERROR_CORRECTION extracted: {"problem": "问题现象", "cause": "根因", "solution": "解决方案"}
+ERROR_CORRECTION extracted: {"mistake": "Agent哪里说错了", "correction": "用户的纠正内容", "conclusion": "正确结论（记住这个）"}
 USER_PROFILE extracted: {"preference": "偏好内容", "category": "分类", "constraint": "约束条件"}
 BEST_PRACTICE extracted: {"scenario": "适用场景", "practice": "具体做法", "rationale": "原理说明"}
 PROJECT_CONTEXT extracted: {"project_name": "项目名", "tech_stack": ["技术栈"], "summary": "一段话概括本次做了什么（具体工作内容，非技术栈罗列）", "key_decisions": "做出的关键决策或技术选型", "next_steps": "接下来的待办或下一步计划"}
@@ -636,28 +637,32 @@ def extract_with_rules(content):
             }
         }
     
-    # 5. 错误纠正检测
-    # 包含错误关键词且有解决方案
-    error_keywords = ['错误', '报错', '失败', 'exception', 'error', 'bug', '问题', '修复', '解决', '不行']
-    resolved_markers = ['解决了', '修复了', '后来', '原来是', '原因', '所以', '改用', '改成', '即可', '才行']
-    
-    if any(kw in content for kw in error_keywords):
-        # 必须有解决/修复/原因等标记才识别为错误纠正
-        if any(kw in content for kw in ['解决', '修复', '后来', '原因', '改成', '改为', '改成', '即可', '才行']):
-            title_match = re.search(r'([^\n。？！]{10,40})', content)
-            title = title_match.group(1).strip() if title_match else "错误处理"
-            
+    # 5. 错误纠正检测（用户纠正 Agent 的错误）
+    # 触发词：不对、错了、你搞错了、其实是、正确的是
+    correction_patterns = [
+        r'(?:不对|错了|搞错了)，?(.{5,100})',
+        r'其实是?(.{5,100})',
+        r'正确的是?(.{5,100})',
+        r'应该是?(.{5,100})',
+        r'你错了吗?(.{5,100})',
+    ]
+    for pattern in correction_patterns:
+        m = re.search(pattern, content)
+        if m:
+            correction = m.group(1).strip()[:200]
+            # 尝试提取 Agent 的错误（取前200字或上一轮内容）
+            mistake = content[:200] if len(content) <= 200 else content[:200]
             return {
                 'type': 'ERROR_CORRECTION',
-                'title': title[:60],
-                'tags': ['error', 'fix'],
+                'title': f"纠正：{correction[:30]}",
+                'tags': ['correction', 'user-feedback'],
                 'extracted': {
-                    'problem': content[:200],
-                    'cause': '',
-                    'solution': content[:500]
+                    'mistake': mistake,
+                    'correction': correction,
+                    'conclusion': correction
                 }
             }
-    
+
     # 6. 项目经验检测 (优先级最低)
     experience_keywords = ['经验', '总结', '踩坑', '坑点', '教训', '记录']
     
@@ -1005,9 +1010,10 @@ def call_api_llm_with_context(context: str) -> dict:
 【五大记忆库定义】
 
 1. **ERROR_CORRECTION（错误纠正）**
-   - 核心：已发生的具体问题 + 验证过的解决方案
-   - 必须有：问题现象 + 根因分析 + 解决方案
-   - 触发词：错误、报错、失败、异常 + 解决了、原因是、改成
+   - 核心：用户纠正 Agent 的错误认知或错误输出
+   - 场景：Agent 说错了 → 用户纠正 → 记录"正确是什么"
+   - 必须有：Agent 的错误 + 用户的纠正 + 正确结论
+   - 触发词：不对、错了、应该是、其实是、正确的是、你搞错了
 
 2. **USER_PROFILE（用户偏好）**
    - 核心：用户的偏好、习惯、约束

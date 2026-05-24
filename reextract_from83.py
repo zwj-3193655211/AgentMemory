@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""从所有会话重新提取记忆 - 使用 Ollama"""
+"""从指定会话继续提取记忆 - 使用 Ollama"""
 import psycopg2
 import requests
 import json
@@ -9,11 +9,9 @@ import sys
 import time
 from datetime import datetime
 
-# Ollama 配置 - 使用环境变量或默认值
 OLLAMA_BASE = os.environ.get('OLLAMA_BASE', 'http://localhost:11434')
 OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'qwen3.5:2b')
 
-# 数据库配置 - 使用环境变量或默认值
 DB_CONFIG = {
     "host": os.environ.get('DATABASE_HOST', 'localhost'),
     "port": int(os.environ.get('DATABASE_PORT', 5500)),
@@ -25,7 +23,6 @@ DB_CONFIG = {
 EXTRACTION_PROMPT = """你是记忆提取专家。分析以下对话内容，提取有价值的记忆。
 
 【五大记忆类型】
-
 1. ERROR_CORRECTION（错误纠正）- 已发生的具体问题 + 解决方案
 2. USER_PROFILE（用户偏好）- 用户的偏好、习惯、约束
 3. BEST_PRACTICE（最佳实践）- 特定场景下验证过有效的做法
@@ -36,32 +33,22 @@ EXTRACTION_PROMPT = """你是记忆提取专家。分析以下对话内容，提
 {content}
 
 【输出要求】
-返回JSON数组，每条记忆包含 type, title, content 字段。无有价值内容返回空数组 []。
-示例：
-[{{"type": "USER_PROFILE", "title": "Python环境偏好", "content": "用户要求使用conda虚拟环境，不要动系统Python"}}]"""
+返回JSON数组，每条记忆包含 type, title, content 字段。无有价值内容返回空数组 []。"""
 
-# 白名单：允许操作的表名
-ALLOWED_TABLES = {'user_profiles', 'error_corrections', 'skills', 'best_practices', 'project_contexts'}
+def to_pg_array(arr):
+    """将Python列表转换为PostgreSQL数组格式"""
+    escaped = [str(x).replace('"', '\\"') for x in arr]
+    return '{' + ','.join(f'"{x}"' for x in escaped) + '}'
 
 def call_ollama(prompt, max_retries=3):
-    """调用 Ollama API"""
     for attempt in range(max_retries):
         try:
             response = requests.post(
                 f"{OLLAMA_BASE}/api/generate",
-                json={
-                    "model": OLLAMA_MODEL,
-                    "prompt": prompt,
-                    "stream": False,
-                    "think": False,  # 关闭思考模式
-                    "options": {
-                        "temperature": 0.3,
-                        "num_predict": 1000
-                    }
-                },
+                json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False, "think": False,
+                      "options": {"temperature": 0.3, "num_predict": 1000}},
                 timeout=120
             )
-            
             if response.status_code == 200:
                 return response.json().get("response", "").strip()
         except Exception as e:
@@ -70,18 +57,13 @@ def call_ollama(prompt, max_retries=3):
     return None
 
 def parse_extraction_result(response_text):
-    """解析提取结果"""
     if not response_text:
         return []
-    
-    # 尝试提取JSON数组
     try:
-        # 找到数组部分
         start = response_text.find('[')
         end = response_text.rfind(']') + 1
         if start >= 0 and end > start:
-            json_str = response_text[start:end]
-            return json.loads(json_str)
+            return json.loads(response_text[start:end])
     except:
         pass
     return []
@@ -90,17 +72,7 @@ def main():
     conn = psycopg2.connect(**DB_CONFIG)
     cur = conn.cursor()
     
-    # 1. 清空现有记忆表
-    print("=" * 60)
-    print("清空现有记忆表...")
-    tables = ['user_profiles', 'error_corrections', 'skills', 'best_practices', 'project_contexts']
-    for table in tables:
-        assert table in ALLOWED_TABLES, f"Invalid table name: {table}"
-        cur.execute(f"DELETE FROM {table}")
-        print(f"  已清空: {table}")
-    conn.commit()
-    
-    # 2. 获取所有会话
+    # 获取所有会话
     cur.execute("""
         SELECT s.id, s.agent_type, s.created_at
         FROM sessions s
@@ -108,23 +80,21 @@ def main():
         ORDER BY s.created_at DESC
     """)
     sessions = cur.fetchall()
-    print(f"\n共 {len(sessions)} 个会话待处理\n")
+    total = len(sessions)
     
-    # 统计
-    stats = {
-        'ERROR_CORRECTION': 0,
-        'USER_PROFILE': 0,
-        'BEST_PRACTICE': 0,
-        'PROJECT_CONTEXT': 0,
-        'SKILL': 0,
-        'SKIP': 0
-    }
+    # 从第83个开始（索引82）
+    start_idx = 82
+    sessions = sessions[start_idx:]
     
-    # 3. 处理每个会话
-    for i, (session_id, agent_type, created_at) in enumerate(sessions, 1):
-        print(f"[{i}/{len(sessions)}] 会话 {session_id[:8]}... ({agent_type})")
+    print(f"从第 {start_idx + 1} 个会话开始，共 {len(sessions)} 个待处理")
+    print(f"跳过前 {start_idx} 个会话")
+    
+    stats = {'ERROR_CORRECTION': 0, 'USER_PROFILE': 0, 'BEST_PRACTICE': 0,
+             'PROJECT_CONTEXT': 0, 'SKILL': 0, 'SKIP': 0}
+    
+    for i, (session_id, agent_type, created_at) in enumerate(sessions, start_idx + 1):
+        print(f"[{i}/{total}] 会话 {session_id[:8]}... ({agent_type})")
         
-        # 获取该会话的消息
         cur.execute("""
             SELECT role, content FROM messages
             WHERE session_id = %s AND deleted = false
@@ -136,19 +106,15 @@ def main():
             print("  无消息，跳过")
             continue
         
-        # 组装对话内容
         content_parts = []
         for role, content in messages:
             if content:
                 content_parts.append(f"{role}: {content[:500]}")
         
         full_content = "\n".join(content_parts)
-        
-        # 如果内容太长，截取
         if len(full_content) > 8000:
             full_content = full_content[:8000] + "...(截断)"
         
-        # 调用 Ollama 提取
         prompt = EXTRACTION_PROMPT.format(content=full_content)
         response = call_ollama(prompt)
         
@@ -156,7 +122,6 @@ def main():
             print("  API调用失败，跳过")
             continue
         
-        # 解析结果
         memories = parse_extraction_result(response)
         
         if not memories:
@@ -164,7 +129,6 @@ def main():
             stats['SKIP'] += 1
             continue
         
-        # 存储记忆
         for mem in memories:
             mem_type = mem.get('type', 'SKIP')
             title = mem.get('title', '')[:100]
@@ -172,7 +136,6 @@ def main():
             
             if mem_type not in stats:
                 mem_type = 'SKIP'
-            
             if mem_type == 'SKIP':
                 stats['SKIP'] += 1
                 continue
@@ -186,57 +149,48 @@ def main():
                         INSERT INTO error_corrections (id, title, problem, cause, solution, example, tags, agent_type, session_id)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """, (mem_id, title, content, '', '', '', [], agent_type, session_id))
-                
                 elif mem_type == 'USER_PROFILE':
                     cur.execute("""
                         INSERT INTO user_profiles (id, title, category, items, confidence, created_at)
                         VALUES (%s, %s, %s, %s, %s, %s)
-                    """, (mem_id, title, 'preference', 
-                          json.dumps([{"key": "preference", "value": content}]), 0.8, now))
-                
+                    """, (mem_id, title, 'preference', json.dumps([{"key": "preference", "value": content}]), 0.8, now))
                 elif mem_type == 'BEST_PRACTICE':
                     cur.execute("""
                         INSERT INTO best_practices (id, title, scenario, practice, rationale, tags, source_session)
                         VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """, (mem_id, title, '', content, '', [], session_id))
-                
                 elif mem_type == 'PROJECT_CONTEXT':
                     cur.execute("""
                         INSERT INTO project_contexts (id, title, key_decisions, created_at, project_name, project_path)
                         VALUES (%s, %s, %s, %s, %s, %s)
                     """, (mem_id, title, json.dumps([{"decision": content}]), now, '', ''))
-                
                 elif mem_type == 'SKILL':
+                    # steps是JSONB, tags是ARRAY
                     cur.execute("""
                         INSERT INTO skills (id, title, skill_type, description, steps, tags)
-                        VALUES (%s, %s, %s, %s, %s, %s)
-                    """, (mem_id, title, 'library-api', content, [], []))
+                        VALUES (%s, %s, %s, %s, %s::jsonb, %s::text[])
+                    """, (mem_id, title, 'library-api', content, '[]', to_pg_array([])))
                 
                 stats[mem_type] += 1
                 print(f"  + {mem_type}: {title[:30]}...")
-                
             except Exception as e:
                 print(f"  存储失败: {e}")
         
         conn.commit()
         
-        # 每10个会话输出统计
         if i % 10 == 0:
             print(f"\n--- 当前进度 ---")
             for t, c in stats.items():
                 print(f"  {t}: {c}")
             print()
     
-    # 最终统计
     print("\n" + "=" * 60)
     print("提取完成! 最终统计:")
     for t, c in stats.items():
         print(f"  {t}: {c}")
     
-    # 检查各表数量
     print("\n各表记录数:")
-    for table in tables:
-        assert table in ALLOWED_TABLES, f"Invalid table name: {table}"
+    for table in ['user_profiles', 'error_corrections', 'skills', 'best_practices', 'project_contexts']:
         cur.execute(f"SELECT COUNT(*) FROM {table}")
         print(f"  {table}: {cur.fetchone()[0]}")
     

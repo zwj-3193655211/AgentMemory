@@ -31,11 +31,15 @@
         style="width: 160px"
         @change="handleFilterChange"
       >
-        <el-option label="技术" value="technique" />
-        <el-option label="方法" value="method" />
-        <el-option label="工具" value="tool" />
-        <el-option label="模式" value="pattern" />
-        <el-option label="最佳实践" value="bestpractice" />
+        <el-option label="库与API参考" value="library-api" />
+        <el-option label="数据分析" value="data-analysis" />
+        <el-option label="故障排查" value="troubleshooting" />
+        <el-option label="代码脚手架" value="scaffold" />
+        <el-option label="流程自动化" value="automation" />
+        <el-option label="代码审查" value="code-review" />
+        <el-option label="产品验证" value="product-verify" />
+        <el-option label="CI/CD" value="cicd" />
+        <el-option label="基础设施运维" value="infra-ops" />
       </el-select>
 
       <el-input
@@ -59,7 +63,7 @@
 
     <el-table :data="filteredData" stripe v-loading="loading">
       <el-table-column prop="title" label="标题" min-width="200" />
-      <el-table-column prop="skillType" label="类型" width="120">
+      <el-table-column prop="skillType" label="类型" width="140">
         <template #default="{ row }">
           <el-tag :type="getSkillTypeTagType(row.skillType)">{{ getSkillTypeLabel(row.skillType) }}</el-tag>
         </template>
@@ -91,11 +95,15 @@
         </el-form-item>
         <el-form-item label="技能类型" prop="skillType">
           <el-select v-model="dialog.formData.skillType" placeholder="请选择技能类型">
-            <el-option label="技术" value="technique" />
-            <el-option label="方法" value="method" />
-            <el-option label="工具" value="tool" />
-            <el-option label="模式" value="pattern" />
-            <el-option label="最佳实践" value="bestpractice" />
+            <el-option label="库与API参考" value="library-api" />
+            <el-option label="数据分析" value="data-analysis" />
+            <el-option label="故障排查" value="troubleshooting" />
+            <el-option label="代码脚手架" value="scaffold" />
+            <el-option label="流程自动化" value="automation" />
+            <el-option label="代码审查" value="code-review" />
+            <el-option label="产品验证" value="product-verify" />
+            <el-option label="CI/CD" value="cicd" />
+            <el-option label="基础设施运维" value="infra-ops" />
           </el-select>
         </el-form-item>
         <el-form-item label="描述" prop="description">
@@ -121,7 +129,7 @@ import { ref, reactive, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Download, Search, Refresh, PriceTag } from '@element-plus/icons-vue'
 import { apiService, API_BASE_URL } from '../services/api'
-import type { Skill } from '../types'
+import type { Skill, SkillType } from '../types'
 
 // 数据列表
 const dataList = ref<Skill[]>([])
@@ -143,7 +151,7 @@ const formRef = ref()
 // 查询过滤器
 const filters = reactive({
   searchText: '',
-  skillType: '',
+  skillType: '' as SkillType | '',
   tag: ''
 })
 
@@ -211,22 +219,30 @@ const formRules = {
 // 技能类型映射
 const getSkillTypeLabel = (type: string) => {
   const labels: Record<string, string> = {
-    technique: '技术',
-    method: '方法',
-    tool: '工具',
-    pattern: '模式',
-    bestpractice: '最佳实践'
+    'library-api': '库与API参考',
+    'data-analysis': '数据分析',
+    'troubleshooting': '故障排查',
+    'scaffold': '代码脚手架',
+    'automation': '流程自动化',
+    'code-review': '代码审查',
+    'product-verify': '产品验证',
+    'cicd': 'CI/CD',
+    'infra-ops': '基础设施运维'
   }
   return labels[type] || type
 }
 
 const getSkillTypeTagType = (type: string) => {
   const types: Record<string, string> = {
-    technique: 'primary',
-    method: 'success',
-    tool: 'warning',
-    pattern: 'info',
-    bestpractice: 'danger'
+    'library-api': 'primary',
+    'data-analysis': 'success',
+    'troubleshooting': 'danger',
+    'scaffold': 'warning',
+    'automation': 'primary',
+    'code-review': 'info',
+    'product-verify': 'success',
+    'cicd': 'warning',
+    'infra-ops': 'danger'
   }
   return types[type] || 'info'
 }
@@ -253,7 +269,7 @@ const loadData = async () => {
 // 打开新增对话框
 const openCreate = () => {
   dialog.isEdit = false
-  dialog.formData = { title: '', skillType: 'technique', description: '', steps: '', tags: [] }
+  dialog.formData = { title: '', skillType: 'library-api' as SkillType, description: '', steps: '', tags: [] }
   tagsInput.value = ''
   dialog.visible = true
 }

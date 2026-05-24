@@ -302,10 +302,12 @@ public class MemoryService {
         // 根据类型提取字段
         switch (result.type) {
             case "ERROR_CORRECTION" -> {
-                memory.problem = extracted.has("problem") ? extracted.get("problem").asText() : "";
-                memory.cause = extracted.has("cause") ? extracted.get("cause").asText() : "";
-                memory.solution = extracted.has("solution") ? extracted.get("solution").asText() : "";
-                memory.description = extracted.has("solution") ? extracted.get("solution").asText() : "";
+                // 用户纠正 Agent 的错误
+                // mistake=Agent说错了什么, correction=用户的纠正, conclusion=正确结论
+                memory.problem = extracted.has("mistake") ? extracted.get("mistake").asText() : "";
+                memory.cause = ""; // 不再适用"根因"概念
+                memory.solution = extracted.has("correction") ? extracted.get("correction").asText() : "";
+                memory.description = extracted.has("conclusion") ? extracted.get("conclusion").asText() : "";
             }
             case "USER_PROFILE" -> {
                 memory.description = extracted.has("preference") ? extracted.get("preference").asText() : "";
