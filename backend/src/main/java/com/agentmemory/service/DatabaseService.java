@@ -119,7 +119,8 @@ public class DatabaseService {
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     version INTEGER DEFAULT 1,
-                    deleted BOOLEAN DEFAULT false
+                    deleted BOOLEAN DEFAULT false,
+                    last_compressed_count INTEGER DEFAULT 0
                 )
                 """);
             

@@ -27,6 +27,7 @@ public class ApplicationConfig {
     private final int compressionSummaryThreshold;
     private final boolean compressionAutoCompress;
     private final int compressionCheckIntervalHours;
+    private final int compressionIncrementalThreshold;
     
     // LLM API 配置（用于会话摘要）
     private final String apiLLMProvider;
@@ -81,6 +82,8 @@ public class ApplicationConfig {
             ? config.getBoolean("compression.autoCompress") : true;
         this.compressionCheckIntervalHours = config.hasPath("compression.checkIntervalHours")
             ? config.getInt("compression.checkIntervalHours") : 2;
+        this.compressionIncrementalThreshold = config.hasPath("compression.incrementalThreshold")
+            ? config.getInt("compression.incrementalThreshold") : 20;
         
         // LLM API 配置（用于会话摘要）
         this.apiLLMProvider = config.hasPath("llm.api.provider")
@@ -117,6 +120,7 @@ public class ApplicationConfig {
     public int getCompressionSummaryThreshold() { return compressionSummaryThreshold; }
     public boolean isCompressionAutoCompress() { return compressionAutoCompress; }
     public int getCompressionCheckIntervalHours() { return compressionCheckIntervalHours; }
+    public int getCompressionIncrementalThreshold() { return compressionIncrementalThreshold; }
     
     // LLM API 配置
     public String getApiLLMProvider() { return apiLLMProvider; }

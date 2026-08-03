@@ -27,6 +27,7 @@ public class SessionCompressionService extends ScheduledServiceBase {
     private int summaryThreshold;
     private boolean autoCompress;
     private final int checkIntervalHours;
+    private final int incrementalThreshold;
 
     public SessionCompressionService(DatabaseService databaseService, ApplicationConfig config) {
         this.databaseService = databaseService;
@@ -38,6 +39,7 @@ public class SessionCompressionService extends ScheduledServiceBase {
         this.summaryThreshold = config != null ? config.getCompressionSummaryThreshold() : 100;
         this.autoCompress = config != null ? config.isCompressionAutoCompress() : true;
         this.checkIntervalHours = config != null ? config.getCompressionCheckIntervalHours() : 2;
+        this.incrementalThreshold = config != null ? config.getCompressionIncrementalThreshold() : 20;
     }
     
     // 兼容旧构造函数
@@ -286,6 +288,14 @@ public class SessionCompressionService extends ScheduledServiceBase {
                         summary = generateSimpleSummary(messages);
                     }
                 }
+                case "INCREMENTAL" -> {
+                    // 增量压缩：只处理新增消息，与已有摘要合并
+                    compressedMessages = applyAdaptiveSlidingWindow(messages);
+                    summary = compressSessionIncremental(conn, sessionId, messages);
+                    if (summary == null || summary.isEmpty()) {
+                        summary = generateSimpleSummary(messages);
+                    }
+                }
                 default -> {
                     log.warn("未知的压缩类型: {}", compressionType);
                     return false;
@@ -385,6 +395,92 @@ public class SessionCompressionService extends ScheduledServiceBase {
     }
 
     /**
+     * 增量压缩：只处理自上次压缩以来的新增消息
+     * 与已有的历史摘要合并生成新摘要，避免重复处理全部消息
+     */
+    private String compressSessionIncremental(Connection conn, String sessionId, List<String> allMessages) throws SQLException {
+        // 1. 获取上次压缩时的消息计数
+        int lastCompressedCount = getLastCompressedCount(conn, sessionId);
+
+        // 2. 无历史记录或新增消息太少，回退到全量多级摘要
+        int newMessageCount = allMessages.size() - lastCompressedCount;
+        if (lastCompressedCount == 0) {
+            log.info("增量压缩: 会话 {} 无历史记录，使用全量多级摘要", sessionId);
+            return semanticCompressor.generateMultiLevelSummary(allMessages);
+        }
+        if (newMessageCount < incrementalThreshold) {
+            log.info("增量压缩: 会话 {} 新增 {} 条消息，低于阈值 {}，跳过", sessionId, newMessageCount, incrementalThreshold);
+            // 返回上次的摘要（保持已有状态）
+            return getLastSummary(conn, sessionId);
+        }
+
+        // 3. 只处理新增消息
+        List<String> newMessages = allMessages.subList(lastCompressedCount, allMessages.size());
+        log.info("增量压缩: 会话 {} 上次压缩 {} 条，新增 {} 条，生成增量摘要",
+                sessionId, lastCompressedCount, newMessages.size());
+
+        String incrementalSummary = semanticCompressor.generateMultiLevelSummary(newMessages);
+        if (incrementalSummary == null || incrementalSummary.isEmpty()) {
+            return getLastSummary(conn, sessionId);
+        }
+
+        // 4. 合并历史摘要 + 增量摘要
+        String lastSummary = getLastSummary(conn, sessionId);
+        if (lastSummary == null || lastSummary.isEmpty()) {
+            return incrementalSummary;
+        }
+
+        List<String> mergeInput = List.of(
+                "【历史摘要】" + lastSummary,
+                "【新增内容】" + incrementalSummary
+        );
+        String mergedSummary = llmClient.summarize(mergeInput);
+        return mergedSummary != null ? mergedSummary
+                : lastSummary + "\n\n【新增内容】" + incrementalSummary;
+    }
+
+    /**
+     * 查询会话上次压缩时的消息计数
+     */
+    private int getLastCompressedCount(Connection conn, String sessionId) throws SQLException {
+        String sql = """
+            SELECT last_compressed_count FROM session_summaries
+            WHERE session_id = ? AND deleted = false
+            ORDER BY version DESC LIMIT 1
+            """;
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, sessionId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    int count = rs.getInt("last_compressed_count");
+                    return count > 0 ? count : 0;
+                }
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * 查询会话最新摘要
+     */
+    private String getLastSummary(Connection conn, String sessionId) throws SQLException {
+        String sql = """
+            SELECT summary FROM session_summaries
+            WHERE session_id = ? AND deleted = false
+            ORDER BY version DESC LIMIT 1
+            """;
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, sessionId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString("summary");
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
      * 标记消息为已删除
      */
     private void markMessagesAsDeleted(Connection conn, String sessionId, int keepCount) throws SQLException {
@@ -450,8 +546,8 @@ public class SessionCompressionService extends ScheduledServiceBase {
         String insertSql = """
             INSERT INTO session_summaries
             (session_id, summary, compression_type, original_message_count, compressed_message_count,
-             window_size, first_message_timestamp, last_message_timestamp, version)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             window_size, first_message_timestamp, last_message_timestamp, version, last_compressed_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
 
         try (PreparedStatement stmt = conn.prepareStatement(insertSql)) {
@@ -464,6 +560,7 @@ public class SessionCompressionService extends ScheduledServiceBase {
             stmt.setTimestamp(7, firstTime != null ? Timestamp.valueOf(firstTime) : null);
             stmt.setTimestamp(8, lastTime != null ? Timestamp.valueOf(lastTime) : null);
             stmt.setInt(9, version);
+            stmt.setInt(10, originalCount);
             stmt.executeUpdate();
         }
     }

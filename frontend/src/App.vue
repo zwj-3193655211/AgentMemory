@@ -217,6 +217,7 @@
                 <el-radio label="HYBRID">混合</el-radio>
                 <el-radio label="SEMANTIC">语义聚类</el-radio>
                 <el-radio label="MULTI_LEVEL">多级摘要</el-radio>
+                <el-radio label="INCREMENTAL">增量压缩</el-radio>
               </el-radio-group>
             </el-form-item>
             
