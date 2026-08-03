@@ -215,6 +215,8 @@
                 <el-radio label="SLIDING_WINDOW">滑动窗口</el-radio>
                 <el-radio label="SUMMARIZE">LLM摘要</el-radio>
                 <el-radio label="HYBRID">混合</el-radio>
+                <el-radio label="SEMANTIC">语义聚类</el-radio>
+                <el-radio label="MULTI_LEVEL">多级摘要</el-radio>
               </el-radio-group>
             </el-form-item>
             

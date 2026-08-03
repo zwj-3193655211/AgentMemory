@@ -19,6 +19,7 @@ public class SessionCompressionService extends ScheduledServiceBase {
 
     private final DatabaseService databaseService;
     private final LLMClient llmClient;
+    private final SemanticCompressor semanticCompressor;
     private final Logger log = LoggerFactory.getLogger(SessionCompressionService.class);
 
     // 压缩配置（从配置读取，可动态更新）
@@ -30,6 +31,7 @@ public class SessionCompressionService extends ScheduledServiceBase {
     public SessionCompressionService(DatabaseService databaseService, ApplicationConfig config) {
         this.databaseService = databaseService;
         this.llmClient = new LLMClient();
+        this.semanticCompressor = new SemanticCompressor(new EmbeddingClient(), llmClient);
         
         // 从配置读取参数
         this.windowSize = config != null ? config.getCompressionWindowSize() : 50;
@@ -268,6 +270,22 @@ public class SessionCompressionService extends ScheduledServiceBase {
                         summary = generateSimpleSummary(messages);
                     }
                 }
+                case "SEMANTIC" -> {
+                    // 语义聚类压缩：语义相近消息分组，保留代表消息
+                    compressedMessages = semanticCompressor.compressBySemanticCluster(messages);
+                    summary = semanticCompressor.generateMultiLevelSummary(messages);
+                    if (summary == null || summary.isEmpty()) {
+                        summary = generateSimpleSummary(compressedMessages);
+                    }
+                }
+                case "MULTI_LEVEL" -> {
+                    // 多级摘要：Map-Reduce 分块摘要再合并
+                    compressedMessages = applyAdaptiveSlidingWindow(messages);
+                    summary = semanticCompressor.generateMultiLevelSummary(messages);
+                    if (summary == null || summary.isEmpty()) {
+                        summary = generateSimpleSummary(messages);
+                    }
+                }
                 default -> {
                     log.warn("未知的压缩类型: {}", compressionType);
                     return false;
@@ -302,7 +320,9 @@ public class SessionCompressionService extends ScheduledServiceBase {
      * 确定压缩类型
      */
     private String determineCompressionType(int messageCount) {
-        if (messageCount > summaryThreshold * 2) {
+        if (messageCount > summaryThreshold * 5) {
+            return "MULTI_LEVEL";  // 超长会话（>5倍阈值），多级摘要
+        } else if (messageCount > summaryThreshold * 2) {
             return "HYBRID";  // 超过阈值2倍，使用混合压缩
         } else if (messageCount > summaryThreshold) {
             return "SUMMARIZE";  // 超过阈值，使用摘要
@@ -349,6 +369,19 @@ public class SessionCompressionService extends ScheduledServiceBase {
         }
         // 返回最近 windowSize 条消息
         return messages.subList(messages.size() - windowSize, messages.size());
+    }
+
+    /**
+     * 自适应滑动窗口：根据消息重要性动态调整窗口大小
+     * 保留的消息覆盖重要性总量的约 80%
+     */
+    private List<String> applyAdaptiveSlidingWindow(List<String> messages) {
+        int adaptiveWindow = semanticCompressor.calculateAdaptiveWindowSize(
+                messages, windowSize, 10, windowSize * 3);
+        if (messages.size() <= adaptiveWindow) {
+            return messages;
+        }
+        return messages.subList(messages.size() - adaptiveWindow, messages.size());
     }
 
     /**
