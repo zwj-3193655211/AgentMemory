@@ -1,7 +1,8 @@
 # AgentMemory 优化方案 B - 交接实施计划
 
 > 创建日期: 2026-08-04
-> 状态: **进行中（约 50% 完成）**
+> 更新日期: 2026-08-04（接手后完成增量压缩和组件拆分）
+> 状态: **进行中（约 85% 完成，剩余运行时测试和可选增强）**
 > 用途: 交接给其他开发者继续执行
 > 前置文档: [2026-08-04-optimization-plan-b.md](2026-08-04-optimization-plan-b.md)
 
@@ -11,15 +12,22 @@
 
 | 模块 | 状态 | 完成度 | 提交记录 |
 |------|------|--------|----------|
-| 模块 5: 前端架构优化 | 🔄 部分完成 | 60% | `2a465ac` |
+| 模块 5: 前端架构优化 | ✅ 完成 | 100% | `2a465ac`, `81ca562` |
 | 模块 3: Pi Agent 支持 | ✅ 完成 | 100% | `652ad49` |
 | 模块 2: SSE 实时更新 | ✅ 完成 | 100% | `694175d` |
-| 模块 4: 压缩算法优化 | 🔄 部分完成 | 70% | 未提交（工作区） |
-| 模块 1: 仪表盘可视化 | 🔄 部分完成 | 70% | 随模块 5 提交 |
+| 模块 4: 压缩算法优化 | ✅ 完成 | 100% | `52b2865`, `b005cc8` |
+| 模块 1: 仪表盘可视化 | ✅ 完成 | 100% | 随模块 5/2 提交 |
+| 构建优化 | ✅ 完成 | 100% | `936ed09` |
+| 运行时功能测试 | ⏸️ 待执行 | 0% | 需要数据库 |
 
-### 已提交的 commit
+### 已提交的 commit（完整）
 
 ```
+936ed09 build: vite 代码分割优化
+81ca562 refactor(frontend): 拆分 Search/Compression/Settings 为独立组件
+b005cc8 feat: 增量压缩 - 只处理新增消息并与历史摘要合并
+52b2865 feat: 上下文压缩算法优化 - 语义聚类/多级摘要/自适应窗口
+8f85bbe docs: 添加优化方案B交接实施计划
 694175d feat: 添加 SSE 实时数据更新
 652ad49 feat: 添加 Pi Agent 监控支持
 2a465ac refactor(frontend): 拆分 Dashboard 和 Sessions 为独立组件
@@ -314,3 +322,45 @@ import 'echarts-wordcloud'
 **交接人**: 前序开发
 **接手人**: （待填写）
 **仓库**: https://github.com/zwj-3193655211/AgentMemory
+
+
+---
+
+## 🔄 后续执行记录（2026-08-04 第二批次）
+
+### 已完成
+
+1. **任务 0**: 提交模块 4 遗留代码（SemanticCompressor + SessionCompressionService 修改）— commit `52b2865`
+2. **任务 1**: 增量压缩 — commit `b005cc8`
+   - `INCREMENTAL` 压缩类型：只处理自上次压缩以来的新增消息，与历史摘要 LLM 合并
+   - `session_summaries.last_compressed_count` 字段（含迁移脚本 + 建表语句）
+   - 配置 `compression.incrementalThreshold=20`
+3. **任务 2**: Search/Compression/Settings 组件拆分 — commit `81ca562`
+   - 新增 `Search.vue` (41行)、`Compression.vue` (544行)、`Settings.vue` (855行)
+   - App.vue: 1961 → 591 行（-70%）
+   - 修复 Search 图标与组件命名冲突（`Search as SearchIcon`）
+   - 子组件自行管理数据加载（onMounted），移除 App.vue 中的 ~1200 行已迁移代码
+4. **构建优化**: commit `936ed09`
+   - vite manualChunks 函数式配置（rolldown 兼容）
+   - chunk 拆分：echarts / element-plus / vendor
+5. **静态验证**: 后端 `mvn compile` 通过；前端 `vue-tsc --noEmit` 通过；76 个单元测试全部通过；`npm run build` 通过
+
+### 验证说明（重要）
+
+- 增量压缩 SQL 参数校验: INSERT 10 字段 = 10 个参数 ✅
+- `last_compressed_count` 在建表语句、迁移脚本、查询 SQL 三处一致 ✅
+- SSE 端点: 前端 `${API_BASE}/events` ↔ 后端 `/api/events` 匹配 ✅
+- **运行时测试未执行**（PostgreSQL 未启动，Docker Desktop 不可用）
+
+### 剩余工作
+
+1. **任务 4.1 功能测试**（需要数据库，约 2-3 小时）:
+   - 启动 PostgreSQL: `docker compose up -d`（或手动 `psql` 执行 `database/migrate_add_incremental_compression.sql`）
+   - 启动后端: `start.bat` 或 `backend/start.bat`
+   - 按本文档「任务 4.1 功能测试清单」逐项验证
+2. **任务 3 仪表盘增强**（可选，P2）:
+   - 词云图: 安装 `echarts-wordcloud`，后端 `GET /api/stats/keywords`
+   - 会话时长统计: 后端 `/api/stats` 增强
+3. **任务 4.2/4.3 测试与发布**:
+   - 单元测试: SemanticCompressorTest / StatsEventBroadcasterTest / sse.test.ts
+   - 文档: README 版本 v3.0.0、CHANGELOG
