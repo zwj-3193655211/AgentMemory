@@ -31,3 +31,7 @@ Thumbs.db
 # Cache
 .cache/
 *.cache
+
+# 测试覆盖率报告
+coverage/
+
