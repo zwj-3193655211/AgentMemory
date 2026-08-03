@@ -39,6 +39,7 @@ public class FileWatcherService {
     // 文件级锁：防止同一文件并发处理
     private final ConcurrentHashMap<String, ReentrantLock> fileLocks = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, CodexSessionMeta> codexSessionMetaCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, CodexSessionMeta> piSessionMetaCache = new ConcurrentHashMap<>();
     
     // ========== 语义切分相关 ==========
     // 话题转换关键词（检测到这些词时，触发一次处理）
@@ -99,7 +100,7 @@ public class FileWatcherService {
     /**
      * 开始监控指定目录
      * @param agentType Agent类型名称（用于标识和存储）
-     * @param parserType 解析器类型（iflow/claude/openclaw/qwen/nanobot/codex）
+     * @param parserType 解析器类型（iflow/claude/openclaw/qwen/nanobot/codex/pi）
      * @param directory 监控目录
      */
     public void watchDirectory(String agentType, String parserType, Path directory) {
@@ -247,7 +248,7 @@ public class FileWatcherService {
     /**
      * 解析 JSONL 行并存储
      * @param agentType Agent类型名称（用于标识和存储）
-     * @param parserType 解析器类型（iflow/claude/openclaw/qwen/nanobot/codex）
+     * @param parserType 解析器类型（iflow/claude/openclaw/qwen/nanobot/codex/pi）
      */
     private void processJsonlLine(String agentType, String parserType, Path file, String line) {
         try {
@@ -268,6 +269,8 @@ public class FileWatcherService {
                 message = parseNanobotMessage(node, file);
             } else if ("codex".equals(parserType)) {
                 message = parseCodexMessage(node, file);
+            } else if ("pi".equals(parserType)) {
+                message = parsePiMessage(node, file);
             }
             
             if (message != null) {
@@ -1012,7 +1015,7 @@ public class FileWatcherService {
      * 手动触发重新扫描指定目录（用于 Setup 向导）
      * @param directory 要扫描的目录路径
      * @param agentType Agent 类型（用于标记消息归属）
-     * @param parserType 解析器类型（iflow/claude/openclaw/qwen/nanobot/codex）
+     * @param parserType 解析器类型（iflow/claude/openclaw/qwen/nanobot/codex/pi）
      */
     public void rescanDirectory(String directory, String agentType, String parserType) {
         Path path = Paths.get(directory);
@@ -1066,6 +1069,104 @@ public class FileWatcherService {
     @Deprecated
     public void rescanDirectory(String directory) {
         rescanDirectory(directory, "manual", "unknown");
+    }
+
+
+    /**
+     * 解析 Pi Agent 消息格式
+     * 日志格式: ~/.pi/agent/sessions/--<encoded-cwd>--/*.jsonl
+     * 行类型:
+     *   - {"type": "session", "id": "...", "cwd": "...", "timestamp": "..."}
+     *   - {"type": "message", "id": "...", "message": {"role": "user|assistant|toolResult", "content": [...]}}
+     */
+    private Message parsePiMessage(JsonNode node, Path file) {
+        String filePath = file.toString();
+        String eventType = getTextOrEmpty(node, "type");
+
+        // 会话元数据行：缓存 sessionId 和 cwd
+        if ("session".equals(eventType)) {
+            String sessionId = getTextOrEmpty(node, "id");
+            String cwd = getTextOrEmpty(node, "cwd");
+            if (!sessionId.isEmpty() || !cwd.isEmpty()) {
+                piSessionMetaCache.put(filePath, new CodexSessionMeta(sessionId, cwd));
+            }
+            return null;
+        }
+
+        // 只处理消息行
+        if (!"message".equals(eventType)) {
+            return null;
+        }
+
+        JsonNode msgNode = node.get("message");
+        if (msgNode == null || !msgNode.isObject()) {
+            return null;
+        }
+
+        String role = getTextOrEmpty(msgNode, "role");
+        // 只保留 user 和 assistant，跳过 toolResult 等
+        if (!"user".equals(role) && !"assistant".equals(role)) {
+            return null;
+        }
+
+        // 提取文本内容（content 为数组，元素类型: text/thinking/toolCall）
+        String content = extractPiMessageText(msgNode.get("content"));
+        if (content.isEmpty()) {
+            return null;
+        }
+
+        // 从缓存获取 sessionId 和项目路径
+        CodexSessionMeta meta = piSessionMetaCache.get(filePath);
+        String sessionId = meta != null ? meta.sessionId() : "";
+        String projectPath = meta != null ? meta.cwd() : "";
+        if (sessionId.isEmpty()) {
+            // 兜底：从文件路径提取（--D--Desktop_Archive-AgentMemory-- 目录名）
+            sessionId = file.getParent() != null ? file.getParent().getFileName().toString() : "unknown";
+        }
+
+        Message message = new Message();
+        message.setId("pi-" + sessionId + "-" + getTextOrEmpty(node, "id"));
+        message.setSessionId(sessionId);
+        message.setParentId(getTextOrEmpty(node, "parentId"));
+        message.setRole(role);
+        message.setTimestamp(getTextOrEmpty(node, "timestamp"));
+        message.setProjectName(projectPath);
+        message.setContent(content);
+        message.setRawJson(node.toString());
+        message.setAgentType("pi");
+        return message;
+    }
+
+    /**
+     * 提取 Pi 消息文本（content 数组中 type=text 的部分）
+     */
+    private String extractPiMessageText(JsonNode contentNode) {
+        if (contentNode == null) {
+            return "";
+        }
+        if (contentNode.isTextual()) {
+            return contentNode.asText().trim();
+        }
+        if (!contentNode.isArray()) {
+            return "";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        for (JsonNode part : contentNode) {
+            if (!part.isObject()) {
+                continue;
+            }
+            if ("text".equals(getTextOrEmpty(part, "type"))) {
+                String text = getTextOrEmpty(part, "text");
+                if (!text.isEmpty()) {
+                    if (sb.length() > 0) {
+                        sb.append("\n");
+                    }
+                    sb.append(text);
+                }
+            }
+        }
+        return sb.toString().trim();
     }
 
     private record CodexSessionMeta(String sessionId, String cwd) {}

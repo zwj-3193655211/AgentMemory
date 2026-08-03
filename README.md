@@ -87,6 +87,7 @@ start.bat
 | Qwen/Qoder | `~/.qwen/projects/` | ✅ 已支持 |
 | OpenClaw | `~/.openclaw/` | ✅ 已支持 |
 | Codex CLI | `~/.codex/sessions/` | ✅ 已支持 |
+| Pi Agent | `~/.pi/agent/sessions/` | ✅ 已支持 |
 
 ## 📖 使用示例
 

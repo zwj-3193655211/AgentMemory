@@ -74,6 +74,7 @@ public class AgentDetectorService {
         addIfNotNull(agents, detectAgent("Qoder CLI", "qoder", ".qoder", "projects"));
         addIfNotNull(agents, detectAgent("Crush CLI", "crush", ".crush"));
         addIfNotNull(agents, detectAgent("WorkBuddy", "workbuddy", ".workbuddy", "projects"));
+        addIfNotNull(agents, detectAgent("Pi Agent", "pi", ".pi", "agent", "sessions"));
 
         log.info("检测到 {} 个 Agent", agents.size());
         return agents;
