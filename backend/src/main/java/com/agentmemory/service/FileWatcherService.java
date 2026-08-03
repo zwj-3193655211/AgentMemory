@@ -278,6 +278,9 @@ public class FileWatcherService {
                 message.setAgentType(agentType);
                 databaseService.saveMessage(message);
                 log.debug("已保存消息: {} - {}", message.getId(), message.getRole());
+
+                // 通知 SSE 客户端刷新统计
+                StatsEventBroadcaster.getInstance().notifyNewMessage();
                 
                 // 改为缓冲消息，批量处理以获得更好的上下文
                 if ("user".equals(message.getRole()) && message.getContent() != null

@@ -27,6 +27,14 @@
           />
         </div>
 
+        <!-- 实时连接状态 -->
+        <el-tooltip :content="sseConnected ? '实时更新已连接' : '实时更新未连接'" placement="bottom">
+          <div class="sse-indicator" :class="{ connected: sseConnected }">
+            <span class="sse-dot"></span>
+            <span class="sse-label">实时</span>
+          </div>
+        </el-tooltip>
+
         <el-menu mode="horizontal" :default-active="activeMenu" @select="handleMenuSelect" class="main-menu" :ellipsis="false">
           <el-menu-item index="dashboard">
             <el-tooltip content="仪表盘" placement="bottom">
@@ -707,6 +715,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, reactive } from 'vue'
+import { sseService } from './services/sse'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { Search, Setting, ChatDotRound, WarningFilled, User, DocumentChecked, FolderOpened, Reading, Odometer, Box, Delete, Connection, InfoFilled } from '@element-plus/icons-vue'
@@ -727,6 +736,7 @@ const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8082/api'
 
 // 数据
 const activeMenu = ref('dashboard')
+const sseConnected = ref(false)
 const showSetup = ref(localStorage.getItem('agentmemory_setup_done') !== 'true')
 const agents = ref<any[]>([])
 const sessions = ref<any[]>([])
@@ -1181,6 +1191,16 @@ const loadAllData = async () => {
   }
 }
 
+// 仅刷新统计数据（用于 SSE 实时更新，轻量级）
+const loadStatsOnly = async () => {
+  try {
+    const res = await axios.get(`${API_BASE}/stats`)
+    stats.value = res.data
+  } catch (e) {
+    console.error('刷新统计失败', e)
+  }
+}
+
 // 搜索功能
 const handleSearch = async () => {
   if (!searchQuery.value.trim()) return
@@ -1518,6 +1538,11 @@ const handleSetupComplete = () => {
 }
 
 onMounted(async () => {
+  // 建立 SSE 实时连接，新消息时自动刷新统计
+  sseService.on('stats_update', loadStatsOnly)
+  sseService.onStatusChange((connected) => { sseConnected.value = connected })
+  sseService.connect()
+
   // 使用统一加载方法，减少API调用次数
   loadAllData()
   loadEmbeddingStatus()
@@ -1532,6 +1557,9 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  // 断开 SSE 连接
+  sseService.disconnect()
+
   // 清理轮询定时器，防止内存泄漏
   if (downloadPollingInterval.value) {
     clearInterval(downloadPollingInterval.value)
@@ -1541,6 +1569,46 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* 实时连接状态指示 */
+.sse-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: #f5f7fa;
+  cursor: default;
+  flex-shrink: 0;
+}
+
+.sse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #c0c4cc;
+  transition: background 0.3s;
+}
+
+.sse-indicator.connected .sse-dot {
+  background: #67c23a;
+  box-shadow: 0 0 6px rgba(103, 194, 58, 0.6);
+  animation: sse-pulse 2s infinite;
+}
+
+@keyframes sse-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.sse-label {
+  font-size: 12px;
+  color: #909399;
+}
+
+.sse-indicator.connected .sse-label {
+  color: #67c23a;
+}
+
 /* 整体布局 */
 .app-container {
   min-height: 100vh;

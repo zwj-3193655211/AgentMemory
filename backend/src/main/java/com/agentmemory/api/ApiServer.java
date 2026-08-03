@@ -31,6 +31,7 @@ import com.agentmemory.service.AgentDetectorService;
 import com.agentmemory.service.DatabaseService;
 import com.agentmemory.service.FileWatcherService;
 import com.agentmemory.service.SessionCompressionService;
+import com.agentmemory.service.StatsEventBroadcaster;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -104,6 +105,7 @@ public class ApiServer {
         server.createContext("/api/setup", new SetupHandler(databaseService, agentDetectorService, fileWatcherService));
         server.createContext("/api/import", new SetupHandler(databaseService, agentDetectorService, fileWatcherService));
         server.createContext("/api/chat", new ChatHandler(databaseService, agentDetectorService));
+        server.createContext("/api/events", new SseHandler());
 
         // Embedding 服务代理（解决前端 CORS 问题）
         String embedBase = System.getenv().getOrDefault("EMBEDDING_BASE_URL", "http://localhost:8100");
@@ -313,7 +315,7 @@ public class ApiServer {
             }
         });
         
-        server.setExecutor(Executors.newFixedThreadPool(20));
+        server.setExecutor(Executors.newCachedThreadPool());  // 缓存线程池，支持 SSE 长连接
         server.start();
         
         log.info("API 服务已启动: http://localhost:{}", port);
@@ -1548,6 +1550,46 @@ public class ApiServer {
         }
     }
     
+    /**
+     * SSE (Server-Sent Events) 实时事件推送
+     * GET /api/events - 建立长连接，接收 stats_update 等事件
+     */
+    class SseHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"GET".equals(exchange.getRequestMethod())) {
+                exchange.sendResponseHeaders(405, -1);
+                return;
+            }
+
+            // SSE 响应头
+            exchange.getResponseHeaders().set("Content-Type", "text/event-stream; charset=utf-8");
+            exchange.getResponseHeaders().set("Cache-Control", "no-cache");
+            exchange.getResponseHeaders().set("Connection", "keep-alive");
+            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+            exchange.sendResponseHeaders(200, 0);  // 0 =  chunked/不定长度
+
+            // 注册客户端（连接保持，由 broadcaster 心跳维持）
+            StatsEventBroadcaster.SseClient client =
+                    new StatsEventBroadcaster.SseClient(exchange.getResponseBody());
+            StatsEventBroadcaster.getInstance().register(client);
+
+            // 发送连接成功事件
+            StatsEventBroadcaster.getInstance().broadcast("connected", "{}");
+
+            // 保持连接直到客户端断开（心跳/事件发送失败时标记 inactive）
+            try {
+                while (client.isActive()) {
+                    Thread.sleep(1000);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                client.close();
+            }
+        }
+    }
+
     class StatsHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
