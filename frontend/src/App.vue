@@ -76,6 +76,12 @@
             </el-tooltip>
             <span class="menu-label">会话摘要</span>
           </el-menu-item>
+          <el-menu-item index="chat">
+            <el-tooltip content="对话" placement="bottom">
+              <el-icon><ChatDotRound /></el-icon>
+            </el-tooltip>
+            <span class="menu-label">对话</span>
+          </el-menu-item>
           <el-menu-item index="settings" class="settings-menu-item">
             <el-tooltip content="设置" placement="bottom">
               <el-icon><Setting /></el-icon>
@@ -560,7 +566,13 @@
         </el-dialog>
       </div>
 
-            <div v-if="activeMenu === 'settings'" class="content-panel full">
+      <!-- 对话页面 -->
+      <div v-if="activeMenu === 'chat'" class="chat-wrapper">
+        <ChatView />
+      </div>
+
+      <!-- 设置页面 -->
+      <div v-if="activeMenu === 'settings'" class="content-panel full">
         <div class="panel-header">
           <h2>系统设置</h2>
         </div>
@@ -905,6 +917,7 @@ import Practices from './views/Practices.vue'
 import Contexts from './views/Contexts.vue'
 import Skills from './views/Skills.vue'
 import Setup from './views/Setup.vue'
+import ChatView from './components/ChatView.vue'
 
 // 使用 Vite 环境变量，支持运行时配置
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8082/api'
@@ -1951,6 +1964,17 @@ onUnmounted(() => {
   max-width: 1600px;
   margin: 0 auto;
   box-sizing: border-box;
+}
+
+.app-main.app-main-chat {
+  padding: 0;
+  gap: 0;
+  max-width: 100%;
+}
+
+.chat-wrapper {
+  width: 100%;
+  height: calc(100vh - 60px);
 }
 
 /* Logo */

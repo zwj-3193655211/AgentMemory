@@ -210,48 +210,10 @@ const formatTime = (time: string | Date) => {
 // 解析 JSON 内容
 const parseItems = (itemsStr: string | any[]) => {
   if (Array.isArray(itemsStr)) return itemsStr
-  if (!itemsStr) return []
-  
-  let text = String(itemsStr)
-  
-  // 移除可能存在的外层引号和转义字符
-  // 处理格式: "\"内容...\"" 或 "\"内容...\\\" 等
-  text = text.trim()
-  if (text.startsWith('"') && text.endsWith('"')) {
-    text = text.substring(1, text.length - 1)
-  }
-  // 移除转义的引号
-  text = text.replace(/\\"/g, '"')
-  
   try {
-    // 尝试解析为JSON
-    return JSON.parse(text)
+    return JSON.parse(itemsStr || '[]')
   } catch {
-    // 如果不是JSON格式，将文本拆分成键值对
-    // 处理格式: "key1: value1、key2: value2" 或 "value1、value2"
-    const result: {key: string; value: string}[] = []
-    
-    // 按顿号分割
-    const parts = text.split('、')
-    parts.forEach((part, index) => {
-      part = part.trim()
-      if (!part) return
-      
-      // 检查是否有冒号分隔的键值对
-      const colonIndex = part.indexOf(':')
-      if (colonIndex > 0) {
-        const key = part.substring(0, colonIndex).trim()
-        const value = part.substring(colonIndex + 1).trim()
-        if (key && value) {
-          result.push({ key, value })
-        }
-      } else {
-        // 如果没有冒号，使用默认key
-        result.push({ key: `项目${index + 1}`, value: part })
-      }
-    })
-    
-    return result.length > 0 ? result : []
+    return []
   }
 }
 

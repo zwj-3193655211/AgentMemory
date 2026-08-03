@@ -103,6 +103,7 @@ public class ApiServer {
         server.createContext("/api/cleanup", new CleanupHandler());
         server.createContext("/api/setup", new SetupHandler(databaseService, agentDetectorService, fileWatcherService));
         server.createContext("/api/import", new SetupHandler(databaseService, agentDetectorService, fileWatcherService));
+        server.createContext("/api/chat", new ChatHandler(databaseService, agentDetectorService));
 
         // Embedding 服务代理（解决前端 CORS 问题）
         String embedBase = System.getenv().getOrDefault("EMBEDDING_BASE_URL", "http://localhost:8100");

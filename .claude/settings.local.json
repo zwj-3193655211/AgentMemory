@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(psql:*)",
+      "Bash(where psql:*)",
+      "mcp__playwright__browser_screenshot",
+      "mcp__playwright__browser_click",
+      "Bash(curl:*)",
+      "Bash(mvn exec:java:*)",
+      "mcp__playwright__browser_close",
+      "Bash(netstat:*)",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_snapshot",
+      "mcp__playwright__browser_console_messages",
+      "Bash(npm run:*)",
+      "mcp__playwright__browser_hover",
+      "Bash(start.bat:*)",
+      "Bash(ls:*)",
+      "Bash(rm:*)",
+      "Bash(wc:*)",
+      "Bash(grep:*)",
+      "mcp__filesystem__list_directory",
+      "Bash(docker exec:*)",
+      "Bash(export DATABASE_PASSWORD=agentmemory123)",
+      "Bash(export JAVA_HOME=\"D:/JDK/jdk_21\")",
+      "Bash(\"D:/JDK/jdk_21/bin/java\" -Dfile.encoding=UTF-8 -cp \"target/classes;target/lib/*\" com.agentmemory.AgentMemoryApplication)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d, indent=2, ensure_ascii=False\\)[:2000]\\)\")",
+      "Bash(tasklist //FI \"IMAGENAME eq java.exe\")",
+      "Bash(awk '{print $5}')",
+      "Bash(xargs -I{} taskkill //F //PID {})",
+      "Bash(\"D:/JDK/jdk_21/bin/javac\" -encoding UTF-8 -cp \"target/classes;target/lib/*\" -d target/classes src/main/java/com/agentmemory/service/DatabaseService.java src/main/java/com/agentmemory/service/CrushDatabaseWatcher.java)"
+    ]
+  }
+}

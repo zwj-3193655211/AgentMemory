@@ -1,24 +1,19 @@
 package com.agentmemory.service;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
-import java.util.List;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.agentmemory.AgentInfo;
 import com.agentmemory.config.ApplicationConfig;
 import com.agentmemory.model.Message;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.sql.*;
+import java.util.List;
 
 /**
  * 数据库服务
@@ -86,23 +81,11 @@ public class DatabaseService {
     }
     
     private void initPostgresql(HikariConfig hikariConfig) {
-        // 添加 UTF-8 编码参数到连接 URL
-        String jdbcUrl = config.getJdbcUrl();
-        
-        // PostgreSQL JDBC URL 使用 ? 开头添加参数
-        String separator = jdbcUrl.contains("?") ? "&" : "?";
-        
-        // 添加客户端编码设置（PostgreSQL 使用 client_encoding 参数）
-        if (!jdbcUrl.contains("client_encoding")) {
-            jdbcUrl += separator + "client_encoding=UTF8";
-            separator = "&";
-        }
-        
-        hikariConfig.setJdbcUrl(jdbcUrl);
+        hikariConfig.setJdbcUrl(config.getJdbcUrl());
         hikariConfig.setUsername(config.getJdbcUser());
         hikariConfig.setPassword(config.getJdbcPassword());
         
-        log.info("使用 PostgreSQL 数据库: {}", jdbcUrl);
+        log.info("使用 PostgreSQL 数据库: {}", config.getJdbcUrl());
     }
     
     /**
