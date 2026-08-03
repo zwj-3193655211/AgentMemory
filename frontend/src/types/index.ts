@@ -8,6 +8,11 @@ export interface Stats {
   practices: number
   contexts: number
   skills: number
+  // 图表数据
+  dailySessions?: Array<{ date: string; count: number }>
+  dailyMessages?: Array<{ date: string; count: number }>
+  agentDistribution?: Array<{ agentType: string; count: number }>
+  memoryDistribution?: Array<{ type: string; count: number }>
 }
 
 // ============== 记忆库类型 ==============

@@ -1,13 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { useCRUD } from './useCRUD'
 
+interface TestItem {
+  id?: string
+  title?: string
+}
+
 describe('useCRUD', () => {
   // Mock api methods
   const mockApiMethods = {
-    list: vi.fn(),
-    create: vi.fn(),
-    update: vi.fn(),
-    delete: vi.fn()
+    list: vi.fn<() => Promise<TestItem[]>>(),
+    create: vi.fn<(data: Partial<TestItem>) => Promise<any>>(),
+    update: vi.fn<(id: string, data: Partial<TestItem>) => Promise<any>>(),
+    delete: vi.fn<(id: string) => Promise<any>>()
   }
 
   beforeEach(() => {
@@ -16,7 +21,7 @@ describe('useCRUD', () => {
 
   describe('initial state', () => {
     it('should initialize with empty dataList', () => {
-      const { dataList, loading, dialog } = useCRUD(mockApiMethods, 'Test')
+      const { dataList, loading, dialog } = useCRUD<TestItem>(mockApiMethods, 'Test')
 
       expect(dataList.value).toEqual([])
       expect(loading.value).toBe(false)
@@ -30,7 +35,7 @@ describe('useCRUD', () => {
       const mockData = [{ id: '1', title: 'Test 1' }, { id: '2', title: 'Test 2' }]
       mockApiMethods.list.mockResolvedValue(mockData)
 
-      const { dataList, loading, loadData } = useCRUD(mockApiMethods, 'Test')
+      const { dataList, loading, loadData } = useCRUD<TestItem>(mockApiMethods, 'Test')
 
       await loadData()
 
@@ -41,7 +46,7 @@ describe('useCRUD', () => {
     it('should handle load error', async () => {
       mockApiMethods.list.mockRejectedValue(new Error('Load failed'))
 
-      const { loadData } = useCRUD(mockApiMethods, 'Test')
+      const { loadData } = useCRUD<TestItem>(mockApiMethods, 'Test')
       await loadData()
 
       // Loading should be false after error
@@ -50,7 +55,7 @@ describe('useCRUD', () => {
 
   describe('openCreate', () => {
     it('should open create dialog with default values', () => {
-      const { dialog, openCreate } = useCRUD(mockApiMethods, 'Test')
+      const { dialog, openCreate } = useCRUD<TestItem>(mockApiMethods, 'Test')
       const defaults = { title: 'Default Title' }
 
       openCreate(defaults)
@@ -61,7 +66,7 @@ describe('useCRUD', () => {
     })
 
     it('should open create dialog with empty defaults', () => {
-      const { dialog, openCreate } = useCRUD(mockApiMethods, 'Test')
+      const { dialog, openCreate } = useCRUD<TestItem>(mockApiMethods, 'Test')
 
       openCreate()
 
@@ -72,7 +77,7 @@ describe('useCRUD', () => {
 
   describe('openEdit', () => {
     it('should open edit dialog with item data', () => {
-      const { dialog, openEdit } = useCRUD(mockApiMethods, 'Test')
+      const { dialog, openEdit } = useCRUD<TestItem>(mockApiMethods, 'Test')
       const item = { id: '123', title: 'Edit Me' }
 
       openEdit(item)
@@ -85,7 +90,7 @@ describe('useCRUD', () => {
 
   describe('closeDialog', () => {
     it('should close dialog and reset form data', () => {
-      const { dialog, closeDialog, openCreate } = useCRUD(mockApiMethods, 'Test')
+      const { dialog, closeDialog, openCreate } = useCRUD<TestItem>(mockApiMethods, 'Test')
 
       openCreate({ title: 'Test' })
       closeDialog()
@@ -100,7 +105,7 @@ describe('useCRUD', () => {
       const mockNewItem = { id: '1', title: 'New' }
       mockApiMethods.create.mockResolvedValue(mockNewItem)
 
-      const { dialog, submitForm, loadData } = useCRUD(mockApiMethods, 'Test')
+      const { dialog, submitForm, loadData } = useCRUD<TestItem>(mockApiMethods, 'Test')
       dialog.formData = { title: 'New' }
 
       await loadData() // Initialize
@@ -115,7 +120,7 @@ describe('useCRUD', () => {
     it('should update existing item successfully', async () => {
       mockApiMethods.update.mockResolvedValue({})
 
-      const { dialog, submitForm, loadData } = useCRUD(mockApiMethods, 'Test')
+      const { dialog, submitForm, loadData } = useCRUD<TestItem>(mockApiMethods, 'Test')
       dialog.formData = { id: '123', title: 'Updated' }
       dialog.isEdit = true
 
@@ -130,7 +135,7 @@ describe('useCRUD', () => {
     it('should handle submit error', async () => {
       mockApiMethods.create.mockRejectedValue(new Error('Create failed'))
 
-      const { dialog, submitForm, loadData } = useCRUD(mockApiMethods, 'Test')
+      const { dialog, submitForm, loadData } = useCRUD<TestItem>(mockApiMethods, 'Test')
       dialog.formData = { title: 'New' }
 
       await loadData()
@@ -145,7 +150,7 @@ describe('useCRUD', () => {
     it('should delete item successfully', async () => {
       mockApiMethods.delete.mockResolvedValue({})
 
-      const { deleteItem, loadData } = useCRUD(mockApiMethods, 'Test')
+      const { deleteItem, loadData } = useCRUD<TestItem>(mockApiMethods, 'Test')
       await loadData()
       mockApiMethods.list.mockResolvedValue([])
 
@@ -158,7 +163,7 @@ describe('useCRUD', () => {
     it('should handle delete error', async () => {
       mockApiMethods.delete.mockRejectedValue(new Error('Delete failed'))
 
-      const { deleteItem } = useCRUD(mockApiMethods, 'Test')
+      const { deleteItem } = useCRUD<TestItem>(mockApiMethods, 'Test')
       const result = await deleteItem('123')
 
       expect(result).toBe(false)
@@ -167,7 +172,7 @@ describe('useCRUD', () => {
 
   describe('confirmDelete', () => {
     it('should return false if item has no id', async () => {
-      const { confirmDelete } = useCRUD(mockApiMethods, 'Test')
+      const { confirmDelete } = useCRUD<TestItem>(mockApiMethods, 'Test')
       const item = {}
 
       const result = await confirmDelete(item as any, 'Test Item')

@@ -95,208 +95,20 @@
     <!-- 主内容区 -->
     <main class="app-main" :class="{ 'app-main-chat': activeMenu === 'chat' }">
       <!-- 仪表盘 -->
-      <div v-if="activeMenu === 'dashboard'" class="content-panel full">
-        <div class="panel-header">
-          <h2>仪表盘</h2>
-          <el-tag type="success">系统运行正常</el-tag>
-        </div>
-
-        <!-- 统计卡片 -->
-        <div class="stats-grid">
-          <el-card class="stat-card clickable" shadow="hover" @click="activeMenu = 'sessions'">
-            <div class="stat-content">
-              <div class="stat-icon sessions">
-                <el-icon :size="32"><ChatDotRound /></el-icon>
-              </div>
-              <div class="stat-info">
-                <div class="stat-number">{{ stats.sessions }}</div>
-                <div class="stat-label">会话总数</div>
-              </div>
-              <div class="stat-arrow">
-                <el-icon><ArrowRight /></el-icon>
-              </div>
-            </div>
-          </el-card>
-
-          <el-card class="stat-card clickable" shadow="hover" @click="activeMenu = 'errors'">
-            <div class="stat-content">
-              <div class="stat-icon errors">
-                <el-icon :size="32"><WarningFilled /></el-icon>
-              </div>
-              <div class="stat-info">
-                <div class="stat-number">{{ stats.errors }}</div>
-                <div class="stat-label">错误纠正</div>
-              </div>
-              <div class="stat-arrow">
-                <el-icon><ArrowRight /></el-icon>
-              </div>
-            </div>
-          </el-card>
-
-          <el-card class="stat-card clickable" shadow="hover" @click="activeMenu = 'practices'">
-            <div class="stat-content">
-              <div class="stat-icon practices">
-                <el-icon :size="32"><DocumentChecked /></el-icon>
-              </div>
-              <div class="stat-info">
-                <div class="stat-number">{{ stats.practices }}</div>
-                <div class="stat-label">实践经验</div>
-              </div>
-              <div class="stat-arrow">
-                <el-icon><ArrowRight /></el-icon>
-              </div>
-            </div>
-          </el-card>
-
-          <el-card class="stat-card clickable" shadow="hover" @click="activeMenu = 'profiles'">
-            <div class="stat-content">
-              <div class="stat-icon profiles">
-                <el-icon :size="32"><User /></el-icon>
-              </div>
-              <div class="stat-info">
-                <div class="stat-number">{{ stats.profiles }}</div>
-                <div class="stat-label">用户画像</div>
-              </div>
-              <div class="stat-arrow">
-                <el-icon><ArrowRight /></el-icon>
-              </div>
-            </div>
-          </el-card>
-
-          <el-card class="stat-card clickable" shadow="hover" @click="activeMenu = 'contexts'">
-            <div class="stat-content">
-              <div class="stat-icon contexts">
-                <el-icon :size="32"><FolderOpened /></el-icon>
-              </div>
-              <div class="stat-info">
-                <div class="stat-number">{{ stats.contexts }}</div>
-                <div class="stat-label">项目上下文</div>
-              </div>
-              <div class="stat-arrow">
-                <el-icon><ArrowRight /></el-icon>
-              </div>
-            </div>
-          </el-card>
-
-          <el-card class="stat-card clickable" shadow="hover" @click="activeMenu = 'skills'">
-            <div class="stat-content">
-              <div class="stat-icon skills">
-                <el-icon :size="32"><Reading /></el-icon>
-              </div>
-              <div class="stat-info">
-                <div class="stat-number">{{ stats.skills }}</div>
-                <div class="stat-label">技能沉淀</div>
-              </div>
-              <div class="stat-arrow">
-                <el-icon><ArrowRight /></el-icon>
-              </div>
-            </div>
-          </el-card>
-
-          <el-card class="stat-card messages-card" shadow="never">
-            <div class="stat-content">
-              <div class="stat-icon messages">
-                <el-icon :size="32"><Box /></el-icon>
-              </div>
-              <div class="stat-info">
-                <div class="stat-number">{{ stats.messages.toLocaleString() }}</div>
-                <div class="stat-label">消息总数</div>
-              </div>
-            </div>
-          </el-card>
-        </div>
-
-        <!-- ECharts 图表区 -->
-        <div class="charts-grid">
-          <el-card class="chart-card" shadow="never">
-            <template #header><span class="chart-title">近30天活跃趋势</span></template>
-            <v-chart class="chart-instance" :option="trendOption" autoresize />
-          </el-card>
-          <el-card class="chart-card" shadow="never">
-            <template #header><span class="chart-title">Agent 使用分布</span></template>
-            <v-chart class="chart-instance" :option="agentPieOption" autoresize />
-          </el-card>
-          <el-card class="chart-card" shadow="never">
-            <template #header><span class="chart-title">记忆库概览</span></template>
-            <v-chart class="chart-instance" :option="memoryBarOption" autoresize />
-          </el-card>
-          <el-card class="chart-card" shadow="never">
-            <template #header><span class="chart-title">消息增长趋势</span></template>
-            <v-chart class="chart-instance" :option="msgAreaOption" autoresize />
-          </el-card>
-        </div>
-
-        <!-- 最近活动 -->
-        <div class="activity-section">
-          <h3>最近会话</h3>
-          <el-table :data="sessions.slice(0, 5)" stripe>
-            <el-table-column prop="agentType" label="Agent" width="100">
-              <template #default="{ row }">
-                <el-tag :type="getAgentTagType(row.agentType)" size="small">{{ row.agentType }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="projectPath" label="项目" show-overflow-tooltip />
-            <el-table-column prop="messageCount" label="消息数" width="80" />
-            <el-table-column prop="createdAt" label="创建时间" width="180">
-              <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
-            </el-table-column>
-          </el-table>
-        </div>
-      </div>
+      <Dashboard
+        v-if="activeMenu === 'dashboard'"
+        :stats="stats"
+        :sessions="sessions"
+        @navigate="handleMenuSelect"
+      />
 
       <!-- 对话记录 -->
-      <div v-if="activeMenu === 'sessions'" class="content-panel">
-        <div class="panel-header">
-          <h2>对话记录</h2>
-          <div style="display: flex; gap: 10px;">
-            <el-select v-model="selectedAgent" placeholder="选择 Agent" clearable style="width: 150px">
-              <el-option v-for="agent in agents" :key="agent.name" :label="agent.displayName || agent.name" :value="agent.name" />
-            </el-select>
-            <el-tag type="info" size="small" style="margin-left: 4px;">{{ filteredSessions.length }} 条</el-tag>
-            <el-button @click="showAddAgentDialog = true" title="添加自定义 Agent">
-              <el-icon><Plus /></el-icon>
-            </el-button>
-            <el-button @click="exportSessions">
-              <el-icon><Download /></el-icon> 导出
-            </el-button>
-          </div>
-        </div>
-        <div class="session-list">
-          <el-card v-for="session in filteredSessions" :key="session.id" class="session-card" @click="selectSession(session)">
-            <div class="session-header">
-              <el-tag :type="getAgentTagType(session.agentType)">{{ session.agentType }}</el-tag>
-              <span class="session-time">{{ formatTime(session.createdAt) }}</span>
-            </div>
-            <div class="session-project">{{ session.projectPath || '未知项目' }}</div>
-            <div class="session-count">{{ session.messageCount }} 条消息</div>
-          </el-card>
-        </div>
-      </div>
-
-      <!-- 对话详情 -->
-      <div v-if="activeMenu === 'sessions' && selectedSession" class="detail-panel">
-        <div class="panel-header">
-          <h3>{{ selectedSession.id }}</h3>
-          <div style="display: flex; gap: 10px;">
-            <el-button @click="exportSingleSession(selectedSession.id)" size="small">
-              <el-icon><Download /></el-icon> 导出
-            </el-button>
-            <el-button @click="selectedSession = null" text>
-              <el-icon><Close /></el-icon>
-            </el-button>
-          </div>
-        </div>
-        <div class="message-list">
-          <div v-for="msg in filteredMessages" :key="msg.id" class="message-item" :class="msg.role">
-            <div class="message-role">{{ msg.role === 'user' ? '用户' : 'AI' }}</div>
-            <div class="message-content">{{ msg.content || '(工具调用)' }}</div>
-          </div>
-          <div v-if="filteredMessages.length === 0 && messages.length > 0" class="empty-hint">
-            已过滤 {{ messages.length - filteredMessages.length }} 条工具调用记录
-          </div>
-        </div>
-      </div>
-
+      <Sessions
+        v-if="activeMenu === 'sessions'"
+        :sessions="sessions"
+        :agents="agents"
+        @add-agent="showAddAgentDialog = true"
+      />
       <!-- 错误纠正库 -->
       <Errors v-if="activeMenu === 'errors'" ref="errorsRef" />
 
@@ -897,18 +709,7 @@
 import { ref, computed, onMounted, onUnmounted, reactive } from 'vue'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
-import { Search, Setting, ChatDotRound, WarningFilled, User, DocumentChecked, FolderOpened, Reading, Odometer, Box, Delete, Plus, Download, Close, Connection, InfoFilled, ArrowRight } from '@element-plus/icons-vue'
-
-// ECharts (vue-echarts 按需注册)
-import VChart from 'vue-echarts'
-import { use } from 'echarts/core'
-import { CanvasRenderer } from 'echarts/renderers'
-import { LineChart, BarChart, PieChart } from 'echarts/charts'
-import {
-  GridComponent, TooltipComponent, LegendComponent,
-  TitleComponent, DataZoomComponent
-} from 'echarts/components'
-use([CanvasRenderer, LineChart, BarChart, PieChart, GridComponent, TooltipComponent, LegendComponent, TitleComponent, DataZoomComponent])
+import { Search, Setting, ChatDotRound, WarningFilled, User, DocumentChecked, FolderOpened, Reading, Odometer, Box, Delete, Connection, InfoFilled } from '@element-plus/icons-vue'
 
 // 导入记忆库组件
 import Errors from './views/Errors.vue'
@@ -917,6 +718,8 @@ import Practices from './views/Practices.vue'
 import Contexts from './views/Contexts.vue'
 import Skills from './views/Skills.vue'
 import Setup from './views/Setup.vue'
+import Dashboard from './views/Dashboard.vue'
+import Sessions from './views/Sessions.vue'
 import ChatView from './components/ChatView.vue'
 
 // 使用 Vite 环境变量，支持运行时配置
@@ -927,84 +730,12 @@ const activeMenu = ref('dashboard')
 const showSetup = ref(localStorage.getItem('agentmemory_setup_done') !== 'true')
 const agents = ref<any[]>([])
 const sessions = ref<any[]>([])
-const messages = ref<any[]>([])
 const errors = ref<any[]>([])
 const profiles = ref<any[]>([])
 const practices = ref<any[]>([])
 const contexts = ref<any[]>([])
 const skills = ref<any[]>([])
 const stats = ref({ sessions: 0, messages: 0, errors: 0, profiles: 0, practices: 0, contexts: 0, skills: 0, dailySessions: [] as any[], dailyMessages: [] as any[], agentDistribution: [] as any[], memoryDistribution: [] as any[] })
-const selectedAgent = ref('')
-
-// ===== ECharts computed options =====
-const trendOption = computed(() => {
-  const ds: any[] = (stats.value as any).dailySessions || []
-  const dm: any[] = (stats.value as any).dailyMessages || []
-  const dates = Array.from(new Set([...ds.map((r: any) => r.date), ...dm.map((r: any) => r.date)])).sort()
-  const sessionMap = Object.fromEntries(ds.map((r: any) => [r.date, r.count]))
-  const msgMap = Object.fromEntries(dm.map((r: any) => [r.date, r.count]))
-  return {
-    tooltip: { trigger: 'axis' },
-    legend: { data: ['会话数', '消息数'], top: 0 },
-    grid: { left: 40, right: 50, bottom: 30, top: 32 },
-    xAxis: { type: 'category', data: dates, axisLabel: { fontSize: 10, rotate: 30 } },
-    yAxis: [
-      { type: 'value', name: '会话', nameTextStyle: { fontSize: 10 } },
-      { type: 'value', name: '消息', nameTextStyle: { fontSize: 10 } }
-    ],
-    series: [
-      { name: '会话数', type: 'line', smooth: true, data: dates.map(d => sessionMap[d] || 0), yAxisIndex: 0, itemStyle: { color: '#5470c6' } },
-      { name: '消息数', type: 'line', smooth: true, data: dates.map(d => msgMap[d] || 0), yAxisIndex: 1, itemStyle: { color: '#91cc75' } }
-    ]
-  }
-})
-
-const agentPieOption = computed(() => {
-  const dist: any[] = (stats.value as any).agentDistribution || []
-  return {
-    tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-    legend: { orient: 'vertical', right: 10, top: 'center', textStyle: { fontSize: 11 } },
-    series: [{
-      type: 'pie', radius: ['40%', '70%'], center: ['40%', '50%'],
-      label: { show: false },
-      data: dist.map((r: any) => ({ name: r.agentType || '未知', value: r.count }))
-    }]
-  }
-})
-
-const memoryBarOption = computed(() => {
-  const dist: any[] = (stats.value as any).memoryDistribution || []
-  return {
-    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-    grid: { left: 80, right: 20, bottom: 20, top: 20 },
-    xAxis: { type: 'value' },
-    yAxis: { type: 'category', data: dist.map((r: any) => r.type), axisLabel: { fontSize: 11 } },
-    series: [{
-      type: 'bar', data: dist.map((r: any) => r.count),
-      itemStyle: { color: '#5470c6', borderRadius: [0, 4, 4, 0] },
-      label: { show: true, position: 'right', fontSize: 11 }
-    }]
-  }
-})
-
-const msgAreaOption = computed(() => {
-  const dm: any[] = (stats.value as any).dailyMessages || []
-  let cum = 0
-  const dates = dm.map((r: any) => r.date)
-  const cumData = dm.map((r: any) => { cum += r.count; return cum })
-  return {
-    tooltip: { trigger: 'axis' },
-    grid: { left: 50, right: 20, bottom: 30, top: 20 },
-    xAxis: { type: 'category', data: dates, axisLabel: { fontSize: 10, rotate: 30 } },
-    yAxis: { type: 'value' },
-    series: [{
-      type: 'line', smooth: true, data: cumData,
-      areaStyle: { opacity: 0.3 },
-      itemStyle: { color: '#91cc75' }
-    }]
-  }
-})
-const selectedSession = ref<any>(null)
 
 // 搜索
 const searchQuery = ref('')
@@ -1399,81 +1130,9 @@ const providerPresets: Record<string, { baseUrl: string; model: string }> = {
   ollama: { baseUrl: 'http://localhost:11434/v1', model: 'qwen3:0.6b' }
 }
 
-// 计算属性
-// Agent名称映射：将agent表中的name映射到session表中的agentType
-const agentNameMapping: Record<string, string> = {
-  'Claude Code': 'claude',
-  'Codex CLI': 'codex',
-  'Crush CLI': 'crush',
-  'iFlow CLI': 'iflow',
-  'Nanobot': 'nanobot',
-  'OpenClaw': 'openclaw',
-  'Qoder CLI': 'qoder',
-  'Qwen CLI': 'qwen',
-  'workbuddy': 'workbuddy'
-}
-
-const filteredSessions = computed(() => {
-  // 调试：显示各 agentType 计数
-  const counts: Record<string, number> = {}
-  sessions.value.forEach(s => { counts[s.agentType] = (counts[s.agentType] || 0) + 1 })
-  console.log('[filter-debug] totalSessions=', sessions.value.length, 'counts=', counts)
-
-  if (!selectedAgent.value) return sessions.value
-  // 将选中的agent名称转换为agentType格式
-  const targetType = agentNameMapping[selectedAgent.value] || selectedAgent.value.toLowerCase().replace(' ', '').replace('cli', '')
-  console.log('[filter] selectedAgent=', selectedAgent.value, 'targetType=', targetType, 'totalSessions=', sessions.value.length)
-  const result = sessions.value.filter(s => {
-    const match = s.agentType === targetType
-    if (s.agentType === 'workbuddy' || s.agentType === 'crush') {
-      console.log('[filter] check', s.agentType, 'vs', targetType, 'match=', match, 'id=', s.id)
-    }
-    return match
-  })
-  console.log('[filter] result count=', result.length)
-  return result
-})
-
-// 过滤空消息（工具调用等）
-const filteredMessages = computed(() => {
-  return messages.value.filter(m => m.content && m.content.trim().length > 0)
-})
-
 // 方法
 const handleMenuSelect = (index: string) => {
   activeMenu.value = index
-  selectedSession.value = null
-}
-
-const selectSession = async (session: any) => {
-  selectedSession.value = session
-  try {
-    const res = await axios.get(`${API_BASE}/messages/${session.id}`)
-    messages.value = res.data
-  } catch (e) {
-    console.error('加载消息失败', e)
-  }
-}
-
-const getAgentTagType = (type: string) => {
-  const types: Record<string, string> = {
-    iflow: 'primary',
-    claude: 'success',
-    qwen: 'warning',
-    qoder: 'danger',
-    openclaw: 'info',
-    nanobot: 'info',
-    crush: 'danger',
-    workbuddy: 'primary',
-    codex: 'success'
-  }
-  return types[type] || 'info'
-}
-
-const formatTime = (time: string | Date) => {
-  if (!time) return ''
-  const d = new Date(time)
-  return d.toLocaleString('zh-CN')
 }
 
 // 添加自定义 Agent
@@ -1846,56 +1505,6 @@ const cleanupNow = async () => {
 // ===== 对话记录导出方法 =====
 
 // 导出所有对话记录
-const exportSessions = async () => {
-  try {
-    const res = await axios.get(`${API_BASE}/sessions/export`, { responseType: 'blob' })
-    const url = window.URL.createObjectURL(new Blob([res.data]))
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `sessions_${Date.now()}.json`
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    ElMessage.success('导出成功')
-  } catch {
-    ElMessage.error('导出失败')
-  }
-}
-
-// 导出单个对话记录（包含消息）
-const exportSingleSession = async (sessionId: string) => {
-  try {
-    // 获取会话信息
-    const sessionRes = await axios.get(`${API_BASE}/sessions`)
-    const session = sessionRes.data.find((s: any) => s.id === sessionId)
-    if (!session) {
-      ElMessage.error('会话不存在')
-      return
-    }
-
-    // 获取消息
-    const messagesRes = await axios.get(`${API_BASE}/messages/${sessionId}`)
-
-    // 组合导出数据
-    const exportData = {
-      session: session,
-      messages: messagesRes.data,
-      exportedAt: new Date().toISOString()
-    }
-
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
-    const url = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `session_${sessionId}_${Date.now()}.json`
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    ElMessage.success('导出成功')
-  } catch (error) {
-    ElMessage.error('导出失败')
-  }
-}
 
 // 初始化完成处理
 const handleSetupComplete = () => {
@@ -2050,17 +1659,6 @@ onUnmounted(() => {
   width: 100%;
 }
 
-/* 详情面板 */
-.detail-panel {
-  flex: 0 0 420px;
-  background: #ffffff;
-  border-radius: 12px;
-  padding: 24px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
-  max-height: calc(100vh - 120px);
-  overflow-y: auto;
-}
-
 /* 面板头部 */
 .panel-header {
   display: flex;
@@ -2078,59 +1676,6 @@ onUnmounted(() => {
   color: #1a1a2e;
 }
 
-/* 会话列表 */
-.session-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
-}
-
-.session-card {
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  border: 1px solid #f0f2f5;
-}
-
-.session-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(64, 158, 255, 0.15);
-  border-color: #409eff;
-}
-
-.session-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.session-time {
-  font-size: 12px;
-  color: #909399;
-}
-
-.session-project {
-  font-size: 14px;
-  color: #606266;
-  margin-bottom: 4px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.session-count {
-  font-size: 12px;
-  color: #909399;
-}
-
-/* 统计卡片网格 */
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
 /* 统计卡片 */
 .stat-card {
   border: none;
@@ -2138,81 +1683,10 @@ onUnmounted(() => {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.stat-card.clickable {
-  cursor: pointer;
-}
-
-.stat-card.clickable:hover {
-  transform: translateY(-4px);
-}
-
-.stat-card.messages-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
-}
-
-.stat-card.messages-card .stat-icon {
-  background: rgba(255, 255, 255, 0.2);
-  color: #fff;
-}
-
-.stat-card.messages-card .stat-label {
-  color: rgba(255, 255, 255, 0.9);
-}
-
 .stat-content {
   display: flex;
   align-items: center;
   gap: 16px;
-}
-
-.stat-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.stat-icon.sessions {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
-}
-
-.stat-icon.errors {
-  background: linear-gradient(135deg, #f56565 0%, #fc8181 100%);
-  color: #fff;
-}
-
-.stat-icon.practices {
-  background: linear-gradient(135deg, #48bb78 0%, #68d391 100%);
-  color: #fff;
-}
-
-.stat-icon.profiles {
-  background: linear-gradient(135deg, #ed8936 0%, #f6ad55 100%);
-  color: #fff;
-}
-
-.stat-icon.contexts {
-  background: linear-gradient(135deg, #718096 0%, #a0aec0 100%);
-  color: #fff;
-}
-
-.stat-icon.skills {
-  background: linear-gradient(135deg, #38b2ac 0%, #4fd1c5 100%);
-  color: #fff;
-}
-
-.stat-icon.messages {
-  background: linear-gradient(135deg, #9f7aea 0%, #b794f4 100%);
-  color: #fff;
-}
-
-.stat-info {
-  flex: 1;
 }
 
 .stat-number {
@@ -2226,58 +1700,6 @@ onUnmounted(() => {
   font-size: 14px;
   color: #606266;
   margin-top: 4px;
-}
-
-.stat-arrow {
-  opacity: 0;
-  transform: translateX(-8px);
-  transition: all 0.3s ease;
-  color: #409eff;
-}
-
-.stat-card.clickable:hover .stat-arrow {
-  opacity: 1;
-  transform: translateX(0);
-}
-
-/* 图表区域 */
-.charts-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-top: 20px;
-}
-
-.chart-card {
-  border-radius: 12px;
-}
-
-.chart-card :deep(.el-card__header) {
-  padding: 12px 16px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.chart-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #333;
-}
-
-.chart-instance {
-  height: 260px;
-  width: 100%;
-}
-
-/* 活动区域 */
-.activity-section {
-  margin-top: 24px;
-}
-
-.activity-section h3 {
-  font-size: 16px;
-  font-weight: 600;
-  color: #1a1a2e;
-  margin-bottom: 16px;
 }
 
 /* 设置卡片 */
@@ -2303,47 +1725,6 @@ onUnmounted(() => {
   font-size: 12px;
   color: #909399;
   margin-left: 8px;
-}
-
-/* 消息列表 */
-.message-list {
-  max-height: calc(100vh - 200px);
-  overflow-y: auto;
-}
-
-.message-item {
-  padding: 12px 16px;
-  border-radius: 8px;
-  margin-bottom: 12px;
-  background: #f5f7fa;
-}
-
-.message-item.user {
-  background: linear-gradient(135deg, #e8f4fd 0%, #d4edfc 100%);
-}
-
-.message-item.assistant {
-  background: linear-gradient(135deg, #f0f9eb 0%, #e8f5e9 100%);
-}
-
-.message-role {
-  font-size: 12px;
-  font-weight: 600;
-  color: #606266;
-  margin-bottom: 4px;
-}
-
-.message-content {
-  font-size: 14px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-}
-
-.empty-hint {
-  text-align: center;
-  color: #909399;
-  padding: 20px;
-  font-size: 14px;
 }
 
 /* 预设区域 */
@@ -2524,10 +1905,6 @@ onUnmounted(() => {
     padding: 16px;
   }
 
-  .detail-panel {
-    flex: 0 0 360px;
-  }
-
   .menu-label {
     display: none;
   }
@@ -2567,20 +1944,6 @@ onUnmounted(() => {
   .app-main {
     flex-direction: column;
     padding: 12px;
-  }
-
-  .detail-panel {
-    flex: 1;
-    width: 100%;
-    max-height: none;
-  }
-
-  .session-list {
-    grid-template-columns: 1fr;
-  }
-
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
   }
 }
 
