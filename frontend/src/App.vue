@@ -42,12 +42,6 @@
             </el-tooltip>
             <span class="menu-label">仪表盘</span>
           </el-menu-item>
-          <el-menu-item index="sessions">
-            <el-tooltip content="对话记录" placement="bottom">
-              <el-icon><ChatDotRound /></el-icon>
-            </el-tooltip>
-            <span class="menu-label">对话记录</span>
-          </el-menu-item>
           <el-menu-item index="errors">
             <el-tooltip content="错误纠正" placement="bottom">
               <el-icon><WarningFilled /></el-icon>
@@ -106,17 +100,9 @@
       <Dashboard
         v-if="activeMenu === 'dashboard'"
         :stats="stats"
-        :sessions="sessions"
         @navigate="handleMenuSelect"
       />
 
-      <!-- 对话记录 -->
-      <Sessions
-        v-if="activeMenu === 'sessions'"
-        :sessions="sessions"
-        :agents="agents"
-        @add-agent="showAddAgentDialog = true"
-      />
       <!-- 错误纠正库 -->
       <Errors v-if="activeMenu === 'errors'" ref="errorsRef" />
 
@@ -201,7 +187,6 @@ import Contexts from './views/Contexts.vue'
 import Skills from './views/Skills.vue'
 import Setup from './views/Setup.vue'
 import Dashboard from './views/Dashboard.vue'
-import Sessions from './views/Sessions.vue'
 import Search from './views/Search.vue'
 import Compression from './views/Compression.vue'
 import Settings from './views/Settings.vue'
@@ -215,7 +200,6 @@ const activeMenu = ref('dashboard')
 const sseConnected = ref(false)
 const showSetup = ref(localStorage.getItem('agentmemory_setup_done') !== 'true')
 const agents = ref<any[]>([])
-const sessions = ref<any[]>([])
 const errors = ref<any[]>([])
 const profiles = ref<any[]>([])
 const practices = ref<any[]>([])
@@ -268,9 +252,8 @@ const addCustomAgent = async () => {
 // 统一加载数据（避免重复请求）
 const loadAllData = async () => {
   try {
-    const [agentsRes, sessionsRes, statsRes, errorsRes, profilesRes, practicesRes, contextsRes, skillsRes] = await Promise.all([
+    const [agentsRes, statsRes, errorsRes, profilesRes, practicesRes, contextsRes, skillsRes] = await Promise.all([
       axios.get(`${API_BASE}/agents`),
-      axios.get(`${API_BASE}/sessions`),
       axios.get(`${API_BASE}/stats`),
       axios.get(`${API_BASE}/errors`),
       axios.get(`${API_BASE}/profiles`),
@@ -279,7 +262,6 @@ const loadAllData = async () => {
       axios.get(`${API_BASE}/skills`)
     ])
     agents.value = agentsRes.data
-    sessions.value = sessionsRes.data
     stats.value = statsRes.data
     errors.value = errorsRes.data
     profiles.value = profilesRes.data

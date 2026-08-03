@@ -7,7 +7,7 @@
 
     <!-- 统计卡片 -->
     <div class="stats-grid">
-      <StatCard icon="ChatDotRound" title="会话总数" :value="stats.sessions" color="sessions" clickable @click="$emit('navigate', 'sessions')" />
+      <StatCard icon="ChatDotRound" title="会话总数" :value="stats.sessions" color="sessions" />
       <StatCard icon="WarningFilled" title="错误纠正" :value="stats.errors" color="errors" clickable @click="$emit('navigate', 'errors')" />
       <StatCard icon="DocumentChecked" title="实践经验" :value="stats.practices" color="practices" clickable @click="$emit('navigate', 'practices')" />
       <StatCard icon="User" title="用户画像" :value="stats.profiles" color="profiles" clickable @click="$emit('navigate', 'profiles')" />
@@ -35,23 +35,6 @@
         <v-chart class="chart-instance" :option="msgAreaOption" autoresize />
       </el-card>
     </div>
-
-    <!-- 最近活动 -->
-    <div class="activity-section">
-      <h3>最近会话</h3>
-      <el-table :data="sessions.slice(0, 5)" stripe>
-        <el-table-column prop="agentType" label="Agent" width="100">
-          <template #default="{ row }">
-            <el-tag :type="getAgentTagType(row.agentType)" size="small">{{ row.agentType }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="projectPath" label="项目" show-overflow-tooltip />
-        <el-table-column prop="messageCount" label="消息数" width="80" />
-        <el-table-column prop="createdAt" label="创建时间" width="180">
-          <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
-        </el-table-column>
-      </el-table>
-    </div>
   </div>
 </template>
 
@@ -72,7 +55,6 @@ use([CanvasRenderer, LineChart, BarChart, PieChart, GridComponent, TooltipCompon
 
 interface Props {
   stats: Stats
-  sessions: any[]
 }
 
 const props = defineProps<Props>()
@@ -148,20 +130,6 @@ const msgAreaOption = computed(() => {
     }]
   }
 })
-
-const getAgentTagType = (type: string): string => {
-  const types: Record<string, string> = {
-    iflow: 'primary', claude: 'success', qwen: 'warning', qoder: 'danger',
-    openclaw: 'info', nanobot: 'info', crush: 'danger', workbuddy: 'primary',
-    codex: 'success', pi: 'success'
-  }
-  return types[type] || 'info'
-}
-
-const formatTime = (time: string | Date): string => {
-  if (!time) return ''
-  return new Date(time).toLocaleString('zh-CN')
-}
 </script>
 
 <style scoped>
@@ -192,19 +160,6 @@ const formatTime = (time: string | Date): string => {
 .chart-instance {
   height: 280px;
   width: 100%;
-}
-
-.activity-section {
-  background: #fff;
-  border-radius: 8px;
-  padding: 16px;
-}
-
-.activity-section h3 {
-  margin: 0 0 16px 0;
-  font-size: 15px;
-  font-weight: 500;
-  color: #303133;
 }
 
 @media (max-width: 1200px) {
