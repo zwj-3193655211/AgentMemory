@@ -4,8 +4,11 @@ AgentMemory 嵌入服务
 
 支持三种模式：
 - 轻量模式 (默认): 仅 Qwen3-Embedding-0.6B，秒启动，规则提取
-- 本地LLM模式: Qwen3-Embedding-0.6B + 本地LLM（transformers，默认 Qwen3.5-2B）
+- 本地LLM模式: Qwen3-Embedding-0.6B + 本地LLM（transformers）
 - API模式: Qwen3-Embedding-0.6B + 外部API（OpenAI兼容接口）
+
+注意：本地 LLM 推理已由系统外部的 Ollama（qwen3.5:2b）承担，
+本服务不再维护本地 transformers 模型副本。LLM_MODE=local 仅作兼容保留。
 
 配置方式（环境变量）：
   LLM_MODE=disabled          # 轻量模式（默认）
@@ -18,8 +21,8 @@ AgentMemory 嵌入服务
   LLM_API_KEY=sk-xxx
   LLM_API_MODEL=gpt-4o-mini
   
-  # 本地模式配置（默认使用 ~/.agentmemory/models/Qwen3.5-2B 本地副本）
-  LLM_LOCAL_MODEL=C:/Users/31936/.agentmemory/models/Qwen3.5-2B
+  # 本地模式配置（本地 transformers 模型副本已删除，LLM 推理由 Ollama 承担）
+  # LLM_LOCAL_MODEL=__OLLAMA__ 表示不使用本地模型
 
 启动方式：
   python embed_server.py                              # 轻量模式
@@ -67,7 +70,8 @@ LLM_API_MODEL = os.environ.get('LLM_API_MODEL', 'gpt-4o-mini')
 LLM_API_TIMEOUT = int(os.environ.get('LLM_API_TIMEOUT', '30'))
 
 # 本地模型配置
-# 默认使用 ~/.agentmemory/models/Qwen3.5-2B 本地副本（提取分类模型）
+# 本地 transformers 模型副本已删除（由 Ollama 承担 LLM 推理）
+# 保留空默认值，LLM_MODE=local 时若未配置将优雅降级
 LLM_LOCAL_MODEL = os.environ.get(
     'LLM_LOCAL_MODEL',
     os.path.join(MODEL_CACHE, 'Qwen3.5-2B')
