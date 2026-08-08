@@ -1,6 +1,5 @@
 <template>
-  <div class="project-view">
-    <!-- 顶部工具条 -->
+  <div class="project-view">    <!-- 顶部工具条 -->
     <div class="panel-header">
       <div class="title-area">
         <h2>项目会话</h2>
@@ -291,11 +290,13 @@ defineExpose({ loadSessions })
 
 <style scoped>
 .project-view {
-  padding: 20px;
-  height: calc(100vh - 60px);
+  padding: 0;
+  width: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-width: 0;
+  height: calc(100vh - 108px); /* 视口 - header 60 - app-main padding 48 */
 }
 
 .panel-header {
@@ -304,6 +305,7 @@ defineExpose({ loadSessions })
   align-items: center;
   margin-bottom: 16px;
   flex-shrink: 0;
+  padding: 0 4px;
 }
 .title-area {
   display: flex;
@@ -323,6 +325,7 @@ defineExpose({ loadSessions })
   gap: 16px;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 /* ===== 左侧项目树 ===== */

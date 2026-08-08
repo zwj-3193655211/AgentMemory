@@ -394,12 +394,16 @@ onUnmounted(() => {
 }
 
 .app-main {
-  display: flex;
   padding: 24px;
-  gap: 24px;
   max-width: 1600px;
   margin: 0 auto;
   box-sizing: border-box;
+  min-height: calc(100vh - 60px);
+}
+
+.app-main > * {
+  min-width: 0;
+  min-height: 0;
 }
 
 /* Logo */
