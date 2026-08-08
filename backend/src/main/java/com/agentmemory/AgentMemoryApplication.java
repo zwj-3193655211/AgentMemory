@@ -9,6 +9,7 @@ import com.agentmemory.service.CleanupService;
 import com.agentmemory.service.CrushDatabaseWatcher;
 import com.agentmemory.service.WorkBuddyWatcher;
 import com.agentmemory.service.SessionCompressionService;
+import com.agentmemory.service.AgentMemorySyncService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,6 +38,7 @@ public class AgentMemoryApplication {
     private final AgentDetectorService agentDetectorService;
     private final CleanupService cleanupService;
     private final SessionCompressionService compressionService;
+    private final AgentMemorySyncService memorySyncService;
     private final ApiServer apiServer;
     private List<AgentInfo> detectedAgents;
     private CrushDatabaseWatcher crushDatabaseWatcher;
@@ -49,6 +51,7 @@ public class AgentMemoryApplication {
         this.agentDetectorService = new AgentDetectorService();
         this.cleanupService = new CleanupService(databaseService, config.getRetentionDays());
         this.compressionService = new SessionCompressionService(databaseService);
+        this.memorySyncService = new AgentMemorySyncService(databaseService);
         this.apiServer = new ApiServer(databaseService, fileWatcherService, agentDetectorService, config.getApiPort());
     }
 
@@ -94,6 +97,10 @@ public class AgentMemoryApplication {
         // 5. 启动会话压缩服务
         log.info("[5/7] 启动会话压缩服务...");
         compressionService.start();
+
+        // 5.5 启动 Agent 记忆同步服务（画像 + SQLite 会话导入）
+        log.info("[5.5/8] 启动 Agent 记忆同步服务...");
+        memorySyncService.start();
 
         // 6. 启动 Crush 数据库监控服务
         log.info("[6/8] 启动 Crush 数据库监控服务...");
