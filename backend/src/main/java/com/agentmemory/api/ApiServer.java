@@ -653,6 +653,10 @@ public class ApiServer {
                         agent.put("parserType", rs.getString("parser_type"));
                         agent.put("version", rs.getString("version"));
                         agent.put("enabled", rs.getBoolean("enabled"));
+                        // 实时检查 CLI 文件是否存在（避免显示已删除的 CLI）
+                        String cli = rs.getString("cli_path");
+                        agent.put("cliExists", cli != null && !cli.isBlank()
+                            && java.nio.file.Files.exists(java.nio.file.Paths.get(cli.replace("\\", "/"))));
                         return agent;
                     }
                 );

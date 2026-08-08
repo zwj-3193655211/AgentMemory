@@ -26,7 +26,7 @@
           <div class="agent-info">
             <p><label>解析器:</label> {{ a.parserType || '-' }}</p>
             <p><label>日志路径:</label> <span class="path">{{ a.logBasePath || '-' }}</span></p>
-            <p><label>CLI:</label> {{ a.cliPath ? '已找到' : '未找到' }}</p>
+            <p><label>CLI:</label> <span :class="a.cliExists ? '' : 'missing'">{{ a.cliExists ? '已找到' : (a.cliPath ? '已删除/不存在' : '未找到') }}</span></p>
           </div>
           <div style="margin-top: 12px; display: flex; gap: 8px">
             <el-button size="small" @click="syncAgent(a)" :loading="a.syncing">同步记忆</el-button>
@@ -117,5 +117,8 @@ defineExpose({ loadAgents })
 }
 .agent-info .path {
   word-break: break-all;
+}
+.agent-info .missing {
+  color: #f56c6c;
 }
 </style>
