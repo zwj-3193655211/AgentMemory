@@ -464,7 +464,6 @@ def export_canvas(base: Path, stats: Dict[str, int]):
             "label": label,
             "color": "5"
         })
-        counter += 1
         y_offset += 400
 
     # 4 类间的关系
