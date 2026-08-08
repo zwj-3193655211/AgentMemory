@@ -80,8 +80,8 @@ public class AgentMemoryApplication {
                 continue;  // WorkBuddy 由 WorkBuddyWatcher 独立监控
             }
             if ("hermes".equals(agent.getType()) || "mavis".equals(agent.getType())
-                    || "marvis".equals(agent.getType())) {
-                continue;  // SQLite 型 agent 由 AgentMemorySyncService 轮询导入会话
+                    || "marvis".equals(agent.getType()) || "minimax".equals(agent.getType())) {
+                continue;  // SQLite 型由 AgentMemorySyncService 轮询；minimax 会话目录暂空，待格式确认后接入
             }
             Path watchPath = expandHomePath(agent.getLogPath());
             if (watchPath.toFile().exists()) {

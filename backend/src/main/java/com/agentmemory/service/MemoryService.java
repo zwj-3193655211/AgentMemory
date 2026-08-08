@@ -29,10 +29,8 @@ public class MemoryService {
     
     // 允许的表名白名单（防止 SQL 注入）
     private static final Set<String> ALLOWED_TABLES = Set.of(
-        "error_corrections",
+        "experiences",
         "user_profiles",
-        "best_practices",
-        "project_contexts",
         "skills"
     );
 
@@ -461,10 +459,10 @@ public class MemoryService {
         
         try (Connection conn = databaseService.getConnection()) {
             switch (type) {
-                case ERROR_CORRECTION -> saveErrorCorrection(conn, id, memory, agentType, sessionId, embedding);
+                case ERROR_CORRECTION -> saveExperience(conn, id, memory, "error_correction", sessionId, embedding);
                 case USER_PROFILE -> saveUserProfile(conn, id, memory);
-                case BEST_PRACTICE -> saveBestPractice(conn, id, memory, sessionId, embedding);
-                case PROJECT_CONTEXT -> saveProjectContext(conn, id, memory);
+                case BEST_PRACTICE -> saveExperience(conn, id, memory, "best_practice", sessionId, embedding);
+                case PROJECT_CONTEXT -> { /* 项目上下文并入会话管理，不再单独存储 */ }
                 case SKILL -> saveSkill(conn, id, memory, embedding);
                 default -> {}
             }
@@ -492,33 +490,6 @@ public class MemoryService {
         }
     }
     
-    private void saveErrorCorrection(Connection conn, String id, ExtractedMemory memory,
-                                     String agentType, String sessionId, float[] embedding) throws SQLException {
-        String sql = embedding != null
-            ? "INSERT INTO error_corrections (id, title, problem, cause, solution, example, tags, agent_type, session_id, embedding, original_content, summary, compression_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::vector, ?, ?, ?)"
-            : "INSERT INTO error_corrections (id, title, problem, cause, solution, example, tags, agent_type, session_id, original_content, summary, compression_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        
-        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-            int idx = 1;
-            stmt.setString(idx++, id);
-            stmt.setString(idx++, memory.title);
-            stmt.setString(idx++, memory.problem != null ? memory.problem : "");
-            stmt.setString(idx++, memory.cause);
-            stmt.setString(idx++, memory.solution != null ? memory.solution : "");
-            stmt.setString(idx++, memory.description);
-            stmt.setArray(idx++, conn.createArrayOf("text", memory.tags.toArray()));
-            stmt.setString(idx++, agentType);
-            stmt.setString(idx++, sessionId);
-            if (embedding != null) {
-                stmt.setString(idx++, toArrayString(embedding));
-            }
-            stmt.setString(idx++, memory.originalContent);
-            stmt.setString(idx++, memory.summary);
-            stmt.setString(idx++, memory.compressionLevel != null ? memory.compressionLevel : "FULL");
-            stmt.executeUpdate();
-        }
-    }
-    
     private void saveUserProfile(Connection conn, String id, ExtractedMemory memory) throws SQLException {
         String sql = "INSERT INTO user_profiles (id, title, category, items) VALUES (?, ?, ?, ?::jsonb)";
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -532,102 +503,38 @@ public class MemoryService {
         }
     }
     
-    private void saveBestPractice(Connection conn, String id, ExtractedMemory memory,
-                                   String sessionId, float[] embedding) throws SQLException {
+    private void saveExperience(Connection conn, String id, ExtractedMemory memory,
+                                 String type, String sessionId, float[] embedding) throws SQLException {
         String sql = embedding != null
-            ? "INSERT INTO best_practices (id, title, scenario, practice, tags, source_session, embedding) VALUES (?, ?, ?, ?, ?, ?, ?::vector)"
-            : "INSERT INTO best_practices (id, title, scenario, practice, tags, source_session) VALUES (?, ?, ?, ?, ?, ?)";
-        
+            ? "INSERT INTO experiences (id, title, type, scenario, practice, rationale, tags, source_session, embedding) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::vector)"
+            : "INSERT INTO experiences (id, title, type, scenario, practice, rationale, tags, source_session) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, id);
             stmt.setString(2, memory.title);
-            stmt.setString(3, memory.scenario != null ? memory.scenario : "");
-            stmt.setString(4, memory.practice != null ? memory.practice : "");
-            stmt.setArray(5, conn.createArrayOf("text", memory.tags.toArray()));
-            stmt.setString(6, sessionId);
+            stmt.setString(3, type);
+            // scenario: 错误纠正用 problem，最佳实践用 scenario
+            String scenario = "error_correction".equals(type)
+                ? (memory.problem != null ? memory.problem : "")
+                : (memory.scenario != null ? memory.scenario : "");
+            stmt.setString(4, scenario);
+            // practice: 错误纠正用 solution，最佳实践用 practice
+            String practice = "error_correction".equals(type)
+                ? (memory.solution != null ? memory.solution : "")
+                : (memory.practice != null ? memory.practice : "");
+            stmt.setString(5, practice);
+            // rationale: 错误纠正用 cause，最佳实践无独立字段用 description 兜底
+            String rationale = "error_correction".equals(type) ? memory.cause : memory.description;
+            stmt.setString(6, rationale);
+            stmt.setArray(7, conn.createArrayOf("text", memory.tags.toArray()));
+            stmt.setString(8, sessionId);
             if (embedding != null) {
-                stmt.setString(7, toArrayString(embedding));
+                stmt.setString(9, toArrayString(embedding));
             }
             stmt.executeUpdate();
         }
     }
-    
-    private void saveProjectContext(Connection conn, String id, ExtractedMemory memory) throws SQLException {
-        String sql = "INSERT INTO project_contexts (id, title, project_name, project_path, tech_stack, key_decisions, structure) VALUES (?, ?, ?, ?, ?::text[], ?::jsonb, ?::jsonb)";
-        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setString(1, id);
-            stmt.setString(2, memory.title);
-            
-            // 获取项目名称
-            String projectName = (String) memory.extra.get("projectName");
-            if (projectName == null || projectName.isEmpty()) {
-                @SuppressWarnings("unchecked")
-                List<String> paths = (List<String>) memory.extra.get("paths");
-                if (paths != null && !paths.isEmpty()) {
-                    String path = paths.get(0);
-                    path = path.replaceAll("[/\\\\]$", "");
-                    int lastSlash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
-                    if (lastSlash >= 0 && lastSlash < path.length() - 1) {
-                        projectName = path.substring(lastSlash + 1);
-                    }
-                }
-            }
-            if (projectName == null || projectName.isEmpty()) {
-                projectName = "未命名项目";
-            }
-            stmt.setString(3, projectName);
-            
-            // 获取项目路径
-            @SuppressWarnings("unchecked")
-            List<String> paths = (List<String>) memory.extra.get("paths");
-            String projectPath = (paths != null && !paths.isEmpty()) ? paths.get(0) : null;
-            stmt.setString(4, projectPath);
-            
-            @SuppressWarnings("unchecked")
-            List<String> techStack = (List<String>) memory.extra.get("techStack");
-            if (techStack != null && !techStack.isEmpty()) {
-                stmt.setArray(5, conn.createArrayOf("text", techStack.toArray()));
-            } else {
-                stmt.setArray(5, conn.createArrayOf("text", new String[]{}));
-            }
-            
-            // 关键决策
-            String keyDecisions = (String) memory.extra.get("keyDecisions");
-            if (keyDecisions == null || keyDecisions.isEmpty()) {
-                stmt.setString(6, "[]");
-            } else {
-                // 将分号分隔的决策转为 JSON 数组
-                String[] decisions = keyDecisions.split(";");
-                StringBuilder jsonArr = new StringBuilder("[");
-                for (int i = 0; i < decisions.length; i++) {
-                    String d = decisions[i].trim();
-                    if (!d.isEmpty()) {
-                        if (jsonArr.length() > 1) jsonArr.append(",");
-                        jsonArr.append("\"").append(d.replace("\"", "\\\"")).append("\"");
-                    }
-                }
-                jsonArr.append("]");
-                stmt.setString(6, jsonArr.toString());
-            }
-            
-            // structure 字段存放 summary + next_steps
-            String summary = (String) memory.extra.getOrDefault("summary", memory.description);
-            String nextSteps = (String) memory.extra.get("nextSteps");
-            StringBuilder structJson = new StringBuilder("{");
-            if (summary != null && !summary.isEmpty()) {
-                structJson.append("\"summary\":\"").append(summary.replace("\"", "\\\"")).append("\"");
-            }
-            if (nextSteps != null && !nextSteps.isEmpty()) {
-                if (structJson.length() > 1) structJson.append(",");
-                structJson.append("\"next_steps\":\"").append(nextSteps.replace("\"", "\\\"")).append("\"");
-            }
-            structJson.append("}");
-            stmt.setString(7, structJson.toString());
-            
-            stmt.executeUpdate();
-        }
-    }
-    
+
     private void saveSkill(Connection conn, String id, ExtractedMemory memory, float[] embedding) throws SQLException {
         String sql = embedding != null
             ? "INSERT INTO skills (id, title, skill_type, description, tags, embedding) VALUES (?, ?, ?, ?, ?, ?::vector)"

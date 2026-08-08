@@ -40,26 +40,21 @@ public class LLMClassifier {
            - 包含"建议"、"推荐"、"最好用"、"经验证明"等表述
            - 是通用性的建议，不针对特定bug修复
 
-        4. project_contexts（项目上下文）：
-           - 项目的技术栈、架构决策、项目路径
-           - 包含具体项目名称、技术名词组合
-           - 描述项目是"做什么的"而不是"怎么做的"
-
-        5. skills（技能沉淀）：
+        4. skills（技能沉淀）：
            - 编程技能、方法论、步骤流程
            - 包含"步骤"、"流程"、"方法"、"原理"等表述
            - 可以复用到其他项目的通用知识
 
-        6. unknown（未知）：
+        5. unknown（未知）：
            - 简单的问候、闲聊、纯提问
            - 没有明确知识点的对话
            - 一次性问题而非可积累的经验
 
         【分类原则】
         - 优先检查是否包含"不对/错了"等错误纠正信号
-        - project_contexts要看是否描述"项目是什么"而非"项目出了什么问题"
         - 如果内容包含多种信号，选择信息量最大、最有长期价值的那一类
         - 纯抱怨或情绪表达属于unknown
+        - 注意：项目技术栈、架构决策等描述应归入 best_practices（作为项目经验），没有独立的项目上下文类型
         """;
 
     // 分类结果JSON模板
@@ -77,7 +72,7 @@ public class LLMClassifier {
         }
 
         注意事项：
-        - type 必须是以下值之一：error_corrections, user_profiles, best_practices, project_contexts, skills, unknown
+        - type 必须是以下值之一：error_corrections, user_profiles, best_practices, skills, unknown
         - confidence 表示分类的确定程度，0.0-1.0之间
         - 如果对话是用户的提问或闲聊，返回 unknown 类型
         """;

@@ -16,10 +16,10 @@ public class MemoryClassifier {
     
     // 记忆类型枚举
     public enum MemoryType {
-        ERROR_CORRECTION("错误纠正", "error_corrections"),
+        ERROR_CORRECTION("错误纠正", "experiences"),
         USER_PROFILE("用户画像", "user_profiles"),
-        BEST_PRACTICE("实践经验", "best_practices"),
-        PROJECT_CONTEXT("项目上下文", "project_contexts"),
+        BEST_PRACTICE("实践经验", "experiences"),
+        PROJECT_CONTEXT("项目上下文", "sessions"),
         SKILL("技能沉淀", "skills"),
         UNKNOWN("未知", null);
         
@@ -147,9 +147,9 @@ public class MemoryClassifier {
             if (hasPreferenceMarkers(content)) {
                 return MemoryType.USER_PROFILE;
             }
-            // 检查是否是项目上下文
+            // 项目上下文并入实践经验
             if (hasProjectContextMarkers(content)) {
-                return MemoryType.PROJECT_CONTEXT;
+                return MemoryType.BEST_PRACTICE;
             }
             // 其他求助请求不保存
             return MemoryType.UNKNOWN;
@@ -170,9 +170,9 @@ public class MemoryClassifier {
             return MemoryType.USER_PROFILE;
         }
 
-        // 检查是否是项目上下文
+        // 项目上下文并入实践经验
         if (hasProjectContextMarkers(content)) {
-            return MemoryType.PROJECT_CONTEXT;
+            return MemoryType.BEST_PRACTICE;
         }
 
         Map<MemoryType, Integer> scores = new EnumMap<>(MemoryType.class);

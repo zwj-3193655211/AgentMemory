@@ -119,8 +119,9 @@ public class CleanupService extends ScheduledServiceBase {
      */
     private int cleanupMemoryTables() {
         int total = 0;
-        total += executeUpdate("DELETE FROM error_corrections WHERE expires_at < NOW() AND deleted = 1", "清理 error_corrections");
-        total += executeUpdate("DELETE FROM best_practices WHERE expires_at < NOW() AND deleted = 1", "清理 best_practices");
+        total += executeUpdate("DELETE FROM experiences WHERE created_at < NOW() - INTERVAL '30 days' AND deleted = true", "清理 experiences");
+        total += executeUpdate("DELETE FROM skills WHERE status = 'rejected' AND created_at < NOW() - INTERVAL '7 days'", "清理 rejected 技能");
+        total += executeUpdate("DELETE FROM skills WHERE status = 'pending' AND created_at < NOW() - INTERVAL '7 days'", "清理超期 pending 技能候选");
         return total;
     }
     

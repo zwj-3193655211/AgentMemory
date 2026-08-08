@@ -98,10 +98,10 @@ public class ApiServer {
         server.createContext("/api/agents", new AgentsHandler());
         server.createContext("/api/sessions", new SessionsHandler());
         server.createContext("/api/messages", new MessagesHandler());
-        server.createContext("/api/errors", new ErrorCorrectionsHandler());
+        server.createContext("/api/experiences", new ExperiencesHandler());
+        server.createContext("/api/errors", new ExperiencesHandler("error_correction"));  // 兼容旧端点
+        server.createContext("/api/practices", new ExperiencesHandler("best_practice"));  // 兼容旧端点
         server.createContext("/api/profiles", new UserProfilesHandler());
-        server.createContext("/api/practices", new BestPracticesHandler());
-        server.createContext("/api/contexts", new ProjectContextsHandler());
         server.createContext("/api/skills", new SkillsHandler());
         server.createContext("/api/stats", new StatsHandler());
         server.createContext("/api/search", new SearchHandler());
@@ -471,6 +471,25 @@ public class ApiServer {
         }
     }
 
+    /**
+     * 获取 URL 查询参数
+     */
+    private String getQueryParam(HttpExchange exchange, String name) {
+        String query = exchange.getRequestURI().getQuery();
+        if (query == null) return null;
+        for (String param : query.split("&")) {
+            String[] pair = param.split("=", 2);
+            if (pair.length == 2 && pair[0].equals(name)) {
+                try {
+                    return java.net.URLDecoder.decode(pair[1], StandardCharsets.UTF_8);
+                } catch (Exception e) {
+                    return pair[1];
+                }
+            }
+        }
+        return null;
+    }
+
     private void sendError(HttpExchange exchange, int code, String message) throws IOException {
         Map<String, Object> error = new HashMap<>();
         error.put("error", true);
@@ -779,71 +798,52 @@ public class ApiServer {
         }
     }
     
-    class ErrorCorrectionsHandler implements HttpHandler {
+    class ExperiencesHandler implements HttpHandler {
+        private final String defaultType;
+
+        public ExperiencesHandler() { this.defaultType = null; }
+        public ExperiencesHandler(String type) { this.defaultType = type; }
+
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             wrapHandler(exchange, () -> {
                 String method = exchange.getRequestMethod();
                 String path = exchange.getRequestURI().getPath();
+                String type = getQueryParam(exchange, "type");
+                if (type == null || type.isBlank()) type = defaultType;
 
                 if ("GET".equals(method)) {
                     if (path.endsWith("/export")) {
-                        handleExport(exchange);
-                    } else if (path.matches("/api/errors/[^/]+")) {
-                        handleGetSingle(exchange, parseIdFromPath(path, "/api/errors/"));
+                        handleExport(exchange, type);
+                    } else if (path.matches("/api/experiences/[^/]+")) {
+                        handleGetSingle(exchange, parseIdFromPath(path, "/api/experiences/"));
                     } else {
-                        handleList(exchange);
+                        handleList(exchange, type);
                     }
                 } else if ("POST".equals(method)) {
-                    handleCreate(exchange);
+                    handleCreate(exchange, type);
                 } else if ("PUT".equals(method)) {
-                    handleUpdate(exchange, parseIdFromPath(path, "/api/errors/"));
+                    handleUpdate(exchange, parseIdFromPath(path, "/api/experiences/"));
                 } else if ("DELETE".equals(method)) {
-                    handleDelete(exchange, parseIdFromPath(path, "/api/errors/"));
+                    handleDelete(exchange, parseIdFromPath(path, "/api/experiences/"));
                 } else {
                     sendError(exchange, 405, "Method not allowed");
                 }
             });
         }
 
-        private void handleList(HttpExchange exchange) throws SQLException, IOException {
-            List<Map<String, Object>> items = queryList(
-                "SELECT * FROM error_corrections WHERE deleted = false ORDER BY created_at DESC LIMIT 100",
-                rs -> {
-                    Map<String, Object> item = new HashMap<>();
-                    item.put("id", rs.getString("id"));
-                    item.put("title", rs.getString("title"));
-                    item.put("problem", rs.getString("problem"));
-                    item.put("cause", rs.getString("cause"));
-                    item.put("solution", rs.getString("solution"));
-                    item.put("example", rs.getString("example"));
-                    item.put("tags", sqlArrayToList(rs.getArray("tags")));
-                    item.put("agentType", rs.getString("agent_type"));
-                    item.put("createdAt", rs.getTimestamp("created_at"));
-                    return item;
-                }
-            );
+        private void handleList(HttpExchange exchange, String type) throws SQLException, IOException {
+            String sql = "SELECT * FROM experiences WHERE deleted = false";
+            if (type != null && !type.isBlank()) sql += " AND type = ?";
+            sql += " ORDER BY created_at DESC LIMIT 200";
+            List<Map<String, Object>> items = queryList(sql, rs -> mapExperience(rs), type);
             sendJson(exchange, items);
         }
 
         private void handleGetSingle(HttpExchange exchange, String id) throws SQLException, IOException {
             List<Map<String, Object>> items = queryList(
-                "SELECT * FROM error_corrections WHERE id = ? AND (deleted = false OR deleted IS NULL)",
-                rs -> {
-                    Map<String, Object> item = new HashMap<>();
-                    item.put("id", rs.getString("id"));
-                    item.put("title", rs.getString("title"));
-                    item.put("problem", rs.getString("problem"));
-                    item.put("cause", rs.getString("cause"));
-                    item.put("solution", rs.getString("solution"));
-                    item.put("example", rs.getString("example"));
-                    item.put("tags", sqlArrayToList(rs.getArray("tags")));
-                    item.put("agentType", rs.getString("agent_type"));
-                    item.put("createdAt", rs.getTimestamp("created_at"));
-                    return item;
-                },
-                id
-            );
+                "SELECT * FROM experiences WHERE id = ? AND (deleted = false OR deleted IS NULL)",
+                rs -> mapExperience(rs), id);
             if (items.isEmpty()) {
                 sendError(exchange, 404, "Not found");
             } else {
@@ -851,25 +851,26 @@ public class ApiServer {
             }
         }
 
-        private void handleCreate(HttpExchange exchange) throws SQLException, IOException {
+        private void handleCreate(HttpExchange exchange, String type) throws SQLException, IOException {
             Map<String, Object> body = readRequestBody(exchange);
-            validateRequiredFields(body, "title", "problem", "solution");
+            validateRequiredFields(body, "title", "scenario", "practice");
+            String resolvedType = type != null ? type : (String) body.getOrDefault("type", "best_practice");
 
             String id = generateId();
             try (Connection conn = databaseService.getConnection()) {
-                String sql = "INSERT INTO error_corrections (id, title, problem, cause, solution, example, tags, created_at, deleted) " +
-                            "VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, false)";
+                String sql = "INSERT INTO experiences (id, title, type, scenario, practice, rationale, example, tags, created_at, deleted) " +
+                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, false)";
                 try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                     stmt.setString(1, id);
                     stmt.setString(2, (String) body.get("title"));
-                    stmt.setString(3, (String) body.get("problem"));
-                    stmt.setString(4, (String) body.get("cause"));
-                    stmt.setString(5, (String) body.get("solution"));
-                    stmt.setString(6, (String) body.get("example"));
-
+                    stmt.setString(3, resolvedType);
+                    stmt.setString(4, (String) body.get("scenario"));
+                    stmt.setString(5, (String) body.get("practice"));
+                    stmt.setString(6, (String) body.get("rationale"));
+                    stmt.setString(7, (String) body.get("example"));
                     @SuppressWarnings("unchecked")
                     List<String> tagsList = (List<String>) body.getOrDefault("tags", new ArrayList<String>());
-                    stmt.setArray(7, conn.createArrayOf("TEXT", tagsList.toArray()));
+                    stmt.setArray(8, conn.createArrayOf("TEXT", tagsList.toArray()));
                     stmt.executeUpdate();
                 }
             }
@@ -878,17 +879,15 @@ public class ApiServer {
 
         private void handleUpdate(HttpExchange exchange, String id) throws SQLException, IOException {
             Map<String, Object> body = readRequestBody(exchange);
-            validateRequiredFields(body, "title", "problem", "solution");
-
+            validateRequiredFields(body, "title", "scenario", "practice");
             try (Connection conn = databaseService.getConnection()) {
-                String sql = "UPDATE error_corrections SET title=?, problem=?, cause=?, solution=?, example=?, tags=? WHERE id=?";
+                String sql = "UPDATE experiences SET title=?, scenario=?, practice=?, rationale=?, example=?, tags=? WHERE id=?";
                 try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                     stmt.setString(1, (String) body.get("title"));
-                    stmt.setString(2, (String) body.get("problem"));
-                    stmt.setString(3, (String) body.get("cause"));
-                    stmt.setString(4, (String) body.get("solution"));
+                    stmt.setString(2, (String) body.get("scenario"));
+                    stmt.setString(3, (String) body.get("practice"));
+                    stmt.setString(4, (String) body.get("rationale"));
                     stmt.setString(5, (String) body.get("example"));
-
                     @SuppressWarnings("unchecked")
                     List<String> tagsList = (List<String>) body.getOrDefault("tags", new ArrayList<String>());
                     stmt.setArray(6, conn.createArrayOf("TEXT", tagsList.toArray()));
@@ -903,39 +902,40 @@ public class ApiServer {
         }
 
         private void handleDelete(HttpExchange exchange, String id) throws SQLException, IOException {
-            try (Connection conn = databaseService.getConnection()) {
-                try (PreparedStatement stmt = conn.prepareStatement("UPDATE error_corrections SET deleted=true WHERE id=?")) {
-                    stmt.setString(1, id);
-                    if (stmt.executeUpdate() == 0) {
-                        sendError(exchange, 404, "Not found");
-                        return;
-                    }
+            try (Connection conn = databaseService.getConnection();
+                 PreparedStatement stmt = conn.prepareStatement("UPDATE experiences SET deleted=true WHERE id=?")) {
+                stmt.setString(1, id);
+                if (stmt.executeUpdate() == 0) {
+                    sendError(exchange, 404, "Not found");
+                    return;
                 }
             }
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            sendJson(exchange, response);
+            sendJson(exchange, Map.of("deleted", true));
         }
 
-        private void handleExport(HttpExchange exchange) throws SQLException, IOException {
-            List<Map<String, Object>> items = queryList(
-                "SELECT * FROM error_corrections WHERE deleted = 0 ORDER BY created_at DESC",
-                rs -> {
-                    Map<String, Object> item = new HashMap<>();
-                    item.put("id", rs.getString("id"));
-                    item.put("title", rs.getString("title"));
-                    item.put("problem", rs.getString("problem"));
-                    item.put("cause", rs.getString("cause"));
-                    item.put("solution", rs.getString("solution"));
-                    item.put("example", rs.getString("example"));
-                    item.put("tags", sqlArrayToList(rs.getArray("tags")));
-                    item.put("createdAt", rs.getTimestamp("created_at"));
-                    return item;
-                }
-            );
-            exportAsJson(exchange, items, "error_corrections");
+        private void handleExport(HttpExchange exchange, String type) throws SQLException, IOException {
+            String sql = "SELECT * FROM experiences WHERE deleted = false";
+            if (type != null && !type.isBlank()) sql += " AND type = ?";
+            List<Map<String, Object>> items = queryList(sql, rs -> mapExperience(rs), type);
+            exportAsJson(exchange, items, "experiences");
+        }
+
+        private Map<String, Object> mapExperience(ResultSet rs) throws SQLException {
+            Map<String, Object> item = new HashMap<>();
+            item.put("id", rs.getString("id"));
+            item.put("title", rs.getString("title"));
+            item.put("type", rs.getString("type"));
+            item.put("scenario", rs.getString("scenario"));
+            item.put("practice", rs.getString("practice"));
+            item.put("rationale", rs.getString("rationale"));
+            item.put("example", rs.getString("example"));
+            item.put("tags", sqlArrayToList(rs.getArray("tags")));
+            item.put("sourceSession", rs.getString("source_session"));
+            item.put("createdAt", rs.getTimestamp("created_at"));
+            return item;
         }
     }
+
     
     class UserProfilesHandler implements HttpHandler {
         @Override
@@ -1072,340 +1072,7 @@ public class ApiServer {
         }
     }
     
-    class BestPracticesHandler implements HttpHandler {
-        @Override
-        public void handle(HttpExchange exchange) throws IOException {
-            wrapHandler(exchange, () -> {
-                String method = exchange.getRequestMethod();
-                String path = exchange.getRequestURI().getPath();
-
-                if ("GET".equals(method)) {
-                    if (path.endsWith("/export")) {
-                        handleExport(exchange);
-                    } else if (path.matches("/api/practices/[^/]+")) {
-                        handleGetSingle(exchange, parseIdFromPath(path, "/api/practices/"));
-                    } else {
-                        handleList(exchange);
-                    }
-                } else if ("POST".equals(method)) {
-                    handleCreate(exchange);
-                } else if ("PUT".equals(method)) {
-                    handleUpdate(exchange, parseIdFromPath(path, "/api/practices/"));
-                } else if ("DELETE".equals(method)) {
-                    handleDelete(exchange, parseIdFromPath(path, "/api/practices/"));
-                } else {
-                    sendError(exchange, 405, "Method not allowed");
-                }
-            });
-        }
-
-        private void handleList(HttpExchange exchange) throws SQLException, IOException {
-            List<Map<String, Object>> items = queryList(
-                "SELECT * FROM best_practices WHERE deleted = false ORDER BY created_at DESC LIMIT 100",
-                rs -> {
-                    Map<String, Object> item = new HashMap<>();
-                    item.put("id", rs.getString("id"));
-                    item.put("title", rs.getString("title"));
-                    item.put("scenario", rs.getString("scenario"));
-                    item.put("practice", rs.getString("practice"));
-                    item.put("rationale", rs.getString("rationale"));
-                    item.put("tags", sqlArrayToList(rs.getArray("tags")));
-                    item.put("createdAt", rs.getTimestamp("created_at"));
-                    return item;
-                }
-            );
-            sendJson(exchange, items);
-        }
-
-        private void handleGetSingle(HttpExchange exchange, String id) throws SQLException, IOException {
-            List<Map<String, Object>> items = queryList(
-                "SELECT * FROM best_practices WHERE id = ? AND (deleted = false OR deleted IS NULL)",
-                rs -> {
-                    Map<String, Object> item = new HashMap<>();
-                    item.put("id", rs.getString("id"));
-                    item.put("title", rs.getString("title"));
-                    item.put("scenario", rs.getString("scenario"));
-                    item.put("practice", rs.getString("practice"));
-                    item.put("rationale", rs.getString("rationale"));
-                    item.put("tags", sqlArrayToList(rs.getArray("tags")));
-                    item.put("createdAt", rs.getTimestamp("created_at"));
-                    return item;
-                },
-                id
-            );
-            if (items.isEmpty()) {
-                sendError(exchange, 404, "Not found");
-            } else {
-                sendJson(exchange, items.get(0));
-            }
-        }
-
-        private void handleCreate(HttpExchange exchange) throws SQLException, IOException {
-            Map<String, Object> body = readRequestBody(exchange);
-            validateRequiredFields(body, "title", "scenario", "practice");
-
-            String id = generateId();
-            try (Connection conn = databaseService.getConnection()) {
-                String sql = "INSERT INTO best_practices (id, title, scenario, practice, rationale, tags, created_at, deleted) " +
-                            "VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, false)";
-                try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-                    stmt.setString(1, id);
-                    stmt.setString(2, (String) body.get("title"));
-                    stmt.setString(3, (String) body.get("scenario"));
-                    stmt.setString(4, (String) body.get("practice"));
-                    stmt.setString(5, (String) body.get("rationale"));
-
-                    @SuppressWarnings("unchecked")
-                    List<String> tagsList = (List<String>) body.getOrDefault("tags", new ArrayList<String>());
-                    stmt.setArray(6, conn.createArrayOf("TEXT", tagsList.toArray()));
-                    stmt.executeUpdate();
-                }
-            }
-            handleGetSingle(exchange, id);
-        }
-
-        private void handleUpdate(HttpExchange exchange, String id) throws SQLException, IOException {
-            Map<String, Object> body = readRequestBody(exchange);
-            validateRequiredFields(body, "title", "scenario", "practice");
-
-            try (Connection conn = databaseService.getConnection()) {
-                String sql = "UPDATE best_practices SET title=?, scenario=?, practice=?, rationale=?, tags=? WHERE id=?";
-                try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-                    stmt.setString(1, (String) body.get("title"));
-                    stmt.setString(2, (String) body.get("scenario"));
-                    stmt.setString(3, (String) body.get("practice"));
-                    stmt.setString(4, (String) body.get("rationale"));
-
-                    @SuppressWarnings("unchecked")
-                    List<String> tagsList = (List<String>) body.getOrDefault("tags", new ArrayList<String>());
-                    stmt.setArray(5, conn.createArrayOf("TEXT", tagsList.toArray()));
-                    stmt.setString(6, id);
-                    if (stmt.executeUpdate() == 0) {
-                        sendError(exchange, 404, "Not found");
-                        return;
-                    }
-                }
-            }
-            handleGetSingle(exchange, id);
-        }
-
-        private void handleDelete(HttpExchange exchange, String id) throws SQLException, IOException {
-            try (Connection conn = databaseService.getConnection()) {
-                try (PreparedStatement stmt = conn.prepareStatement("UPDATE best_practices SET deleted=true WHERE id=?")) {
-                    stmt.setString(1, id);
-                    if (stmt.executeUpdate() == 0) {
-                        sendError(exchange, 404, "Not found");
-                        return;
-                    }
-                }
-            }
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            sendJson(exchange, response);
-        }
-
-        private void handleExport(HttpExchange exchange) throws SQLException, IOException {
-            List<Map<String, Object>> items = queryList(
-                "SELECT * FROM best_practices WHERE deleted = false ORDER BY created_at DESC",
-                rs -> {
-                    Map<String, Object> item = new HashMap<>();
-                    item.put("id", rs.getString("id"));
-                    item.put("title", rs.getString("title"));
-                    item.put("scenario", rs.getString("scenario"));
-                    item.put("practice", rs.getString("practice"));
-                    item.put("rationale", rs.getString("rationale"));
-                    item.put("tags", sqlArrayToList(rs.getArray("tags")));
-                    item.put("createdAt", rs.getTimestamp("created_at"));
-                    return item;
-                }
-            );
-            exportAsJson(exchange, items, "best_practices");
-        }
-    }
     
-    class ProjectContextsHandler implements HttpHandler {
-        @Override
-        public void handle(HttpExchange exchange) throws IOException {
-            wrapHandler(exchange, () -> {
-                String method = exchange.getRequestMethod();
-                String path = exchange.getRequestURI().getPath();
-
-                if ("GET".equals(method)) {
-                    if (path.endsWith("/export")) {
-                        handleExport(exchange);
-                    } else if (path.matches("/api/contexts/[^/]+")) {
-                        handleGetSingle(exchange, parseIdFromPath(path, "/api/contexts/"));
-                    } else {
-                        handleList(exchange);
-                    }
-                } else if ("POST".equals(method)) {
-                    handleCreate(exchange);
-                } else if ("PUT".equals(method)) {
-                    handleUpdate(exchange, parseIdFromPath(path, "/api/contexts/"));
-                } else if ("DELETE".equals(method)) {
-                    handleDelete(exchange, parseIdFromPath(path, "/api/contexts/"));
-                } else {
-                    sendError(exchange, 405, "Method not allowed");
-                }
-            });
-        }
-
-        private void handleList(HttpExchange exchange) throws SQLException, IOException {
-            List<Map<String, Object>> items = queryList(
-                "SELECT * FROM project_contexts WHERE (deleted = false OR deleted IS NULL) ORDER BY updated_at DESC",
-                rs -> {
-                    Map<String, Object> item = new HashMap<>();
-                    item.put("id", rs.getString("id"));
-                    item.put("title", rs.getString("title"));
-                    item.put("projectName", rs.getString("project_name"));
-                    item.put("projectPath", rs.getString("project_path"));
-                    item.put("techStack", sqlArrayToList(rs.getArray("tech_stack")));
-                    item.put("keyDecisions", rs.getString("key_decisions"));
-                    item.put("structure", rs.getString("structure"));
-                    item.put("updatedAt", rs.getTimestamp("updated_at"));
-                    return item;
-                }
-            );
-            sendJson(exchange, items);
-        }
-
-        private void handleGetSingle(HttpExchange exchange, String id) throws SQLException, IOException {
-            List<Map<String, Object>> items = queryList(
-                "SELECT * FROM project_contexts WHERE id = ? AND (deleted = false OR deleted IS NULL)",
-                rs -> {
-                    Map<String, Object> item = new HashMap<>();
-                    item.put("id", rs.getString("id"));
-                    item.put("title", rs.getString("title"));
-                    item.put("projectName", rs.getString("project_name"));
-                    item.put("projectPath", rs.getString("project_path"));
-                    item.put("techStack", sqlArrayToList(rs.getArray("tech_stack")));
-                    item.put("keyDecisions", rs.getString("key_decisions"));
-                    item.put("structure", rs.getString("structure"));
-                    item.put("updatedAt", rs.getTimestamp("updated_at"));
-                    return item;
-                },
-                id
-            );
-            if (items.isEmpty()) {
-                sendError(exchange, 404, "Not found");
-            } else {
-                sendJson(exchange, items.get(0));
-            }
-        }
-
-        private void handleCreate(HttpExchange exchange) throws SQLException, IOException {
-            Map<String, Object> body = readRequestBody(exchange);
-            validateRequiredFields(body, "title", "projectName");
-
-            String id = generateId();
-            try (Connection conn = databaseService.getConnection()) {
-                String sql = "INSERT INTO project_contexts (id, title, project_name, project_path, tech_stack, key_decisions, structure, updated_at, deleted) " +
-                            "VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, CURRENT_TIMESTAMP, false)";
-                try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-                    stmt.setString(1, id);
-                    stmt.setString(2, (String) body.get("title"));
-                    stmt.setString(3, (String) body.get("projectName"));
-                    stmt.setString(4, (String) body.get("projectPath"));
-
-                    @SuppressWarnings("unchecked")
-                    List<String> techStackList = (List<String>) body.getOrDefault("techStack", new ArrayList<String>());
-                    stmt.setArray(5, conn.createArrayOf("TEXT", techStackList.toArray()));
-                    
-                    String keyDecisions = (String) body.get("keyDecisions");
-                    String keyDecisionsJson = convertToJsonArray(keyDecisions);
-                    stmt.setObject(6, keyDecisionsJson, java.sql.Types.OTHER);
-                    
-                    stmt.setString(7, (String) body.get("structure"));
-                    stmt.executeUpdate();
-                }
-            }
-            handleGetSingle(exchange, id);
-        }
-
-        private void handleUpdate(HttpExchange exchange, String id) throws SQLException, IOException {
-            Map<String, Object> body = readRequestBody(exchange);
-            validateRequiredFields(body, "title", "projectName");
-
-            try (Connection conn = databaseService.getConnection()) {
-                String sql = "UPDATE project_contexts SET title=?, project_name=?, project_path=?, tech_stack=?, key_decisions=?, structure=?::jsonb, updated_at=CURRENT_TIMESTAMP WHERE id=?";
-                try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-                    stmt.setString(1, (String) body.get("title"));
-                    stmt.setString(2, (String) body.get("projectName"));
-                    stmt.setString(3, (String) body.get("projectPath"));
-
-                    @SuppressWarnings("unchecked")
-                    List<String> techStackList = (List<String>) body.getOrDefault("techStack", new ArrayList<String>());
-                    stmt.setArray(4, conn.createArrayOf("TEXT", techStackList.toArray()));
-                    
-                    String keyDecisions = (String) body.get("keyDecisions");
-                    String keyDecisionsJson = convertToJsonArray(keyDecisions);
-                    stmt.setObject(5, keyDecisionsJson, java.sql.Types.OTHER);
-                    
-                    stmt.setString(6, (String) body.get("structure"));
-                    stmt.setString(7, id);
-                    if (stmt.executeUpdate() == 0) {
-                        sendError(exchange, 404, "Not found");
-                        return;
-                    }
-                }
-            }
-            handleGetSingle(exchange, id);
-        }
-
-        private void handleDelete(HttpExchange exchange, String id) throws SQLException, IOException {
-            try (Connection conn = databaseService.getConnection()) {
-                try (PreparedStatement stmt = conn.prepareStatement("UPDATE project_contexts SET deleted=true WHERE id=?")) {
-                    stmt.setString(1, id);
-                    if (stmt.executeUpdate() == 0) {
-                        sendError(exchange, 404, "Not found");
-                        return;
-                    }
-                }
-            }
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            sendJson(exchange, response);
-        }
-
-        private void handleExport(HttpExchange exchange) throws SQLException, IOException {
-            List<Map<String, Object>> items = queryList(
-                "SELECT * FROM project_contexts WHERE (deleted = false OR deleted IS NULL) ORDER BY updated_at DESC",
-                rs -> {
-                    Map<String, Object> item = new HashMap<>();
-                    item.put("id", rs.getString("id"));
-                    item.put("title", rs.getString("title"));
-                    item.put("projectPath", rs.getString("project_path"));
-                    item.put("techStack", sqlArrayToList(rs.getArray("tech_stack")));
-                    item.put("keyDecisions", rs.getString("key_decisions"));
-                    item.put("structure", rs.getString("structure"));
-                    item.put("updatedAt", rs.getTimestamp("updated_at"));
-                    return item;
-                }
-            );
-            exportAsJson(exchange, items, "project_contexts");
-        }
-
-        private String convertToJsonArray(String input) {
-            if (input == null || input.trim().isEmpty()) {
-                return "[]";
-            }
-            input = input.trim();
-            if (input.startsWith("[") && input.endsWith("]")) {
-                return input;
-            }
-            String[] items = input.split("[,，]");
-            StringBuilder sb = new StringBuilder("[");
-            for (int i = 0; i < items.length; i++) {
-                String item = items[i].trim();
-                if (!item.isEmpty()) {
-                    if (i > 0) sb.append(",");
-                    sb.append("\"").append(item.replace("\"", "\\\"")).append("\"");
-                }
-            }
-            sb.append("]");
-            return sb.toString();
-        }
-    }
     
     class SkillsHandler implements HttpHandler {
         @Override
@@ -1619,7 +1286,7 @@ public class ApiServer {
                 rsMessages.next();
                 stats.put("messages", rsMessages.getInt(1));
                 
-                ResultSet rsErrors = stmt.executeQuery("SELECT COUNT(*) FROM error_corrections WHERE deleted = false");
+                ResultSet rsErrors = stmt.executeQuery("SELECT COUNT(*) FROM experiences WHERE type = 'error_correction' AND deleted = false");
                 rsErrors.next();
                 stats.put("errors", rsErrors.getInt(1));
                 
@@ -1627,11 +1294,11 @@ public class ApiServer {
                 rsProfiles.next();
                 stats.put("profiles", rsProfiles.getInt(1));
                 
-                ResultSet rsPractices = stmt.executeQuery("SELECT COUNT(*) FROM best_practices WHERE deleted = false");
+                ResultSet rsPractices = stmt.executeQuery("SELECT COUNT(*) FROM experiences WHERE type = 'best_practice' AND deleted = false");
                 rsPractices.next();
                 stats.put("practices", rsPractices.getInt(1));
                 
-                ResultSet rsContexts = stmt.executeQuery("SELECT COUNT(*) FROM project_contexts");
+                ResultSet rsContexts = stmt.executeQuery("SELECT COUNT(*) FROM experiences WHERE deleted = false");
                 rsContexts.next();
                 stats.put("contexts", rsContexts.getInt(1));
                 
