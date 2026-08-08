@@ -72,12 +72,6 @@
             </el-tooltip>
             <span class="menu-label">Agent 接入</span>
           </el-menu-item>
-          <el-menu-item index="sessions">
-            <el-tooltip content="会话库" placement="bottom">
-              <el-icon><ChatDotRound /></el-icon>
-            </el-tooltip>
-            <span class="menu-label">会话库</span>
-          </el-menu-item>
           <el-menu-item index="compression">
             <el-tooltip content="会话摘要" placement="bottom">
               <el-icon><Connection /></el-icon>
@@ -117,9 +111,6 @@
 
       <!-- Agent 接入 -->
       <Agents v-if="activeMenu === 'agents'" ref="agentsRef" />
-
-      <!-- 会话库 -->
-      <SessionsView v-if="activeMenu === 'sessions'" ref="sessionsRef" />
 
       <!-- 搜索结果 -->
       <Search
@@ -175,12 +166,11 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { sseService } from './services/sse'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
-import { Search as SearchIcon, Setting, WarningFilled, User, FolderOpened, Reading, Odometer, Box, Connection, ChatDotRound } from '@element-plus/icons-vue'
+import { Search as SearchIcon, Setting, WarningFilled, User, FolderOpened, Reading, Odometer, Box, Connection } from '@element-plus/icons-vue'
 
 // 导入记忆库组件
 import Experiences from './views/Experiences.vue'
 import Profiles from './views/Profiles.vue'
-import SessionsView from './views/Sessions.vue'
 import ProjectView from './views/ProjectView.vue'
 import Skills from './views/Skills.vue'
 import Agents from './views/Agents.vue'
