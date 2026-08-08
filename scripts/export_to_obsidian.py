@@ -435,14 +435,16 @@ def export_canvas(base: Path, stats: Dict[str, int]):
 
     # 4 类节点（垂直堆叠）
     types = [
-        ("经验", "experiences", "2", "left"),
-        ("技能", "skills", "3", "right"),
-        ("画像", "profiles", "4", "right"),
-        ("会话", "sessions", "6", "left"),
+        (1, "经验", "experiences", "2", "left"),
+        (2, "技能", "skills", "3", "right"),
+        (3, "画像", "profiles", "4", "right"),
+        (4, "会话", "sessions", "6", "left"),
     ]
+    label_to_id = {}
     y_offset = -800
-    for label, dir_name, color, side in types:
-        node_id = f"{label:04d}0000000000"
+    for idx, label, dir_name, color, side in types:
+        node_id = f"{idx:016d}"
+        label_to_id[label] = node_id
         nodes.append({
             "id": node_id,
             "type": "group",
@@ -462,6 +464,7 @@ def export_canvas(base: Path, stats: Dict[str, int]):
             "label": label,
             "color": "5"
         })
+        counter += 1
         y_offset += 400
 
     # 4 类间的关系
@@ -474,8 +477,8 @@ def export_canvas(base: Path, stats: Dict[str, int]):
     for src, dst, label, desc in relations:
         edges.append({
             "id": f"edge_{src}_{dst}",
-            "fromNode": f"{src:04d}0000000000",
-            "toNode": f"{dst:04d}0000000000",
+            "fromNode": label_to_id.get(src, "0000000000000000"),
+            "toNode": label_to_id.get(dst, "0000000000000000"),
             "label": desc,
             "color": "4"
         })

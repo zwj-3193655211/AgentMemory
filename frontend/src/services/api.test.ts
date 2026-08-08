@@ -88,24 +88,46 @@ describe('ApiService', () => {
   })
 
   describe('CRUD methods', () => {
-    describe('errors', () => {
-      it('should have getErrors method', () => {
-        expect(apiService.getErrors).toBeDefined()
-        expect(typeof apiService.getErrors).toBe('function')
+    describe('experiences', () => {
+      it('should have getExperiences method', () => {
+        expect(apiService.getExperiences).toBeDefined()
+        expect(typeof apiService.getExperiences).toBe('function')
       })
 
-      it('should have createError method', () => {
-        expect(apiService.createError).toBeDefined()
+      it('should have createExperience method', () => {
+        expect(apiService.createExperience).toBeDefined()
       })
 
-      it('should have updateError method', () => {
-        expect(apiService.updateError).toBeDefined()
+      it('should have updateExperience method', () => {
+        expect(apiService.updateExperience).toBeDefined()
       })
 
-      it('should have deleteError method', () => {
-        expect(apiService.deleteError).toBeDefined()
+      it('should have deleteExperience method', () => {
+        expect(apiService.deleteExperience).toBeDefined()
       })
     })
+
+    describe('sync', () => {
+      it('should have syncAll method', () => {
+        expect(apiService.syncAll).toBeDefined()
+        expect(typeof apiService.syncAll).toBe('function')
+      })
+
+      it('should have syncAgent method', () => {
+        expect(apiService.syncAgent).toBeDefined()
+      })
+    })
+
+    describe('session', () => {
+      it('should have getSessionTitle method', () => {
+        expect(apiService.getSessionTitle).toBeDefined()
+      })
+
+      it('should have deleteSessionMessages method', () => {
+        expect(apiService.deleteSessionMessages).toBeDefined()
+      })
+    })
+
 
     describe('profiles', () => {
       it('should have getProfiles method', () => {
@@ -125,41 +147,25 @@ describe('ApiService', () => {
       })
     })
 
-    describe('practices', () => {
-      it('should have getPractices method', () => {
-        expect(apiService.getPractices).toBeDefined()
+    describe('skills status', () => {
+      it('should have getSkillsByStatus method', () => {
+        expect(apiService.getSkillsByStatus).toBeDefined()
       })
 
-      it('should have createPractice method', () => {
-        expect(apiService.createPractice).toBeDefined()
+      it('should have getPendingSkillCount method', () => {
+        expect(apiService.getPendingSkillCount).toBeDefined()
       })
 
-      it('should have updatePractice method', () => {
-        expect(apiService.updatePractice).toBeDefined()
+      it('should have approveSkill method', () => {
+        expect(apiService.approveSkill).toBeDefined()
       })
 
-      it('should have deletePractice method', () => {
-        expect(apiService.deletePractice).toBeDefined()
+      it('should have rejectSkill method', () => {
+        expect(apiService.rejectSkill).toBeDefined()
       })
     })
 
-    describe('contexts', () => {
-      it('should have getContexts method', () => {
-        expect(apiService.getContexts).toBeDefined()
-      })
 
-      it('should have createContext method', () => {
-        expect(apiService.createContext).toBeDefined()
-      })
-
-      it('should have updateContext method', () => {
-        expect(apiService.updateContext).toBeDefined()
-      })
-
-      it('should have deleteContext method', () => {
-        expect(apiService.deleteContext).toBeDefined()
-      })
-    })
 
     describe('skills', () => {
       it('should have getSkills method', () => {

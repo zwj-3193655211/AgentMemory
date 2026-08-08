@@ -8,10 +8,10 @@
     <!-- 统计卡片 -->
     <div class="stats-grid">
       <StatCard icon="ChatDotRound" title="会话总数" :value="stats.sessions" color="sessions" />
-      <StatCard icon="WarningFilled" title="错误纠正" :value="stats.errors" color="errors" clickable @click="$emit('navigate', 'errors')" />
-      <StatCard icon="DocumentChecked" title="实践经验" :value="stats.practices" color="practices" clickable @click="$emit('navigate', 'practices')" />
+      <StatCard icon="WarningFilled" title="错误纠正" :value="stats.errors" color="errors" clickable @click="$emit('navigate', 'experiences')" />
+      <StatCard icon="DocumentChecked" title="实践经验" :value="stats.practices" color="practices" clickable @click="$emit('navigate', 'experiences')" />
       <StatCard icon="User" title="用户画像" :value="stats.profiles" color="profiles" clickable @click="$emit('navigate', 'profiles')" />
-      <StatCard icon="FolderOpened" title="项目上下文" :value="stats.contexts" color="contexts" clickable @click="$emit('navigate', 'contexts')" />
+      <StatCard icon="FolderOpened" title="项目会话" :value="stats.contexts" color="contexts" clickable @click="$emit('navigate', 'projects')" />
       <StatCard icon="Reading" title="技能沉淀" :value="stats.skills" color="skills" clickable @click="$emit('navigate', 'skills')" />
       <StatCard icon="Box" title="消息总数" :value="stats.messages.toLocaleString()" color="messages" />
     </div>

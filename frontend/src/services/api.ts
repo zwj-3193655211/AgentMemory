@@ -71,34 +71,6 @@ export class ApiService {
 
   // ============== 记忆库 API ==============
 
-  /**
-   * 获取错误纠正列表
-   */
-  async getErrors() {
-    return this.get<any[]>('/errors')
-  }
-
-  /**
-   * 创建错误纠正
-   */
-  async createError(data: any) {
-    return this.post('/errors', data)
-  }
-
-  /**
-   * 更新错误纠正
-   */
-  async updateError(id: string, data: any) {
-    return this.put(`/errors/${id}`, data)
-  }
-
-  /**
-   * 删除错误纠正
-   */
-  async deleteError(id: string) {
-    return this.delete(`/errors/${id}`)
-  }
-
   // ============== 实践经验（合并端点） ==============
 
   /**
@@ -190,61 +162,6 @@ export class ApiService {
     return this.delete(`/profiles/${id}`)
   }
 
-  /**
-   * 获取实践经验列表
-   */
-  async getPractices() {
-    return this.get<any[]>('/practices')
-  }
-
-  /**
-   * 创建实践经验
-   */
-  async createPractice(data: any) {
-    return this.post('/practices', data)
-  }
-
-  /**
-   * 更新实践经验
-   */
-  async updatePractice(id: string, data: any) {
-    return this.put(`/practices/${id}`, data)
-  }
-
-  /**
-   * 删除实践经验
-   */
-  async deletePractice(id: string) {
-    return this.delete(`/practices/${id}`)
-  }
-
-  /**
-   * 获取项目上下文列表
-   */
-  async getContexts() {
-    return this.get<any[]>('/contexts')
-  }
-
-  /**
-   * 创建项目上下文
-   */
-  async createContext(data: any) {
-    return this.post('/contexts', data)
-  }
-
-  /**
-   * 更新项目上下文
-   */
-  async updateContext(id: string, data: any) {
-    return this.put(`/contexts/${id}`, data)
-  }
-
-  /**
-   * 删除项目上下文
-   */
-  async deleteContext(id: string) {
-    return this.delete(`/contexts/${id}`)
-  }
 
   /**
    * 获取技能沉淀列表
