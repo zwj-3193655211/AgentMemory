@@ -672,6 +672,22 @@ public class ApiServer {
                 return;
             }
 
+            // 会话标题懒生成：GET /api/sessions/{id}/title
+            if (path.matches("/api/sessions/[^/]+/title") && "GET".equals(exchange.getRequestMethod())) {
+                String id = parseIdFromPath(path, "/api/sessions/");
+                if (id.endsWith("/title")) id = id.substring(0, id.length() - "/title".length());
+                handleTitle(exchange, id);
+                return;
+            }
+
+            // 删除原消息：DELETE /api/sessions/{id}/messages
+            if (path.matches("/api/sessions/[^/]+/messages") && "DELETE".equals(exchange.getRequestMethod())) {
+                String id = parseIdFromPath(path, "/api/sessions/");
+                if (id.endsWith("/messages")) id = id.substring(0, id.length() - "/messages".length());
+                handleDeleteMessages(exchange, id);
+                return;
+            }
+
             String query = exchange.getRequestURI().getQuery();
             int limit = 200;
             int offset = 0;
@@ -749,6 +765,74 @@ public class ApiServer {
                     }
                 );
                 exportAsJson(exchange, sessions, "sessions");
+            } catch (SQLException e) {
+                sendError(exchange, 500, e.getMessage());
+            }
+        }
+
+        /** 会话标题懒生成：查缓存，无则用首条 user 消息截断并写回 */
+        private void handleTitle(HttpExchange exchange, String sessionId) throws IOException {
+            try {
+                // 1. 查缓存
+                String cached = null;
+                try (Connection conn = databaseService.getConnection();
+                     PreparedStatement st = conn.prepareStatement("SELECT title FROM sessions WHERE id = ?")) {
+                    st.setString(1, sessionId);
+                    try (ResultSet rs = st.executeQuery()) {
+                        if (rs.next()) cached = rs.getString("title");
+                    }
+                }
+                if (cached != null && !cached.isBlank()) {
+                    sendJson(exchange, Map.of("title", cached));
+                    return;
+                }
+
+                // 2. 取前 10 条 user 消息，跳过元数据/工具指令，生成标题
+                String title = null;
+                try (Connection conn = databaseService.getConnection();
+                     PreparedStatement st = conn.prepareStatement(
+                         "SELECT content FROM messages WHERE session_id = ? AND role = 'user' AND deleted = false " +
+                         "AND content IS NOT NULL AND LENGTH(TRIM(content)) > 5 ORDER BY timestamp LIMIT 10")) {
+                    st.setString(1, sessionId);
+                    try (ResultSet rs = st.executeQuery()) {
+                        while (rs.next()) {
+                            String content = rs.getString("content").trim();
+                            // 跳过 Claude 元数据 / 工具指令 / 纯标签
+                            if (content.startsWith("Conversation info") || content.startsWith("<")
+                                    || content.startsWith("```") || content.contains("untrusted metadata")) {
+                                continue;
+                            }
+                            String first = content.replaceAll("\\s+", " ");
+                            title = first.length() > 40 ? first.substring(0, 40) : first;
+                            break;
+                        }
+                    }
+                }
+                if (title == null || title.isBlank()) {
+                    title = "未命名会话";
+                }
+
+                // 3. 写回缓存
+                try (Connection conn = databaseService.getConnection();
+                     PreparedStatement st = conn.prepareStatement("UPDATE sessions SET title = ? WHERE id = ?")) {
+                    st.setString(1, title);
+                    st.setString(2, sessionId);
+                    st.executeUpdate();
+                }
+                sendJson(exchange, Map.of("title", title));
+            } catch (SQLException e) {
+                sendError(exchange, 500, e.getMessage());
+            }
+        }
+
+        /** 软删除会话原消息（保留压缩摘要） */
+        private void handleDeleteMessages(HttpExchange exchange, String sessionId) throws IOException {
+            try (Connection conn = databaseService.getConnection();
+                 PreparedStatement st = conn.prepareStatement(
+                     "UPDATE messages SET deleted = true, expires_at = NOW() WHERE session_id = ? AND deleted = false")) {
+                st.setString(1, sessionId);
+                int n = st.executeUpdate();
+                sendJson(exchange, Map.of("deleted", n));
             } catch (SQLException e) {
                 sendError(exchange, 500, e.getMessage());
             }
