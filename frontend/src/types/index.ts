@@ -12,6 +12,7 @@ export interface Stats {
   dailySessions?: Array<{ date: string; count: number }>
   dailyMessages?: Array<{ date: string; count: number }>
   agentDistribution?: Array<{ agentType: string; count: number }>
+  agentActivity?: Array<{ agentType: string; messageCount: number; inputTokens: number; outputTokens: number }>
   memoryDistribution?: Array<{ type: string; count: number }>
 }
 

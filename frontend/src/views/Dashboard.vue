@@ -19,11 +19,11 @@
     <!-- ECharts 图表区 -->
     <div class="charts-grid">
       <el-card class="chart-card" shadow="never">
-        <template #header><span class="chart-title">近30天活跃趋势</span></template>
-        <v-chart class="chart-instance" :option="trendOption" autoresize />
+        <template #header><span class="chart-title">近30天 Agent 调用量</span></template>
+        <v-chart class="chart-instance" :option="agentActivityOption" autoresize />
       </el-card>
       <el-card class="chart-card" shadow="never">
-        <template #header><span class="chart-title">Agent 使用分布</span></template>
+        <template #header><span class="chart-title">Agent 会话分布</span></template>
         <v-chart class="chart-instance" :option="agentPieOption" autoresize />
       </el-card>
       <el-card class="chart-card" shadow="never">
@@ -63,25 +63,37 @@ defineEmits<{
   navigate: [menu: string]
 }>()
 
-const trendOption = computed(() => {
-  const ds = props.stats.dailySessions || []
-  const dm = props.stats.dailyMessages || []
-  const dates = Array.from(new Set([...ds.map(r => r.date), ...dm.map(r => r.date)])).sort()
-  const sessionMap = Object.fromEntries(ds.map(r => [r.date, r.count]))
-  const msgMap = Object.fromEntries(dm.map(r => [r.date, r.count]))
+const agentActivityOption = computed(() => {
+  const act = props.stats.agentActivity || []
+  // 按消息数降序，取前 10
+  const sorted = [...act].sort((a, b) => b.messageCount - a.messageCount).slice(0, 10)
+  const agents = sorted.map(r => r.agentType)
+  const msgCounts = sorted.map(r => r.messageCount)
+  // tooltip 显示消息数 + token（如有）
+  const fmt = (v: number) => v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(v)
   return {
-    tooltip: { trigger: 'axis' as const },
-    legend: { data: ['会话数', '消息数'], top: 0 },
-    grid: { left: 40, right: 50, bottom: 30, top: 32 },
-    xAxis: { type: 'category' as const, data: dates, axisLabel: { fontSize: 10, rotate: 30 } },
-    yAxis: [
-      { type: 'value' as const, name: '会话', nameTextStyle: { fontSize: 10 } },
-      { type: 'value' as const, name: '消息', nameTextStyle: { fontSize: 10 } }
-    ],
-    series: [
-      { name: '会话数', type: 'line' as const, smooth: true, data: dates.map(d => sessionMap[d] || 0), yAxisIndex: 0, itemStyle: { color: '#5470c6' } },
-      { name: '消息数', type: 'line' as const, smooth: true, data: dates.map(d => msgMap[d] || 0), yAxisIndex: 1, itemStyle: { color: '#91cc75' } }
-    ]
+    tooltip: {
+      trigger: 'axis' as const,
+      axisPointer: { type: 'shadow' as const },
+      formatter: (params: any[]) => {
+        const i = params[0]?.dataIndex ?? 0
+        const r = sorted[i]
+        let s = `<b>${r.agentType}</b><br/>消息数: ${r.messageCount}`
+        if (r.inputTokens > 0 || r.outputTokens > 0) {
+          s += `<br/>输入 token: ${fmt(r.inputTokens)}<br/>输出 token: ${fmt(r.outputTokens)}`
+        }
+        return s
+      }
+    },
+    grid: { left: 80, right: 40, bottom: 20, top: 20 },
+    xAxis: { type: 'value' as const, name: '消息数', nameTextStyle: { fontSize: 11 } },
+    yAxis: { type: 'category' as const, data: agents, axisLabel: { fontSize: 11 } },
+    series: [{
+      type: 'bar' as const,
+      data: msgCounts,
+      itemStyle: { color: '#5470c6', borderRadius: [0, 4, 4, 0] },
+      label: { show: true, position: 'right' as const, fontSize: 11 }
+    }]
   }
 })
 

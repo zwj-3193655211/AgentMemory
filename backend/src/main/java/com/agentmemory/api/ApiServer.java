@@ -1487,7 +1487,30 @@ public class ApiServer {
                     }
                 } catch (Exception e) { log.warn("dailyMessages query failed: {}", e.getMessage()); }
                 stats.put("dailyMessages", dailyMessages);
-                
+
+                // 近30天按 agent 的消息活动量（消息数 + 可用 token 汇总）
+                List<Map<String, Object>> agentActivity = new ArrayList<>();
+                try (ResultSet rsActivity = stmt.executeQuery(
+                    "SELECT COALESCE(s.agent_type, '未知') as agent_type, " +
+                    "COUNT(m.id) as message_count, " +
+                    "COALESCE(SUM(CASE WHEN m.raw_json::text LIKE '%input_tokens%' " +
+                    "THEN (m.raw_json->'message'->'usage'->>'input_tokens')::bigint ELSE 0 END), 0) as input_tokens, " +
+                    "COALESCE(SUM(CASE WHEN m.raw_json::text LIKE '%input_tokens%' " +
+                    "THEN (m.raw_json->'message'->'usage'->>'output_tokens')::bigint ELSE 0 END), 0) as output_tokens " +
+                    "FROM messages m JOIN sessions s ON s.id = m.session_id " +
+                    "WHERE m.timestamp >= CURRENT_DATE - INTERVAL '30 days' AND m.deleted = false " +
+                    "GROUP BY s.agent_type ORDER BY message_count DESC")) {
+                    while (rsActivity.next()) {
+                        Map<String, Object> row = new HashMap<>();
+                        row.put("agentType", rsActivity.getString("agent_type"));
+                        row.put("messageCount", rsActivity.getInt("message_count"));
+                        row.put("inputTokens", rsActivity.getLong("input_tokens"));
+                        row.put("outputTokens", rsActivity.getLong("output_tokens"));
+                        agentActivity.add(row);
+                    }
+                } catch (Exception e) { log.warn("agentActivity query failed: {}", e.getMessage()); }
+                stats.put("agentActivity", agentActivity);
+
                 // 按 agent_type 分组的会话分布
                 List<Map<String, Object>> agentDistribution = new ArrayList<>();
                 try (ResultSet rsAgentDist = stmt.executeQuery(
