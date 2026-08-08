@@ -85,28 +85,33 @@ REM [Ollama] 检查并启动（供 LLM 推理加速，若已运行则跳过）
 set OLLAMA_EXE=D:\Ollma\ollama.exe
 if not exist "%OLLAMA_EXE%" set "OLLAMA_EXE=ollama"
 netstat -ano | findstr :11434 | findstr LISTENING >nul 2>&1
-if !errorlevel! equ 0 (
-    echo [INFO] Ollama 已在运行 (端口 11434)，跳过启动。
-) else (
-    echo [4.5/6] 启动 Ollama...
-    start "Ollama" cmd /k "chcp 65001 >nul && \"%OLLAMA_EXE%\" serve"
-    echo [INFO] 等待 Ollama 就绪 (端口 11434)...
-    set OLLAMA_WAIT=0
-    :ollama_wait_loop
-    timeout /t 2 /nobreak >nul
-    set /a OLLAMA_WAIT+=2
-    netstat -ano | findstr :11434 | findstr LISTENING >nul 2>&1
-    if !errorlevel! equ 0 goto ollama_ready
-    if !OLLAMA_WAIT! geq 30 (
-        echo [WARN] Ollama 30 秒内未就绪，继续启动其他服务（LLM 压缩可能不可用）。
-        goto ollama_skip
-    )
-    echo [INFO] 等待 Ollama... !OLLAMA_WAIT!s
-    goto ollama_wait_loop
-    :ollama_ready
-    echo [INFO] Ollama 已就绪 (端口 11434)。
-    :ollama_skip
+if !errorlevel! equ 0 goto ollama_already_running
+
+echo [4.5/6] 启动 Ollama...
+start "Ollama" cmd /k "chcp 65001 >nul && \"%OLLAMA_EXE%\" serve"
+echo [INFO] 等待 Ollama 就绪 (端口 11434)...
+set OLLAMA_WAIT=0
+
+:ollama_wait_loop
+ping -n 2 127.0.0.1 >nul
+set /a OLLAMA_WAIT+=2
+netstat -ano | findstr :11434 | findstr LISTENING >nul 2>&1
+if !errorlevel! equ 0 goto ollama_ready
+if !OLLAMA_WAIT! geq 30 (
+    echo [WARN] Ollama 30 秒内未就绪，继续启动其他服务（LLM 压缩可能不可用）。
+    goto ollama_skip
 )
+echo [INFO] 等待 Ollama... !OLLAMA_WAIT!s
+goto ollama_wait_loop
+
+:ollama_already_running
+echo [INFO] Ollama 已在运行 (端口 11434)，跳过启动。
+goto ollama_skip
+
+:ollama_ready
+echo [INFO] Ollama 已就绪 (端口 11434)。
+
+:ollama_skip
 
 echo [4/6] Starting Embedding Service...
 start "Embedding" cmd /k "chcp 65001 >nul && cd /d "%~dp0embedding_service" && python embed_server.py"
