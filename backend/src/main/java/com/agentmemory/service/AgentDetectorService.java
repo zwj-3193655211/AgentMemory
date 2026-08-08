@@ -146,7 +146,9 @@ public class AgentDetectorService {
             
             String cliPath = findInPath(type.toLowerCase());
             agent.setCliPath(cliPath);
-            agent.setEnabled(cliPath != null);
+            // 启用状态与 CLI 解耦：目录存在即可启用（CLI 仅是附加信息，
+            // 桌面版 agent 如 codex/marvis 没有命令行但也应启用）
+            agent.setEnabled(true);
             
             log.debug("检测到 {}: {}, PATH: {}", name, type, cliPath);
             return agent;
