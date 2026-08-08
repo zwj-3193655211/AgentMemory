@@ -1505,10 +1505,9 @@ public class ApiServer {
                 // 各记忆模块数量分布
                 List<Map<String, Object>> memoryDistribution = new ArrayList<>();
                 String[][] memoryTypes = {
-                    {"错误纠正", "SELECT COUNT(*) FROM error_corrections WHERE deleted = false"},
+                    {"错误纠正", "SELECT COUNT(*) FROM experiences WHERE type = 'error_correction' AND deleted = false"},
+                    {"实践经验", "SELECT COUNT(*) FROM experiences WHERE type = 'best_practice' AND deleted = false"},
                     {"用户画像", "SELECT COUNT(*) FROM user_profiles"},
-                    {"实践经验", "SELECT COUNT(*) FROM best_practices WHERE deleted = false"},
-                    {"项目上下文", "SELECT COUNT(*) FROM project_contexts"},
                     {"技能沉淀", "SELECT COUNT(*) FROM skills"}
                 };
                 for (String[] typeInfo : memoryTypes) {
@@ -1600,10 +1599,9 @@ public class ApiServer {
                             vecStr.append("]");
 
                             try (Connection conn = databaseService.getConnection()) {
-                                semanticSearchTable(conn, "error_corrections", "ERROR_CORRECTION", vecStr.toString(), limit, results);
-                                semanticSearchTable(conn, "best_practices", "BEST_PRACTICE", vecStr.toString(), limit, results);
-                                semanticSearchTable(conn, "skills", "SKILL", vecStr.toString(), limit, results);
-                                semanticSearchTable(conn, "project_contexts", "PROJECT_CONTEXT", vecStr.toString(), limit, results);
+                                semanticSearchTable(conn, "experiences", "BEST_PRACTICE", vecStr.toString(), limit, results, "type = 'best_practice'");
+                                semanticSearchTable(conn, "experiences", "ERROR_CORRECTION", vecStr.toString(), limit, results, "type = 'error_correction'");
+                                semanticSearchTable(conn, "skills", "SKILL", vecStr.toString(), limit, results, null);
                             }
 
                             // 按相似度排序
@@ -1622,10 +1620,9 @@ public class ApiServer {
                 // 如果语义搜索没有结果，使用文本搜索
                 if (results.isEmpty()) {
                     try (Connection conn = databaseService.getConnection()) {
-                        textSearchTable(conn, "error_corrections", "ERROR_CORRECTION", query, limit, results);
-                        textSearchTable(conn, "best_practices", "BEST_PRACTICE", query, limit, results);
+                        textSearchTable(conn, "experiences", "BEST_PRACTICE", query, limit, results);
+                        textSearchTable(conn, "experiences", "ERROR_CORRECTION", query, limit, results);
                         textSearchTable(conn, "skills", "SKILL", query, limit, results);
-                        textSearchTable(conn, "project_contexts", "PROJECT_CONTEXT", query, limit, results);
                     }
 
                     // 去重（按 ID）
@@ -1650,8 +1647,9 @@ public class ApiServer {
         }
 
         private void semanticSearchTable(Connection conn, String table, String type,
-                                         String vecStr, int limit, List<Map<String, Object>> results) throws SQLException {
-            String sql = buildSemanticSearchSql(table, vecStr);
+                                         String vecStr, int limit, List<Map<String, Object>> results,
+                                         String extraWhere) throws SQLException {
+            String sql = buildSemanticSearchSql(table, vecStr, extraWhere);
 
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                 stmt.setInt(1, limit / 2);
@@ -1669,14 +1667,17 @@ public class ApiServer {
             }
         }
 
-        private String buildSemanticSearchSql(String table, String vecStr) {
+        private String buildSemanticSearchSql(String table, String vecStr, String extraWhere) {
             String contentField = getContentField(table);
+            String where = "WHERE embedding IS NOT NULL AND (deleted = false OR deleted IS NULL)";
+            if (extraWhere != null && !extraWhere.isBlank()) {
+                where += " AND " + extraWhere;
+            }
             return String.format(
                 "SELECT id, title, %s as content, " +
                 "1 - (embedding <=> '%s'::vector) as similarity FROM %s " +
-                "WHERE embedding IS NOT NULL AND (deleted = false OR deleted IS NULL) " +
-                "ORDER BY similarity DESC LIMIT ?",
-                contentField, vecStr, table
+                "%s ORDER BY similarity DESC LIMIT ?",
+                contentField, vecStr, table, where
             );
         }
 
@@ -1723,10 +1724,8 @@ public class ApiServer {
 
         private String getContentField(String table) {
             switch (table) {
-                case "error_corrections": return "COALESCE(solution, problem, '')";
+                case "experiences": return "COALESCE(practice, scenario, rationale, '')";
                 case "user_profiles": return "COALESCE(items::text, category, '')";
-                case "best_practices": return "COALESCE(practice, scenario, rationale, '')";
-                case "project_contexts": return "COALESCE(project_path, tech_stack::text, key_decisions::text, '')";
                 case "skills": return "COALESCE(description, steps::text, '')";
                 default: return "COALESCE(description, '')";
             }
@@ -1734,10 +1733,8 @@ public class ApiServer {
 
         private String[] getSearchFields(String table) {
             switch (table) {
-                case "error_corrections": return new String[]{"title", "problem", "solution", "cause"};
+                case "experiences": return new String[]{"title", "scenario", "practice", "rationale"};
                 case "user_profiles": return new String[]{"title", "category"};
-                case "best_practices": return new String[]{"title", "practice", "scenario", "rationale"};
-                case "project_contexts": return new String[]{"title", "project_path"};
                 case "skills": return new String[]{"title", "description"};
                 default: return new String[]{"title"};
             }
@@ -1982,8 +1979,8 @@ public class ApiServer {
                     return;
                 }
                 
-                // POST: 保存配置
-                if ("POST".equalsIgnoreCase(method)) {
+                // POST: 保存配置（排除 /compress 子路径）
+                if ("POST".equalsIgnoreCase(method) && !path.endsWith("/compress")) {
                     Map<String, Object> input = readRequestBody(exchange);
                     
                     String sql = "INSERT INTO compression_config (config_key, window_size, summary_threshold, auto_compress, compression_type, llm_provider) " +
@@ -2076,11 +2073,14 @@ public class ApiServer {
                     }
                     
                     boolean success;
+                    log.info("[compress-debug] 收到压缩请求 sessionId={} type={}, service={}",
+                            sessionId, compressionType, compressionService != null ? compressionService.getClass().getSimpleName() : "null");
                     if (compressionType != null && !compressionType.isEmpty()) {
                         success = compressionService.compressSessionWithType(sessionId, compressionType);
                     } else {
                         success = compressionService.compressSessionManual(sessionId);
                     }
+                    log.info("[compress-debug] 压缩结果: {}", success);
                     
                     if (success) {
                         sendJson(exchange, Map.of("status", "ok", "message", "压缩成功", "sessionId", sessionId, "compressionType", compressionType));
@@ -2382,3 +2382,5 @@ public class ApiServer {
         }
     }
 }
+
+// UNIQUE_MARKER_20260808

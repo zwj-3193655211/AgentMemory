@@ -127,14 +127,21 @@ public class LLMClient {
     }
 
     /**
-     * 构建摘要提示词
+     * 构建摘要提示词（四段式结构化）
      */
     private String buildSummarizePrompt(List<String> messages) {
         StringBuilder sb = new StringBuilder();
-        sb.append("请分析以下对话内容，生成简洁的摘要。摘要应包含：\n");
-        sb.append("1. 对话的主要主题和目的\n");
-        sb.append("2. 关键的技术决策或问题解决方案\n");
-        sb.append("3. 重要的信息或偏好\n\n");
+        sb.append("你是专业的对话压缩助手。请将以下对话压缩为结构化摘要。\n\n");
+        sb.append("必须输出以下格式：\n");
+        sb.append("【目标】本次会话要解决的问题（1-2 句）\n");
+        sb.append("【决策】做出的关键决策及理由（要点式，每点一行）\n");
+        sb.append("【问题】遇到的问题与解决方案（要点式）\n");
+        sb.append("【结论】最终结论/产出物/下一步（1-3 句）\n\n");
+        sb.append("要求：\n");
+        sb.append("- 保留所有关键技术细节：命令、文件路径、参数、版本号、错误信息\n");
+        sb.append("- 忽略寒暄、重复表述、中间过程的无效尝试\n");
+        sb.append("- 用中文输出\n");
+        sb.append("- 总长度控制在原文的 20% 以内，但不超过 300 字\n\n");
         sb.append("对话内容：\n\n");
 
         for (int i = 0; i < messages.size(); i++) {
@@ -142,7 +149,7 @@ public class LLMClient {
             sb.append(messages.get(i)).append("\n\n");
         }
 
-        sb.append("\n请生成不超过 200 字的摘要：");
+        sb.append("\n请生成结构化摘要：");
         return sb.toString();
     }
 
@@ -337,7 +344,7 @@ public class LLMClient {
                     .uri(URI.create(baseUrl + "/chat/completions"))
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
-                    .timeout(Duration.ofSeconds(60));
+                    .timeout(Duration.ofSeconds(300));
             
             // 只在 apiKey 存在时添加 Authorization header
             if (apiKey != null && !apiKey.isEmpty()) {

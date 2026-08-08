@@ -257,9 +257,9 @@ public class SessionCompressionService extends ScheduledServiceBase {
                     summary = "滑动窗口压缩，保留最近 " + windowSize + " 条消息";
                 }
                 case "SUMMARIZE" -> {
-                    // 摘要：调用 LLM 生成摘要
+                    // 摘要：分块多级摘要（避免单次输入过长导致 LLM 超时）
                     compressedMessages = messages; // 保留全部，但生成摘要
-                    summary = llmClient.summarize(messages);
+                    summary = semanticCompressor.generateMultiLevelSummary(truncateMessages(messages));
                     if (summary == null || summary.isEmpty()) {
                         summary = "LLM 摘要生成失败，使用简单摘要";
                     }
@@ -267,7 +267,7 @@ public class SessionCompressionService extends ScheduledServiceBase {
                 case "HYBRID" -> {
                     // 混合：滑动窗口 + 摘要
                     compressedMessages = applySlidingWindow(messages);
-                    summary = llmClient.summarize(messages);
+                    summary = semanticCompressor.generateMultiLevelSummary(truncateMessages(messages));
                     if (summary == null || summary.isEmpty()) {
                         summary = generateSimpleSummary(messages);
                     }
@@ -324,6 +324,23 @@ public class SessionCompressionService extends ScheduledServiceBase {
             log.error("压缩会话失败: {}", sessionId, e);
             return false;
         }
+    }
+
+    /**
+     * 截断消息列表：每条最多 200 字符，总输入控制在合理范围
+     * 避免超长输入导致本地 LLM 推理超时
+     */
+    private List<String> truncateMessages(List<String> messages) {
+        List<String> result = new ArrayList<>();
+        for (String msg : messages) {
+            if (msg == null) continue;
+            if (msg.length() > 200) {
+                result.add(msg.substring(0, 200));
+            } else {
+                result.add(msg);
+            }
+        }
+        return result;
     }
 
     /**

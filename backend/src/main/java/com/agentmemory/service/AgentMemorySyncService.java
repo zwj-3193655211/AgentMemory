@@ -377,11 +377,16 @@ public class AgentMemorySyncService extends ScheduledServiceBase {
     private String normalizeTimestamp(String ts) {
         if (ts == null || ts.isBlank() || "0".equals(ts)) return null;
         try {
-            // 1. 纯数字时间戳（秒/毫秒）
-            if (ts.matches("\\d{10,13}")) {
-                long v = Long.parseLong(ts);
-                if (ts.length() <= 10) v *= 1000;
-                return new java.sql.Timestamp(v).toInstant().toString();
+            // 1. 纯数字时间戳（秒/毫秒），含浮点（如 1780822146.9565885）
+            if (ts.matches("\\d{10,13}(\\.\\d+)?")) {
+                double v = Double.parseDouble(ts);
+                long millis;
+                if (v < 1e12) {
+                    millis = (long) (v * 1000);  // 秒级
+                } else {
+                    millis = (long) v;            // 毫秒级
+                }
+                return new java.sql.Timestamp(millis).toInstant().toString();
             }
             // 2. ISO 无时区（如 2026-08-08T05:59:42.850952）→ 追加 Z
             if (ts.matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}")) {
