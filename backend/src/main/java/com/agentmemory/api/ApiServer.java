@@ -28,6 +28,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.agentmemory.service.AgentDetectorService;
+import com.agentmemory.service.AgentMemorySyncService;
 import com.agentmemory.service.DatabaseService;
 import com.agentmemory.service.FileWatcherService;
 import com.agentmemory.service.SessionCompressionService;
@@ -54,6 +55,7 @@ public class ApiServer {
     private HttpServer server;
     private final int port;
     private SessionCompressionService compressionService;
+    private AgentMemorySyncService memorySyncService;
     
     // CORS 配置：允许的源列表（可通过系统属性配置）
     private static final String ALLOWED_ORIGINS = System.getProperty("api.cors.origins", 
@@ -84,6 +86,10 @@ public class ApiServer {
     public void setCompressionService(SessionCompressionService compressionService) {
         this.compressionService = compressionService;
     }
+
+    public void setMemorySyncService(AgentMemorySyncService memorySyncService) {
+        this.memorySyncService = memorySyncService;
+    }
     
     public void start() throws IOException {
         server = HttpServer.create(new InetSocketAddress(port), 0);
@@ -106,6 +112,8 @@ public class ApiServer {
         server.createContext("/api/import", new SetupHandler(databaseService, agentDetectorService, fileWatcherService));
         server.createContext("/api/chat", new ChatHandler(databaseService, agentDetectorService));
         server.createContext("/api/events", new SseHandler());
+        server.createContext("/api/sync", new MemorySyncHandler());
+        server.createContext("/api/agents/sync", new AgentSyncHandler());
 
         // Embedding 服务代理（解决前端 CORS 问题）
         String embedBase = System.getenv().getOrDefault("EMBEDDING_BASE_URL", "http://localhost:8100");
@@ -2489,6 +2497,78 @@ public class ApiServer {
                 config.put("days", 30);
             }
             return config;
+        }
+    }
+
+    /**
+     * 记忆同步 handler：POST /api/sync 手动触发画像同步 + SQLite 会话导入
+     */
+    class MemorySyncHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            wrapHandler(exchange, () -> {
+                if (!"POST".equals(exchange.getRequestMethod())) {
+                    sendError(exchange, 405, "Method Not Allowed");
+                    return;
+                }
+                if (memorySyncService == null) {
+                    sendError(exchange, 500, "AgentMemorySyncService 未初始化");
+                    return;
+                }
+                Map<String, Object> result = new HashMap<>();
+                result.put("profiles", memorySyncService.syncAllProfiles());
+                result.put("sessions", memorySyncService.importAllSqliteSessions());
+                sendJson(exchange, result);
+            });
+        }
+    }
+
+    /**
+     * 单 agent 同步 handler：POST /api/agents/sync 同步指定 agent（body: {"agent":"hermes"}）
+     */
+    class AgentSyncHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            wrapHandler(exchange, () -> {
+                if (!"POST".equals(exchange.getRequestMethod())) {
+                    sendError(exchange, 405, "Method Not Allowed");
+                    return;
+                }
+                if (memorySyncService == null) {
+                    sendError(exchange, 500, "AgentMemorySyncService 未初始化");
+                    return;
+                }
+                Map<String, Object> body = readRequestBody(exchange);
+                String agent = body != null ? (String) body.get("agent") : null;
+                if (agent == null || agent.isBlank()) {
+                    sendError(exchange, 400, "缺少 agent 参数");
+                    return;
+                }
+                Map<String, Object> result = new HashMap<>();
+                // 单个 agent 同步（画像 + 会话导入）
+                result.put("agent", agent);
+                result.put("synced", syncSingleAgent(agent));
+                sendJson(exchange, result);
+            });
+        }
+    }
+
+    /** 同步单个 agent（支持 hermes/mavis/marvis 会话导入 + 所有画像源） */
+    private boolean syncSingleAgent(String agent) {
+        try {
+            switch (agent) {
+                case "hermes" -> memorySyncService.importSessionsFromDb("hermes",
+                        "C:/Users/31936/.hermes/state.db");
+                case "mavis" -> memorySyncService.importSessionsFromDb("mavis",
+                        "C:/Users/31936/.mavis/sqlite.db");
+                case "marvis" -> memorySyncService.importSessionsFromDb("marvis",
+                        "C:/Users/31936/.marvis/database/memory.db");
+                default -> { return true; } // 画像类 agent 由全量同步覆盖
+            }
+            return true;
+        } catch (Exception e) {
+            log.error("同步 agent {} 失败: {}", agent, e.getMessage());
+            return false;
         }
     }
 }

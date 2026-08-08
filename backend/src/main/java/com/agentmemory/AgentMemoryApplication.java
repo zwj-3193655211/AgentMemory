@@ -113,6 +113,7 @@ public class AgentMemoryApplication {
         // 8. 启动 API 服务
         log.info("[8/8] 启动 API 服务...");
         apiServer.setCompressionService(compressionService);
+        apiServer.setMemorySyncService(memorySyncService);
         apiServer.start();
         log.info("      API 地址: http://localhost:{}", config.getApiPort());
 
