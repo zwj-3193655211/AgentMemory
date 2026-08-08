@@ -73,11 +73,15 @@ public class AgentMemoryApplication {
         }
         databaseService.registerAgents(detectedAgents);
 
-        // 3. 启动文件监控（WorkBuddy 使用独立 Watcher，跳过）
+        // 3. 启动文件监控（WorkBuddy 使用独立 Watcher，跳过；SQLite 型 agent 由 AgentMemorySyncService 轮询导入）
         log.info("[3/6] 启动文件监控服务...");
         for (AgentInfo agent : detectedAgents) {
             if ("workbuddy".equals(agent.getType())) {
                 continue;  // WorkBuddy 由 WorkBuddyWatcher 独立监控
+            }
+            if ("hermes".equals(agent.getType()) || "mavis".equals(agent.getType())
+                    || "marvis".equals(agent.getType())) {
+                continue;  // SQLite 型 agent 由 AgentMemorySyncService 轮询导入会话
             }
             Path watchPath = expandHomePath(agent.getLogPath());
             if (watchPath.toFile().exists()) {

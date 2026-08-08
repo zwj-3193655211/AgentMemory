@@ -76,6 +76,12 @@ public class AgentDetectorService {
         addIfNotNull(agents, detectAgent("WorkBuddy", "workbuddy", ".workbuddy", "projects"));
         addIfNotNull(agents, detectAgent("Pi Agent", "pi", ".pi", "agent", "sessions"));
 
+        // 记忆重构新增：SQLite/JSONL 型 agent（会话由 AgentMemorySyncService 导入）
+        addIfNotNull(agents, detectAgent("Hermes", "hermes", ".hermes"));
+        addIfNotNull(agents, detectAgent("Mavis", "mavis", ".mavis"));
+        addIfNotNull(agents, detectAgent("Marvis", "marvis", ".marvis"));
+        addIfNotNull(agents, detectAgent("MiniMax Code", "minimax", ".minimax"));
+
         log.info("检测到 {} 个 Agent", agents.size());
         return agents;
     }
