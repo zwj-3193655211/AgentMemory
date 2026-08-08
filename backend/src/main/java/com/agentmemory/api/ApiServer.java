@@ -1168,13 +1168,25 @@ public class ApiServer {
                 if ("GET".equals(method)) {
                     if (path.endsWith("/export")) {
                         handleExport(exchange);
+                    } else if (path.matches("/api/skills/pending-count")) {
+                        sendJson(exchange, Map.of("count", getPendingSkillCount()));
                     } else if (path.matches("/api/skills/[^/]+")) {
                         handleGetSingle(exchange, parseIdFromPath(path, "/api/skills/"));
                     } else {
                         handleList(exchange);
                     }
                 } else if ("POST".equals(method)) {
-                    handleCreate(exchange);
+                    if (path.matches("/api/skills/[^/]+/approve")) {
+                        String id = parseIdFromPath(path, "/api/skills/");
+                        if (id.endsWith("/approve")) id = id.substring(0, id.length() - "/approve".length());
+                        handleStatusChange(exchange, id, "approved");
+                    } else if (path.matches("/api/skills/[^/]+/reject")) {
+                        String id = parseIdFromPath(path, "/api/skills/");
+                        if (id.endsWith("/reject")) id = id.substring(0, id.length() - "/reject".length());
+                        handleStatusChange(exchange, id, "rejected");
+                    } else {
+                        handleCreate(exchange);
+                    }
                 } else if ("PUT".equals(method)) {
                     handleUpdate(exchange, parseIdFromPath(path, "/api/skills/"));
                 } else if ("DELETE".equals(method)) {
@@ -1186,8 +1198,11 @@ public class ApiServer {
         }
 
         private void handleList(HttpExchange exchange) throws SQLException, IOException {
-            List<Map<String, Object>> items = queryList(
-                "SELECT * FROM skills WHERE (deleted = false OR deleted IS NULL) ORDER BY created_at DESC",
+            String status = getQueryParam(exchange, "status");
+            String sql = "SELECT * FROM skills WHERE (deleted = false OR deleted IS NULL)";
+            if (status != null && !status.isBlank()) sql += " AND status = ?";
+            sql += " ORDER BY created_at DESC";
+            List<Map<String, Object>> items = queryList(sql,
                 rs -> {
                     Map<String, Object> item = new HashMap<>();
                     item.put("id", rs.getString("id"));
@@ -1196,11 +1211,38 @@ public class ApiServer {
                     item.put("description", rs.getString("description"));
                     item.put("steps", rs.getString("steps"));
                     item.put("tags", sqlArrayToList(rs.getArray("tags")));
+                    item.put("status", rs.getString("status"));
+                    item.put("extractedBy", rs.getString("extracted_by"));
                     item.put("createdAt", rs.getTimestamp("created_at"));
                     return item;
-                }
-            );
+                },
+                status);
             sendJson(exchange, items);
+        }
+
+        /** 技能确认/忽略：更新状态 */
+        private void handleStatusChange(HttpExchange exchange, String id, String status) throws SQLException, IOException {
+            try (Connection conn = databaseService.getConnection();
+                 PreparedStatement st = conn.prepareStatement("UPDATE skills SET status = ? WHERE id = ?")) {
+                st.setString(1, status);
+                st.setString(2, id);
+                int n = st.executeUpdate();
+                if (n == 0) {
+                    sendError(exchange, 404, "Not found");
+                    return;
+                }
+                sendJson(exchange, Map.of("id", id, "status", status));
+            }
+        }
+
+        /** 待确认技能候选数（前端红点） */
+        private int getPendingSkillCount() throws SQLException {
+            try (Connection conn = databaseService.getConnection();
+                 PreparedStatement st = conn.prepareStatement(
+                     "SELECT COUNT(*) FROM skills WHERE status = 'pending' AND (deleted = false OR deleted IS NULL)");
+                 ResultSet rs = st.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
         }
 
         private void handleGetSingle(HttpExchange exchange, String id) throws SQLException, IOException {
