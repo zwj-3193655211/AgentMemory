@@ -3,9 +3,9 @@
 AgentMemory 嵌入服务
 
 支持三种模式：
-- 轻量模式 (默认): 仅 bge-small-zh-v1.5，秒启动，规则提取
-- 本地LLM模式: bge-small + 本地LLM（transformers）
-- API模式: bge-small + 外部API（OpenAI兼容接口）
+- 轻量模式 (默认): 仅 Qwen3-Embedding-0.6B，秒启动，规则提取
+- 本地LLM模式: Qwen3-Embedding-0.6B + 本地LLM（transformers，默认 Qwen3.5-2B）
+- API模式: Qwen3-Embedding-0.6B + 外部API（OpenAI兼容接口）
 
 配置方式（环境变量）：
   LLM_MODE=disabled          # 轻量模式（默认）
@@ -18,8 +18,8 @@ AgentMemory 嵌入服务
   LLM_API_KEY=sk-xxx
   LLM_API_MODEL=gpt-4o-mini
   
-  # 本地模式配置
-  LLM_LOCAL_MODEL=Qwen/Qwen3-0.6B
+  # 本地模式配置（默认使用 ~/.agentmemory/models/Qwen3.5-2B 本地副本）
+  LLM_LOCAL_MODEL=C:/Users/31936/.agentmemory/models/Qwen3.5-2B
 
 启动方式：
   python embed_server.py                              # 轻量模式
@@ -67,20 +67,17 @@ LLM_API_MODEL = os.environ.get('LLM_API_MODEL', 'gpt-4o-mini')
 LLM_API_TIMEOUT = int(os.environ.get('LLM_API_TIMEOUT', '30'))
 
 # 本地模型配置
-LLM_LOCAL_MODEL = os.environ.get('LLM_LOCAL_MODEL', 'Qwen/Qwen3-0.6B')
+# 默认使用 ~/.agentmemory/models/Qwen3.5-2B 本地副本（提取分类模型）
+LLM_LOCAL_MODEL = os.environ.get(
+    'LLM_LOCAL_MODEL',
+    os.path.join(MODEL_CACHE, 'Qwen3.5-2B')
+)
 
-# Embedding 模型配置
-EMBEDDING_MODEL = os.environ.get('EMBEDDING_MODEL', 'BAAI/bge-small-zh-v1.5')
+# Embedding 模型配置（bge-small-zh-v1.5 已移除，默认使用 Qwen3-Embedding-0.6B）
+EMBEDDING_MODEL = os.environ.get('EMBEDDING_MODEL', 'Qwen/Qwen3-Embedding-0.6B')
 
 # 支持的 Embedding 模型列表
 EMBEDDING_MODELS = {
-    'BAAI/bge-small-zh-v1.5': {
-        'name': 'BGE-small-zh-v1.5',
-        'dimension': 512,
-        'size': '~100MB',
-        'description': '轻量级中文模型，速度快',
-        'download_size_mb': 100
-    },
     'Qwen/Qwen3-Embedding-0.6B': {
         'name': 'Qwen3-Embedding-0.6B',
         'dimension': 1024,
