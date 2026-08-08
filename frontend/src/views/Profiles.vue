@@ -64,10 +64,8 @@
       </el-table-column>
       <el-table-column label="内容" min-width="500">
         <template #default="{ row }">
-          <div class="item-content">
-            <div v-for="(line, idx) in parseContent(row.items)" :key="idx" class="content-line">
-              {{ line }}
-            </div>
+          <div class="item-content" :title="getFullContent(row.items)">
+            <div class="content-line">{{ getPreview(row.items) }}</div>
           </div>
         </template>
       </el-table-column>
@@ -235,8 +233,8 @@ const formatTime = (time: string | Date) => {
   return d.toLocaleString('zh-CN')
 }
 
-// 解析 JSON 内容（从 {content: "..."} 数组中提取 content 文本）
-const parseContent = (itemsStr: string | any[]): string[] => {
+// 解析 JSON 内容（从 {content: "..."} 数组中提取 content 文本，返回单字符串）
+const parseContent = (itemsStr: string | any[]): string => {
   let arr: any[] = []
   if (Array.isArray(itemsStr)) {
     arr = itemsStr
@@ -246,6 +244,19 @@ const parseContent = (itemsStr: string | any[]): string[] => {
   return arr
     .map((it: any) => (typeof it === 'string' ? it : (it?.content || JSON.stringify(it))))
     .filter((s: string) => s && s.trim())
+    .join('\n')
+}
+
+// 预览：截断为前 200 字（单行显示）
+const getPreview = (itemsStr: string | any[]) => {
+  const full = parseContent(itemsStr)
+  const single = full.replace(/\s+/g, ' ')
+  return single.length > 200 ? single.slice(0, 200) + '…' : single
+}
+
+// 完整内容（用于悬停提示）
+const getFullContent = (itemsStr: string | any[]) => {
+  return parseContent(itemsStr)
 }
 
 // 加载数据
@@ -414,30 +425,14 @@ loadData()
 }
 
 .item-content {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-height: 120px;
-  overflow: hidden;
-  position: relative;
   font-size: 13px;
   line-height: 1.5;
   color: #303133;
 }
 
-.item-content::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 30px;
-  background: linear-gradient(to bottom, transparent, #fff);
-  pointer-events: none;
-}
-
 .content-line {
-  white-space: pre-wrap;
-  word-break: break-word;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>
