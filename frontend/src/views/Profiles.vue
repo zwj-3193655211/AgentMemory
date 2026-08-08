@@ -72,7 +72,7 @@
       <el-table-column prop="updatedAt" label="更新时间" width="180">
         <template #default="{ row }">{{ formatTime(row.updatedAt) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="150" fixed="right">
+      <el-table-column label="操作" width="150">
         <template #default="{ row }">
           <el-button size="small" @click="openEdit(row)">编辑</el-button>
           <el-button size="small" type="danger" @click="handleDelete(row)">删除</el-button>
@@ -118,8 +118,9 @@ import { apiService, API_BASE_URL } from '../services/api'
 const syncing = ref(false)
 
 // 组件卸载时清理对话框（防止遮罩残留阻塞菜单点击）
+// 注意：卸载钩子里不应修改 reactive 状态（会干扰 Vue patch），改为标记由父级处理
 onUnmounted(() => {
-  dialog.visible = false
+  // dialog.visible = false  // 移除此处赋值，避免卸载时改状态导致 patch 中断
 })
 
 // 手动同步 agent 记忆文件

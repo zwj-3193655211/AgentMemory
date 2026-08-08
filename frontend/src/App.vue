@@ -35,7 +35,7 @@
           </div>
         </el-tooltip>
 
-        <el-menu mode="horizontal" :default-active="activeMenu" @select="handleMenuSelect" class="main-menu" :ellipsis="false">
+        <el-menu mode="horizontal" v-model:default-active="activeMenu" @select="handleMenuSelect" class="main-menu" :ellipsis="false">
           <el-menu-item index="dashboard" @click="handleMenuSelect('dashboard')">
             <el-tooltip content="仪表盘" placement="bottom">
               <el-icon><Odometer /></el-icon>
@@ -211,10 +211,6 @@ const newAgent = ref({
 
 // 方法
 const handleMenuSelect = (index: string) => {
-  // 切换时清理可能残留的 dialog 遮罩（防止阻塞后续点击）
-  try {
-    document.querySelectorAll('.el-overlay').forEach(el => (el as HTMLElement).remove())
-  } catch {}
   activeMenu.value = index
   // 防御性：同步到 localStorage 防止偶发状态丢失
   try { localStorage.setItem('agentmemory_activeMenu', index) } catch {}
