@@ -35,50 +35,50 @@
           </div>
         </el-tooltip>
 
-        <el-menu mode="horizontal" v-model:default-active="activeMenu" @select="handleMenuSelect" class="main-menu" :ellipsis="false">
-          <el-menu-item index="dashboard">
+        <el-menu mode="horizontal" :default-active="activeMenu" @select="handleMenuSelect" class="main-menu" :ellipsis="false">
+          <el-menu-item index="dashboard" @click="handleMenuSelect('dashboard')">
             <el-tooltip content="仪表盘" placement="bottom">
               <el-icon><Odometer /></el-icon>
             </el-tooltip>
             <span class="menu-label">仪表盘</span>
           </el-menu-item>
-          <el-menu-item index="experiences">
+          <el-menu-item index="experiences" @click="handleMenuSelect('experiences')">
             <el-tooltip content="实践经验" placement="bottom">
               <el-icon><WarningFilled /></el-icon>
             </el-tooltip>
             <span class="menu-label">实践经验</span>
           </el-menu-item>
-          <el-menu-item index="profiles">
+          <el-menu-item index="profiles" @click="handleMenuSelect('profiles')">
             <el-tooltip content="用户画像" placement="bottom">
               <el-icon><User /></el-icon>
             </el-tooltip>
             <span class="menu-label">用户画像</span>
           </el-menu-item>
-          <el-menu-item index="projects">
+          <el-menu-item index="projects" @click="handleMenuSelect('projects')">
             <el-tooltip content="项目会话" placement="bottom">
               <el-icon><FolderOpened /></el-icon>
             </el-tooltip>
             <span class="menu-label">项目会话</span>
           </el-menu-item>
-          <el-menu-item index="skills">
+          <el-menu-item index="skills" @click="handleMenuSelect('skills')">
             <el-tooltip content="技能沉淀" placement="bottom">
               <el-icon><Reading /></el-icon>
             </el-tooltip>
             <span class="menu-label">技能沉淀</span>
           </el-menu-item>
-          <el-menu-item index="agents">
+          <el-menu-item index="agents" @click="handleMenuSelect('agents')">
             <el-tooltip content="Agent 接入" placement="bottom">
               <el-icon><Box /></el-icon>
             </el-tooltip>
             <span class="menu-label">Agent 接入</span>
           </el-menu-item>
-          <el-menu-item index="compression">
+          <el-menu-item index="compression" @click="handleMenuSelect('compression')">
             <el-tooltip content="会话摘要" placement="bottom">
               <el-icon><Connection /></el-icon>
             </el-tooltip>
             <span class="menu-label">会话摘要</span>
           </el-menu-item>
-          <el-menu-item index="settings" class="settings-menu-item">
+          <el-menu-item index="settings" class="settings-menu-item" @click="handleMenuSelect('settings')">
             <el-tooltip content="设置" placement="bottom">
               <el-icon><Setting /></el-icon>
             </el-tooltip>
@@ -211,6 +211,10 @@ const newAgent = ref({
 
 // 方法
 const handleMenuSelect = (index: string) => {
+  // 切换时清理可能残留的 dialog 遮罩（防止阻塞后续点击）
+  try {
+    document.querySelectorAll('.el-overlay').forEach(el => (el as HTMLElement).remove())
+  } catch {}
   activeMenu.value = index
   // 防御性：同步到 localStorage 防止偶发状态丢失
   try { localStorage.setItem('agentmemory_activeMenu', index) } catch {}

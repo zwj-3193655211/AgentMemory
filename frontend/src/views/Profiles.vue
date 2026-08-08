@@ -109,13 +109,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Download, Search, Refresh } from '@element-plus/icons-vue'
 import { apiService, API_BASE_URL } from '../services/api'
 
 // 记忆同步状态
 const syncing = ref(false)
+
+// 组件卸载时清理对话框（防止遮罩残留阻塞菜单点击）
+onUnmounted(() => {
+  dialog.visible = false
+})
 
 // 手动同步 agent 记忆文件
 const syncNow = async () => {
