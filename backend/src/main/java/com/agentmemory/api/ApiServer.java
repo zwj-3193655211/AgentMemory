@@ -918,9 +918,14 @@ public class ApiServer {
 
         private void handleList(HttpExchange exchange, String type) throws SQLException, IOException {
             String sql = "SELECT * FROM experiences WHERE deleted = false";
-            if (type != null && !type.isBlank()) sql += " AND type = ?";
-            sql += " ORDER BY created_at DESC LIMIT 200";
-            List<Map<String, Object>> items = queryList(sql, rs -> mapExperience(rs), type);
+            List<Map<String, Object>> items;
+            if (type != null && !type.isBlank()) {
+                sql += " AND type = ? ORDER BY created_at DESC LIMIT 200";
+                items = queryList(sql, rs -> mapExperience(rs), type);
+            } else {
+                sql += " ORDER BY created_at DESC LIMIT 200";
+                items = queryList(sql, rs -> mapExperience(rs));
+            }
             sendJson(exchange, items);
         }
 
@@ -999,8 +1004,13 @@ public class ApiServer {
 
         private void handleExport(HttpExchange exchange, String type) throws SQLException, IOException {
             String sql = "SELECT * FROM experiences WHERE deleted = false";
-            if (type != null && !type.isBlank()) sql += " AND type = ?";
-            List<Map<String, Object>> items = queryList(sql, rs -> mapExperience(rs), type);
+            List<Map<String, Object>> items;
+            if (type != null && !type.isBlank()) {
+                sql += " AND type = ?";
+                items = queryList(sql, rs -> mapExperience(rs), type);
+            } else {
+                items = queryList(sql, rs -> mapExperience(rs));
+            }
             exportAsJson(exchange, items, "experiences");
         }
 
@@ -1057,6 +1067,7 @@ public class ApiServer {
                     item.put("title", rs.getString("title"));
                     item.put("category", rs.getString("category"));
                     item.put("items", rs.getString("items"));
+                    item.put("sourceAgent", rs.getString("source_agent"));
                     item.put("updatedAt", rs.getTimestamp("updated_at"));
                     return item;
                 }
@@ -1073,6 +1084,7 @@ public class ApiServer {
                     item.put("title", rs.getString("title"));
                     item.put("category", rs.getString("category"));
                     item.put("items", rs.getString("items"));
+                    item.put("sourceAgent", rs.getString("source_agent"));
                     item.put("updatedAt", rs.getTimestamp("updated_at"));
                     return item;
                 },
@@ -1200,24 +1212,29 @@ public class ApiServer {
         private void handleList(HttpExchange exchange) throws SQLException, IOException {
             String status = getQueryParam(exchange, "status");
             String sql = "SELECT * FROM skills WHERE (deleted = false OR deleted IS NULL)";
-            if (status != null && !status.isBlank()) sql += " AND status = ?";
-            sql += " ORDER BY created_at DESC";
-            List<Map<String, Object>> items = queryList(sql,
-                rs -> {
-                    Map<String, Object> item = new HashMap<>();
-                    item.put("id", rs.getString("id"));
-                    item.put("title", rs.getString("title"));
-                    item.put("skillType", rs.getString("skill_type"));
-                    item.put("description", rs.getString("description"));
-                    item.put("steps", rs.getString("steps"));
-                    item.put("tags", sqlArrayToList(rs.getArray("tags")));
-                    item.put("status", rs.getString("status"));
-                    item.put("extractedBy", rs.getString("extracted_by"));
-                    item.put("createdAt", rs.getTimestamp("created_at"));
-                    return item;
-                },
-                status);
+            List<Map<String, Object>> items;
+            if (status != null && !status.isBlank()) {
+                sql += " AND status = ? ORDER BY created_at DESC";
+                items = queryList(sql, rs -> mapSkill(rs), status);
+            } else {
+                sql += " ORDER BY created_at DESC";
+                items = queryList(sql, rs -> mapSkill(rs));
+            }
             sendJson(exchange, items);
+        }
+
+        private Map<String, Object> mapSkill(ResultSet rs) throws SQLException {
+            Map<String, Object> item = new HashMap<>();
+            item.put("id", rs.getString("id"));
+            item.put("title", rs.getString("title"));
+            item.put("skillType", rs.getString("skill_type"));
+            item.put("description", rs.getString("description"));
+            item.put("steps", rs.getString("steps"));
+            item.put("tags", sqlArrayToList(rs.getArray("tags")));
+            item.put("status", rs.getString("status"));
+            item.put("extractedBy", rs.getString("extracted_by"));
+            item.put("createdAt", rs.getTimestamp("created_at"));
+            return item;
         }
 
         /** 技能确认/忽略：更新状态 */

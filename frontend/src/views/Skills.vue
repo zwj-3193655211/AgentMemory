@@ -12,6 +12,20 @@
       </div>
     </div>
 
+    <!-- 技能库 / 候选 Tab -->
+    <el-tabs v-model="activeTab" @tab-change="handleTabChange">
+      <el-tab-pane label="技能库" name="approved" />
+      <el-tab-pane name="pending">
+        <template #label>
+          技能候选
+          <el-badge v-if="pendingCount > 0" :value="pendingCount" class="pending-badge" />
+        </template>
+      </el-tab-pane>
+    </el-tabs>
+
+    <!-- 技能库列表 -->
+    <template v-if="activeTab === 'approved'">
+
     <!-- 查询工具栏 -->
     <div class="filter-toolbar">
       <el-input
@@ -86,6 +100,37 @@
         </template>
       </el-table-column>
     </el-table>
+    </template>
+
+    <!-- 技能候选列表（LLM 提取待人工确认） -->
+    <template v-else>
+      <el-empty v-if="pendingList.length === 0" description="暂无待确认的技能候选" />
+      <el-card v-for="item in pendingList" :key="item.id" shadow="hover" class="pending-card">
+        <template #header>
+          <div style="display: flex; justify-content: space-between; align-items: center">
+            <span class="pending-title">{{ item.title }}</span>
+            <div>
+              <el-tag size="small" style="margin-right: 8px">{{ item.skillType || '未分类' }}</el-tag>
+              <el-tag size="small" type="warning">LLM 提取</el-tag>
+            </div>
+          </div>
+        </template>
+        <p class="pending-desc">{{ item.description }}</p>
+        <div v-if="item.steps && item.steps !== '[]'" class="pending-steps">
+          <div class="steps-title">步骤：</div>
+          <pre>{{ formatSteps(item.steps) }}</pre>
+        </div>
+        <div class="pending-tags">
+          <el-tag v-for="t in parseTags(item.tags)" :key="t" size="small" class="skill-tag">{{ t }}</el-tag>
+        </div>
+        <div class="pending-actions">
+          <el-button type="primary" size="small" @click="approveSkill(item)">
+            <el-icon><Check /></el-icon> 确认入库
+          </el-button>
+          <el-button type="danger" size="small" @click="rejectSkill(item)">忽略</el-button>
+        </div>
+      </el-card>
+    </template>
 
     <!-- 对话框 -->
     <el-dialog v-model="dialog.visible" :title="dialog.isEdit ? '编辑技能沉淀' : '新增技能沉淀'" width="600px">
@@ -127,7 +172,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Download, Search, Refresh, PriceTag } from '@element-plus/icons-vue'
+import { Plus, Download, Search, Refresh, PriceTag, Check } from '@element-plus/icons-vue'
 import { apiService, API_BASE_URL } from '../services/api'
 import type { Skill, SkillType } from '../types'
 
@@ -266,6 +311,50 @@ const loadData = async () => {
   }
 }
 
+// ===== 技能候选（LLM 提取待确认） =====
+const activeTab = ref('approved')
+const pendingList = ref<Skill[]>([])
+const pendingCount = ref(0)
+
+const loadPending = async () => {
+  try {
+    pendingList.value = await apiService.getSkillsByStatus('pending')
+    const c = await apiService.getPendingSkillCount()
+    pendingCount.value = c.count || 0
+  } catch {}
+}
+
+const handleTabChange = () => {
+  if (activeTab.value === 'pending') loadPending()
+}
+
+const formatSteps = (steps: string) => {
+  if (!steps) return ''
+  try {
+    const arr = JSON.parse(steps)
+    if (Array.isArray(arr)) return arr.map((s, i) => `${i + 1}. ${s}`).join('\n')
+    return steps
+  } catch {
+    return steps
+  }
+}
+
+const approveSkill = async (item: Skill) => {
+  try {
+    await apiService.approveSkill(item.id!)
+    ElMessage.success('已确认入库')
+    await loadPending()
+  } catch {}
+}
+
+const rejectSkill = async (item: Skill) => {
+  try {
+    await apiService.rejectSkill(item.id!)
+    ElMessage.success('已忽略')
+    await loadPending()
+  } catch {}
+}
+
 // 打开新增对话框
 const openCreate = () => {
   dialog.isEdit = false
@@ -347,6 +436,7 @@ defineExpose({ loadData })
 
 // 初始化加载数据
 loadData()
+loadPending()
 </script>
 
 <style scoped>

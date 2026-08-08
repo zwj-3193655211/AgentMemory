@@ -185,6 +185,11 @@
         <el-table-column prop="compressionType" label="压缩类型" width="120" />
         <el-table-column prop="messageCount" label="原消息数" width="100" />
         <el-table-column prop="compressedAt" label="压缩时间" width="180" />
+        <el-table-column label="操作" width="130">
+          <template #default="{ row }">
+            <el-button link type="danger" size="small" @click.stop="deleteMessages(row)">删除原消息</el-button>
+          </template>
+        </el-table-column>
       </el-table>
     </el-card>
 
@@ -236,7 +241,8 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import axios from 'axios'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { apiService } from '../services/api'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8082/api'
 
@@ -267,6 +273,21 @@ const summaryDetail = reactive({
 const openSummaryDetail = (row: any) => {
   summaryDetail.data = row
   summaryDetail.visible = true
+}
+
+// 删除会话原消息（软删除，摘要保留）
+const deleteMessages = async (row: any) => {
+  try {
+    await ElMessageBox.confirm(
+      '删除后原对话不可恢复（压缩摘要保留），确定删除？',
+      '删除原消息',
+      { type: 'warning' }
+    )
+    await apiService.deleteSessionMessages(row.sessionId)
+    ElMessage.success('原消息已删除，摘要保留')
+  } catch (error) {
+    if (error !== 'cancel') {}
+  }
 }
 
 const viewSessionMessages = async (sessionId: string) => {

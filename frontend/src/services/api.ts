@@ -99,6 +99,69 @@ export class ApiService {
     return this.delete(`/errors/${id}`)
   }
 
+  // ============== 实践经验（合并端点） ==============
+
+  /**
+   * 获取实践经验列表（支持类型过滤）
+   */
+  async getExperiences(type?: string) {
+    const q = type ? `?type=${type}` : ''
+    return this.get<any[]>(`/experiences${q}`)
+  }
+
+  /**
+   * 创建实践经验
+   */
+  async createExperience(data: any) {
+    return this.post('/experiences', data)
+  }
+
+  /**
+   * 更新实践经验
+   */
+  async updateExperience(id: string, data: any) {
+    return this.put(`/experiences/${id}`, data)
+  }
+
+  /**
+   * 删除实践经验
+   */
+  async deleteExperience(id: string) {
+    return this.delete(`/experiences/${id}`)
+  }
+
+  // ============== 记忆同步 ==============
+
+  /**
+   * 手动触发全量记忆同步（画像 + SQLite 会话导入）
+   */
+  async syncAll() {
+    return this.post('/sync', {})
+  }
+
+  /**
+   * 同步单个 agent
+   */
+  async syncAgent(agent: string) {
+    return this.post('/agents/sync', { agent })
+  }
+
+  // ============== 会话标题与删除 ==============
+
+  /**
+   * 会话标题懒生成
+   */
+  async getSessionTitle(sessionId: string) {
+    return this.get<{ title: string }>(`/sessions/${sessionId}/title`)
+  }
+
+  /**
+   * 删除会话原消息（软删除）
+   */
+  async deleteSessionMessages(sessionId: string) {
+    return this.delete(`/sessions/${sessionId}/messages`)
+  }
+
   /**
    * 获取用户画像列表
    */
@@ -188,6 +251,34 @@ export class ApiService {
    */
   async getSkills() {
     return this.get<any[]>('/skills')
+  }
+
+  /**
+   * 获取技能列表（按状态过滤）
+   */
+  async getSkillsByStatus(status: string) {
+    return this.get<any[]>(`/skills?status=${status}`)
+  }
+
+  /**
+   * 待确认技能候选数
+   */
+  async getPendingSkillCount() {
+    return this.get<{ count: number }>('/skills/pending-count')
+  }
+
+  /**
+   * 确认技能候选
+   */
+  async approveSkill(id: string) {
+    return this.post(`/skills/${id}/approve`, {})
+  }
+
+  /**
+   * 忽略技能候选
+   */
+  async rejectSkill(id: string) {
+    return this.post(`/skills/${id}/reject`, {})
   }
 
   /**

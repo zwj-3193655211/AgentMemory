@@ -42,11 +42,11 @@
             </el-tooltip>
             <span class="menu-label">仪表盘</span>
           </el-menu-item>
-          <el-menu-item index="errors">
-            <el-tooltip content="错误纠正" placement="bottom">
+          <el-menu-item index="experiences">
+            <el-tooltip content="实践经验" placement="bottom">
               <el-icon><WarningFilled /></el-icon>
             </el-tooltip>
-            <span class="menu-label">错误纠正</span>
+            <span class="menu-label">实践经验</span>
           </el-menu-item>
           <el-menu-item index="profiles">
             <el-tooltip content="用户画像" placement="bottom">
@@ -54,17 +54,11 @@
             </el-tooltip>
             <span class="menu-label">用户画像</span>
           </el-menu-item>
-          <el-menu-item index="practices">
-            <el-tooltip content="实践经验" placement="bottom">
-              <el-icon><DocumentChecked /></el-icon>
-            </el-tooltip>
-            <span class="menu-label">实践经验</span>
-          </el-menu-item>
-          <el-menu-item index="contexts">
-            <el-tooltip content="项目上下文" placement="bottom">
+          <el-menu-item index="projects">
+            <el-tooltip content="项目会话" placement="bottom">
               <el-icon><FolderOpened /></el-icon>
             </el-tooltip>
-            <span class="menu-label">项目上下文</span>
+            <span class="menu-label">项目会话</span>
           </el-menu-item>
           <el-menu-item index="skills">
             <el-tooltip content="技能沉淀" placement="bottom">
@@ -72,17 +66,17 @@
             </el-tooltip>
             <span class="menu-label">技能沉淀</span>
           </el-menu-item>
+          <el-menu-item index="agents">
+            <el-tooltip content="Agent 接入" placement="bottom">
+              <el-icon><Box /></el-icon>
+            </el-tooltip>
+            <span class="menu-label">Agent 接入</span>
+          </el-menu-item>
           <el-menu-item index="compression">
             <el-tooltip content="会话摘要" placement="bottom">
               <el-icon><Connection /></el-icon>
             </el-tooltip>
             <span class="menu-label">会话摘要</span>
-          </el-menu-item>
-          <el-menu-item index="chat">
-            <el-tooltip content="对话" placement="bottom">
-              <el-icon><ChatDotRound /></el-icon>
-            </el-tooltip>
-            <span class="menu-label">对话</span>
           </el-menu-item>
           <el-menu-item index="settings" class="settings-menu-item">
             <el-tooltip content="设置" placement="bottom">
@@ -95,7 +89,7 @@
     </header>
 
     <!-- 主内容区 -->
-    <main class="app-main" :class="{ 'app-main-chat': activeMenu === 'chat' }">
+    <main class="app-main">
       <!-- 仪表盘 -->
       <Dashboard
         v-if="activeMenu === 'dashboard'"
@@ -103,20 +97,20 @@
         @navigate="handleMenuSelect"
       />
 
-      <!-- 错误纠正库 -->
-      <Errors v-if="activeMenu === 'errors'" ref="errorsRef" />
+      <!-- 实践经验（合并错误纠正 + 最佳实践） -->
+      <Experiences v-if="activeMenu === 'experiences'" ref="experiencesRef" />
 
       <!-- 用户画像 -->
       <Profiles v-if="activeMenu === 'profiles'" ref="profilesRef" />
 
-      <!-- 实践经验 -->
-      <Practices v-if="activeMenu === 'practices'" ref="practicesRef" />
-
-      <!-- 项目上下文 -->
-      <Contexts v-if="activeMenu === 'contexts'" ref="contextsRef" />
+      <!-- 项目会话（按项目分组） -->
+      <ProjectView v-if="activeMenu === 'projects'" ref="projectViewRef" />
 
       <!-- 技能沉淀 -->
       <Skills v-if="activeMenu === 'skills'" ref="skillsRef" />
+
+      <!-- Agent 接入 -->
+      <Agents v-if="activeMenu === 'agents'" ref="agentsRef" />
       
       <!-- 搜索结果 -->
       <Search
@@ -128,11 +122,6 @@
       
       <!-- 会话摘要页面 -->
       <Compression v-if="activeMenu === 'compression'" />
-
-      <!-- 对话页面 -->
-      <div v-if="activeMenu === 'chat'" class="chat-wrapper">
-        <ChatView />
-      </div>
 
       <!-- 设置页面 -->
       <Settings v-if="activeMenu === 'settings'" />
@@ -177,20 +166,19 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { sseService } from './services/sse'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
-import { Search as SearchIcon, Setting, ChatDotRound, WarningFilled, User, DocumentChecked, FolderOpened, Reading, Odometer, Box, Connection } from '@element-plus/icons-vue'
+import { Search as SearchIcon, Setting, WarningFilled, User, FolderOpened, Reading, Odometer, Box, Connection } from '@element-plus/icons-vue'
 
 // 导入记忆库组件
-import Errors from './views/Errors.vue'
+import Experiences from './views/Experiences.vue'
 import Profiles from './views/Profiles.vue'
-import Practices from './views/Practices.vue'
-import Contexts from './views/Contexts.vue'
+import ProjectView from './views/ProjectView.vue'
 import Skills from './views/Skills.vue'
+import Agents from './views/Agents.vue'
 import Setup from './views/Setup.vue'
 import Dashboard from './views/Dashboard.vue'
 import Search from './views/Search.vue'
 import Compression from './views/Compression.vue'
 import Settings from './views/Settings.vue'
-import ChatView from './components/ChatView.vue'
 
 // 使用 Vite 环境变量，支持运行时配置
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8082/api'
@@ -200,10 +188,7 @@ const activeMenu = ref('dashboard')
 const sseConnected = ref(false)
 const showSetup = ref(localStorage.getItem('agentmemory_setup_done') !== 'true')
 const agents = ref<any[]>([])
-const errors = ref<any[]>([])
 const profiles = ref<any[]>([])
-const practices = ref<any[]>([])
-const contexts = ref<any[]>([])
 const skills = ref<any[]>([])
 const stats = ref({ sessions: 0, messages: 0, errors: 0, profiles: 0, practices: 0, contexts: 0, skills: 0, dailySessions: [] as any[], dailyMessages: [] as any[], agentDistribution: [] as any[], memoryDistribution: [] as any[] })
 
@@ -252,21 +237,15 @@ const addCustomAgent = async () => {
 // 统一加载数据（避免重复请求）
 const loadAllData = async () => {
   try {
-    const [agentsRes, statsRes, errorsRes, profilesRes, practicesRes, contextsRes, skillsRes] = await Promise.all([
+    const [agentsRes, statsRes, profilesRes, skillsRes] = await Promise.all([
       axios.get(`${API_BASE}/agents`),
       axios.get(`${API_BASE}/stats`),
-      axios.get(`${API_BASE}/errors`),
       axios.get(`${API_BASE}/profiles`),
-      axios.get(`${API_BASE}/practices`),
-      axios.get(`${API_BASE}/contexts`),
       axios.get(`${API_BASE}/skills`)
     ])
     agents.value = agentsRes.data
     stats.value = statsRes.data
-    errors.value = errorsRes.data
     profiles.value = profilesRes.data
-    practices.value = practicesRes.data
-    contexts.value = contextsRes.data
     skills.value = skillsRes.data
   } catch (e) {
     console.error('加载数据失败', e)
@@ -403,17 +382,6 @@ onUnmounted(() => {
   max-width: 1600px;
   margin: 0 auto;
   box-sizing: border-box;
-}
-
-.app-main.app-main-chat {
-  padding: 0;
-  gap: 0;
-  max-width: 100%;
-}
-
-.chat-wrapper {
-  width: 100%;
-  height: calc(100vh - 60px);
 }
 
 /* Logo */

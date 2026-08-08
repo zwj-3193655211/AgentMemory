@@ -1,7 +1,7 @@
 <template>
-  <div class="practices-view">
+  <div class="experiences-view">
     <div class="panel-header">
-      <h2>实践经验库</h2>
+      <h2>实践经验</h2>
       <div style="display: flex; gap: 10px;">
         <el-button type="primary" @click="openCreate()">
           <el-icon><Plus /></el-icon> 新增
@@ -12,11 +12,18 @@
       </div>
     </div>
 
+    <!-- 类型 Tab -->
+    <el-tabs v-model="activeType" @tab-change="handleTypeChange">
+      <el-tab-pane label="全部" name="all" />
+      <el-tab-pane label="最佳实践" name="best_practice" />
+      <el-tab-pane label="错误纠正" name="error_correction" />
+    </el-tabs>
+
     <!-- 查询工具栏 -->
     <div class="filter-toolbar">
       <el-input
         v-model="filters.searchText"
-        placeholder="搜索标题、场景、实践..."
+        placeholder="搜索标题、场景、做法..."
         clearable
         style="width: 280px"
         @input="handleFilterChange"
@@ -34,17 +41,6 @@
         <template #prefix><el-icon><PriceTag /></el-icon></template>
       </el-input>
 
-      <el-date-picker
-        v-model="filters.dateRange"
-        type="daterange"
-        range-separator="至"
-        start-placeholder="开始日期"
-        end-placeholder="结束日期"
-        value-format="YYYY-MM-DD"
-        style="width: 260px"
-        @change="handleFilterChange"
-      />
-
       <el-button @click="clearFilters">
         <el-icon><Refresh /></el-icon> 重置
       </el-button>
@@ -54,50 +50,62 @@
       </div>
     </div>
 
-    <el-table :data="filteredData" stripe v-loading="loading">
-      <el-table-column prop="title" label="标题" min-width="200" />
-      <el-table-column prop="scenario" label="场景" min-width="200" />
-      <el-table-column prop="practice" label="实践" min-width="200" show-overflow-tooltip />
-      <el-table-column prop="tags" label="标签" width="200">
+    <!-- 数据表格 -->
+    <el-table :data="filteredData" v-loading="loading" style="width: 100%">
+      <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip />
+      <el-table-column label="类型" width="100">
         <template #default="{ row }">
-          <el-tag v-for="tag in parseTags(row.tags)" :key="tag" size="small" class="practice-tag">
-            {{ tag }}
+          <el-tag :type="row.type === 'error_correction' ? 'danger' : 'success'" size="small">
+            {{ row.type === 'error_correction' ? '错误纠正' : '最佳实践' }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="createdAt" label="创建时间" width="180">
+      <el-table-column prop="scenario" label="场景/问题" min-width="200" show-overflow-tooltip />
+      <el-table-column prop="practice" label="做法/解决" min-width="250" show-overflow-tooltip />
+      <el-table-column label="标签" width="180">
+        <template #default="{ row }">
+          <el-tag v-for="t in parseTags(row.tags)" :key="t" size="small" style="margin-right: 4px">{{ t }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="创建时间" width="160">
         <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="150" fixed="right">
+      <el-table-column label="操作" width="140" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" @click="openEdit(row)">编辑</el-button>
-          <el-button size="small" type="danger" @click="handleDelete(row)">删除</el-button>
+          <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
+          <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
 
-    <!-- 对话框 -->
+    <!-- 新增/编辑对话框 -->
     <el-dialog v-model="dialog.visible" :title="dialog.isEdit ? '编辑实践经验' : '新增实践经验'" width="600px">
-      <el-form :model="dialog.formData" :rules="formRules" ref="formRef" label-width="100px">
+      <el-form ref="formRef" :model="dialog.formData" :rules="formRules" label-width="90px">
+        <el-form-item label="类型">
+          <el-radio-group v-model="dialog.formData.type">
+            <el-radio value="best_practice">最佳实践</el-radio>
+            <el-radio value="error_correction">错误纠正</el-radio>
+          </el-radio-group>
+        </el-form-item>
         <el-form-item label="标题" prop="title">
-          <el-input v-model="dialog.formData.title" placeholder="请输入标题" />
+          <el-input v-model="dialog.formData.title" placeholder="简明扼要的标题" />
         </el-form-item>
-        <el-form-item label="适用场景" prop="scenario">
-          <el-input v-model="dialog.formData.scenario" type="textarea" :rows="2" placeholder="请描述适用场景" />
+        <el-form-item label="场景" prop="scenario">
+          <el-input v-model="dialog.formData.scenario" type="textarea" :rows="3" placeholder="问题或使用场景描述" />
         </el-form-item>
-        <el-form-item label="实践经验" prop="practice">
-          <el-input v-model="dialog.formData.practice" type="textarea" :rows="3" placeholder="请提供实践经验" />
+        <el-form-item label="做法" prop="practice">
+          <el-input v-model="dialog.formData.practice" type="textarea" :rows="4" placeholder="解决方案或实践做法（流程化、可执行）" />
         </el-form-item>
-        <el-form-item label="原理说明" prop="rationale">
-          <el-input v-model="dialog.formData.rationale" type="textarea" :rows="2" placeholder="可选：原理说明" />
+        <el-form-item label="原因" prop="rationale">
+          <el-input v-model="dialog.formData.rationale" type="textarea" :rows="2" placeholder="原因或理由（可选）" />
         </el-form-item>
-        <el-form-item label="标签" prop="tags">
-          <el-input v-model="tagsInput" placeholder="逗号分隔，如：performance,optimization" />
+        <el-form-item label="标签">
+          <el-input v-model="tagsInput" placeholder="多个标签用逗号分隔" />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialog.visible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit">{{ dialog.isEdit ? '更新' : '创建' }}</el-button>
+        <el-button type="primary" @click="handleSubmit">保存</el-button>
       </template>
     </el-dialog>
   </div>
@@ -108,48 +116,48 @@ import { ref, reactive, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Download, Search, Refresh, PriceTag } from '@element-plus/icons-vue'
 import { apiService, API_BASE_URL } from '../services/api'
-import type { BestPractice } from '../types'
 
-// 数据列表
-const dataList = ref<BestPractice[]>([])
+interface Experience {
+  id?: string
+  title: string
+  type: string
+  scenario: string
+  practice: string
+  rationale?: string
+  tags?: string[] | string
+  createdAt?: string
+}
+
+const dataList = ref<Experience[]>([])
 const loading = ref(false)
+const activeType = ref('all')
 
-// 对话框状态
 const dialog = reactive({
   visible: false,
   isEdit: false,
-  formData: {} as Partial<BestPractice>
+  formData: {} as Partial<Experience>
 })
 
-// 标签输入
 const tagsInput = ref('')
-
-// 表单引用
 const formRef = ref()
 
-// 查询过滤器
 const filters = reactive({
   searchText: '',
-  tag: '',
-  dateRange: [] as string[]
+  tag: ''
 })
 
-// 过滤后的数据
 const filteredData = computed(() => {
   let result = dataList.value
 
-  // 文本搜索
   if (filters.searchText) {
     const keyword = filters.searchText.toLowerCase()
     result = result.filter(item =>
       (item.title && item.title.toLowerCase().includes(keyword)) ||
       (item.scenario && item.scenario.toLowerCase().includes(keyword)) ||
-      (item.practice && item.practice.toLowerCase().includes(keyword)) ||
-      (item.rationale && item.rationale.toLowerCase().includes(keyword))
+      (item.practice && item.practice.toLowerCase().includes(keyword))
     )
   }
 
-  // 标签过滤
   if (filters.tag) {
     const tagKeyword = filters.tag.toLowerCase()
     result = result.filter(item => {
@@ -160,33 +168,16 @@ const filteredData = computed(() => {
     })
   }
 
-  // 日期范围过滤
-  if (filters.dateRange && filters.dateRange.length === 2) {
-    const [startDate, endDate] = filters.dateRange
-    result = result.filter(item => {
-      if (!item.createdAt) return false
-      const date = new Date(item.createdAt).toISOString().split('T')[0]
-      return date >= startDate && date <= endDate
-    })
-  }
-
   return result
 })
 
-// 处理过滤变化
-const handleFilterChange = () => {
-  // 使用 computed 自动处理
-}
-
-// 清空过滤器
+const handleFilterChange = () => {}
 const clearFilters = () => {
   filters.searchText = ''
   filters.tag = ''
-  filters.dateRange = []
 }
 
-// 解析标签
-const parseTags = (tags: string | string[]) => {
+const parseTags = (tags: string | string[] | undefined) => {
   if (Array.isArray(tags)) return tags
   if (typeof tags === 'string' && tags) {
     return tags.split(',').map(t => t.trim()).filter(t => t)
@@ -194,25 +185,22 @@ const parseTags = (tags: string | string[]) => {
   return []
 }
 
-// 表单验证规则
 const formRules = {
   title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
   scenario: [{ required: true, message: '请描述场景', trigger: 'blur' }],
-  practice: [{ required: true, message: '请提供实践经验', trigger: 'blur' }]
+  practice: [{ required: true, message: '请提供做法', trigger: 'blur' }]
 }
 
-// 格式化时间
 const formatTime = (time: string | Date) => {
   if (!time) return ''
-  const d = new Date(time)
-  return d.toLocaleString('zh-CN')
+  return new Date(time).toLocaleString('zh-CN')
 }
 
-// 加载数据
 const loadData = async () => {
   loading.value = true
   try {
-    dataList.value = await apiService.getPractices()
+    const type = activeType.value === 'all' ? undefined : activeType.value
+    dataList.value = await apiService.getExperiences(type)
   } catch (error: any) {
     ElMessage.error(`加载数据失败: ${error.message}`)
   } finally {
@@ -220,26 +208,26 @@ const loadData = async () => {
   }
 }
 
-// 打开新增对话框
+const handleTypeChange = () => {
+  loadData()
+}
+
 const openCreate = () => {
   dialog.isEdit = false
-  dialog.formData = { title: '', scenario: '', practice: '', rationale: '', tags: [] }
+  dialog.formData = { title: '', type: 'best_practice', scenario: '', practice: '', rationale: '', tags: [] }
   tagsInput.value = ''
   dialog.visible = true
 }
 
-// 打开编辑对话框
-const openEdit = (row: BestPractice) => {
+const openEdit = (row: Experience) => {
   dialog.isEdit = true
-  dialog.formData = { ...row }
+  dialog.formData = { ...row, type: row.type || 'best_practice' }
   tagsInput.value = Array.isArray(row.tags) ? row.tags.join(', ') : ''
   dialog.visible = true
 }
 
-// 提交表单
 const handleSubmit = async () => {
   if (!formRef.value) return
-
   await formRef.value.validate(async (valid: boolean) => {
     if (!valid) return
 
@@ -248,45 +236,39 @@ const handleSubmit = async () => {
 
     try {
       if (dialog.isEdit && dialog.formData.id) {
-        await apiService.updatePractice(dialog.formData.id, data)
+        await apiService.updateExperience(dialog.formData.id, data)
         ElMessage.success('更新成功')
       } else {
-        await apiService.createPractice(data)
+        await apiService.createExperience(data)
         ElMessage.success('创建成功')
       }
       dialog.visible = false
       await loadData()
-    } catch (error: any) {
-      // 错误已在 ApiService 中处理
-    }
+    } catch (error: any) {}
   })
 }
 
-// 删除记录
-const handleDelete = async (row: BestPractice) => {
+const handleDelete = async (row: Experience) => {
   if (!row.id) return
-
   try {
     await ElMessageBox.confirm('确定要删除这条记录吗？', '确认删除', { type: 'warning' })
-    await apiService.deletePractice(row.id)
+    await apiService.deleteExperience(row.id)
     ElMessage.success('删除成功')
     await loadData()
   } catch (error) {
-    if (error !== 'cancel') {
-      // 错误已在 ApiService 中处理
-    }
+    if (error !== 'cancel') {}
   }
 }
 
-// 导出数据
 const exportData = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/practices/export`)
+    const type = activeType.value === 'all' ? '' : `?type=${activeType.value}`
+    const response = await fetch(`${API_BASE_URL}/experiences${type}/export`)
     const blob = await response.blob()
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `practices_${Date.now()}.json`
+    link.download = `experiences_${Date.now()}.json`
     document.body.appendChild(link)
     link.click()
     link.remove()
@@ -296,70 +278,30 @@ const exportData = async () => {
   }
 }
 
-// 暴露方法供父组件调用
 defineExpose({ loadData })
-
-// 初始化加载数据
 loadData()
 </script>
 
 <style scoped>
-.practices-view {
-  background: #fff;
-  border-radius: 12px;
-  padding: 24px;
-  width: 100%;
-  max-width: 100%;
-  overflow: hidden;
+.experiences-view {
+  padding: 20px;
 }
-
-.practices-view :deep(.el-table) {
-  width: 100% !important;
-  table-layout: fixed;
-}
-
 .panel-header {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #f0f2f5;
+  align-items: center;
+  margin-bottom: 16px;
 }
-
-.panel-header h2 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: #1a1a2e;
-}
-
 .filter-toolbar {
   display: flex;
-  align-items: center;
   gap: 12px;
-  margin-bottom: 20px;
-  padding: 16px;
-  background: #f8f9fb;
-  border-radius: 10px;
+  align-items: center;
+  margin-bottom: 16px;
   flex-wrap: wrap;
 }
-
 .filter-stats {
   margin-left: auto;
+  color: #909399;
   font-size: 13px;
-  color: #606266;
-  background: #fff;
-  padding: 6px 12px;
-  border-radius: 6px;
-  border: 1px solid #e8eaed;
-}
-
-.practice-tag {
-  margin-right: 4px;
-  margin-bottom: 2px;
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-  border: none;
-  color: #fff;
 }
 </style>

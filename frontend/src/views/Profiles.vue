@@ -6,6 +6,9 @@
         <el-button type="primary" @click="openCreate()">
           <el-icon><Plus /></el-icon> 新增
         </el-button>
+        <el-button type="success" @click="syncNow" :loading="syncing">
+          <el-icon><Refresh /></el-icon> 同步记忆
+        </el-button>
         <el-button @click="exportData">
           <el-icon><Download /></el-icon> 导出
         </el-button>
@@ -49,6 +52,12 @@
 
     <el-table :data="filteredData" stripe v-loading="loading">
       <el-table-column prop="title" label="标题" min-width="200" />
+      <el-table-column label="来源" width="110">
+        <template #default="{ row }">
+          <el-tag v-if="row.sourceAgent" size="small" type="info">{{ row.sourceAgent }}</el-tag>
+          <el-tag v-else size="small">手动</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column prop="category" label="类别" width="120">
         <template #default="{ row }">
           <el-tag :type="getCategoryTagType(row.category)">{{ getCategoryLabel(row.category) }}</el-tag>
@@ -105,6 +114,24 @@ import { ref, reactive, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Download, Search, Refresh } from '@element-plus/icons-vue'
 import { apiService, API_BASE_URL } from '../services/api'
+
+// 记忆同步状态
+const syncing = ref(false)
+
+// 手动同步 agent 记忆文件
+const syncNow = async () => {
+  syncing.value = true
+  try {
+    const res = await apiService.syncAll()
+    const profiles = res.profiles || {}
+    ElMessage.success(`同步完成：新增画像 ${profiles.totalSynced || 0} 条`)
+  } catch {
+    ElMessage.error('同步失败')
+  } finally {
+    syncing.value = false
+    await loadData()
+  }
+}
 import type { UserProfile } from '../types'
 
 // 数据列表
