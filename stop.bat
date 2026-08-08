@@ -1,4 +1,5 @@
 @echo off
+setlocal enabledelayedexpansion
 chcp 65001 >nul
 echo ================================
 echo   AgentMemory 停止服务脚本
@@ -49,6 +50,21 @@ for /f "tokens=5" %%a in ('netstat -aon ^| findstr :5500 ^| findstr LISTENING') 
         echo ✓ PostgreSQL数据库进程已终止 (端口 5500)
     ) else (
         echo 未找到端口 5500 的进程
+    )
+)
+
+REM 停止端口 11434 (Ollama) - 询问用户是否关闭
+netstat -aon | findstr :11434 | findstr LISTENING >nul 2>&1
+if !errorlevel! equ 0 (
+    echo.
+    set /p STOP_OLLAMA="检测到 Ollama (端口 11434) 正在运行，是否一并关闭？(y/N): "
+    if /i "!STOP_OLLAMA!"=="y" (
+        for /f "tokens=5" %%a in ('netstat -aon ^| findstr :11434 ^| findstr LISTENING') do (
+            taskkill /F /PID %%a >nul 2>&1
+            echo ✓ Ollama 已关闭
+        )
+    ) else (
+        echo 保留 Ollama 运行（下次启动更快）。
     )
 )
 
