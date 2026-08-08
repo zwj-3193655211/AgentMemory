@@ -537,8 +537,8 @@ public class MemoryService {
 
     private void saveSkill(Connection conn, String id, ExtractedMemory memory, float[] embedding) throws SQLException {
         String sql = embedding != null
-            ? "INSERT INTO skills (id, title, skill_type, description, tags, embedding) VALUES (?, ?, ?, ?, ?, ?::vector)"
-            : "INSERT INTO skills (id, title, skill_type, description, tags) VALUES (?, ?, ?, ?, ?)";
+            ? "INSERT INTO skills (id, title, skill_type, description, tags, embedding, status, extracted_by) VALUES (?, ?, ?, ?, ?, ?::vector, 'pending', 'llm')"
+            : "INSERT INTO skills (id, title, skill_type, description, tags, status, extracted_by) VALUES (?, ?, ?, ?, ?, 'pending', 'llm')";
         
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, id);
