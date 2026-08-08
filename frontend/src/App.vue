@@ -35,7 +35,7 @@
           </div>
         </el-tooltip>
 
-        <el-menu mode="horizontal" :default-active="activeMenu" @select="handleMenuSelect" class="main-menu" :ellipsis="false">
+        <el-menu mode="horizontal" v-model:default-active="activeMenu" @select="handleMenuSelect" class="main-menu" :ellipsis="false">
           <el-menu-item index="dashboard">
             <el-tooltip content="仪表盘" placement="bottom">
               <el-icon><Odometer /></el-icon>
@@ -212,7 +212,15 @@ const newAgent = ref({
 // 方法
 const handleMenuSelect = (index: string) => {
   activeMenu.value = index
+  // 防御性：同步到 localStorage 防止偶发状态丢失
+  try { localStorage.setItem('agentmemory_activeMenu', index) } catch {}
 }
+
+// 初始化时恢复上次的菜单
+try {
+  const saved = localStorage.getItem('agentmemory_activeMenu')
+  if (saved) activeMenu.value = saved
+} catch {}
 
 // 添加自定义 Agent
 const addCustomAgent = async () => {
