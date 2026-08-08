@@ -51,7 +51,6 @@
     </div>
 
     <el-table :data="filteredData" stripe v-loading="loading">
-      <el-table-column prop="title" label="标题" min-width="200" />
       <el-table-column label="来源" width="110">
         <template #default="{ row }">
           <el-tag v-if="row.sourceAgent" size="small" type="info">{{ row.sourceAgent }}</el-tag>
@@ -63,11 +62,13 @@
           <el-tag :type="getCategoryTagType(row.category)">{{ getCategoryLabel(row.category) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="items" label="内容" min-width="300">
+      <el-table-column label="内容" min-width="500">
         <template #default="{ row }">
-          <el-tag v-for="(item, idx) in parseItems(row.items)" :key="idx" class="item-tag">
-            {{ item.key }}: {{ item.value }}
-          </el-tag>
+          <div class="item-content">
+            <div v-for="(line, idx) in parseContent(row.items)" :key="idx" class="content-line">
+              {{ line }}
+            </div>
+          </div>
         </template>
       </el-table-column>
       <el-table-column prop="updatedAt" label="更新时间" width="180">
@@ -234,14 +235,17 @@ const formatTime = (time: string | Date) => {
   return d.toLocaleString('zh-CN')
 }
 
-// 解析 JSON 内容
-const parseItems = (itemsStr: string | any[]) => {
-  if (Array.isArray(itemsStr)) return itemsStr
-  try {
-    return JSON.parse(itemsStr || '[]')
-  } catch {
-    return []
+// 解析 JSON 内容（从 {content: "..."} 数组中提取 content 文本）
+const parseContent = (itemsStr: string | any[]): string[] => {
+  let arr: any[] = []
+  if (Array.isArray(itemsStr)) {
+    arr = itemsStr
+  } else if (typeof itemsStr === 'string' && itemsStr.trim()) {
+    try { arr = JSON.parse(itemsStr) } catch { arr = [] }
   }
+  return arr
+    .map((it: any) => (typeof it === 'string' ? it : (it?.content || JSON.stringify(it))))
+    .filter((s: string) => s && s.trim())
 }
 
 // 加载数据
@@ -407,5 +411,33 @@ loadData()
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border: none;
   color: #fff;
+}
+
+.item-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 120px;
+  overflow: hidden;
+  position: relative;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #303133;
+}
+
+.item-content::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 30px;
+  background: linear-gradient(to bottom, transparent, #fff);
+  pointer-events: none;
+}
+
+.content-line {
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 </style>
