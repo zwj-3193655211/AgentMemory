@@ -64,8 +64,8 @@ start.bat
 
 ### 5️⃣ 访问界面
 
-- **Web 界面**: http://localhost:5173
-- **API 服务**: http://localhost:8080
+- **Web 界面**: http://localhost:5175
+- **API 服务**: http://localhost:8082
 - **Embedding**: http://localhost:8100
 
 ## ✨ 主要功能
@@ -94,13 +94,13 @@ start.bat
 ### 查看统计信息
 
 ```bash
-curl http://localhost:8080/api/stats
+curl http://localhost:8082/api/stats
 ```
 
 ### 语义搜索
 
 ```bash
-curl -X POST http://localhost:8080/api/search \
+curl -X POST http://localhost:8082/api/search \
   -H "Content-Type: application/json" \
   -d '{"query": "如何优化数据库查询？"}'
 ```
@@ -122,7 +122,7 @@ docker logs -f agentmemory-db
 ```hocon
 database {
     type = "postgresql"
-    url = "jdbc:postgresql://localhost:5432/agent_memory"
+    url = "jdbc:postgresql://localhost:5500/agentmemory"
     user = "agentmemory"
     password = "${DATABASE_PASSWORD}"  # 从环境变量读取
     poolSize = 10
@@ -139,7 +139,7 @@ memory {
 }
 
 api {
-    port = 8080
+    port = 8082
 }
 ```
 
@@ -157,19 +157,18 @@ start.bat
 
 ### 停止服务
 
-```bash
+```bat
 # Windows
-taskkill /F /FI "WINDOWTITLE eq AgentMemory-*"
-
-# Linux/Mac
-./stop.sh
+stop.bat
 ```
+
+Linux/macOS 在运行 `start.sh` 的终端按 `Ctrl+C`。
 
 ### 查看数据库
 
 ```bash
 # 进入数据库
-psql -U postgres -d agent_memory
+docker exec -it agentmemory-db psql -U agentmemory -d agentmemory
 
 # 查看表
 \dt
@@ -180,8 +179,9 @@ SELECT * FROM messages ORDER BY created_at DESC LIMIT 10;
 
 ## 📚 更多文档
 
-- [更新日志](CHANGELOG.md) - 版本更新和优化记录
-- [开发文档](docs/) - 代码审查、项目规划等
+- [项目开发维护文档](docs/项目开发维护文档.md) - 开发、测试、更新和代码审查记录
+- [历史计划](docs/历史计划.md) - 历史设计与实施计划
+- [论文与展示资料](docs/论文与展示资料.md) - 论文、演示稿和架构图资料
 
 ## 🐛 常见问题
 
@@ -223,7 +223,7 @@ MIT License - 详见 [LICENSE](LICENSE) 文件
 ---
 
 **版本**: 2.1.0
-**最后更新**: 2026-03-23
+**最后更新**: 2026-08-09
 **问题反馈**: [GitHub Issues](https://github.com/yourname/AgentMemory/issues)
 
 ---
@@ -237,6 +237,6 @@ MIT License - 详见 [LICENSE](LICENSE) 文件
 - 🔄 后端优化: 40% (P0/P1 问题修复中)
 - ⏸️ 前端重构: 0% (预计减少 1900 行重复代码)
 
-**详细报告**: [项目重构总体状态](docs/plans/2026-03-23-project-refactor-status.md)
+**详细报告**: [项目开发维护文档](docs/项目开发维护文档.md)
 
 **代码质量**: ⭐⭐⭐⭐ (4/5)

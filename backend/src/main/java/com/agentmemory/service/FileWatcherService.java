@@ -66,6 +66,13 @@ public class FileWatcherService {
     // 上下文窗口大小（用于分类时包含的历史消息）
     private static final int CONTEXT_WINDOW_SIZE = 10;
     
+    /**
+     * 数据库初始化完成后调用：加载 LLM Provider 配置（ollama 等）
+     */
+    public void configureMemoryLLM() {
+        memoryService.configureLLM();
+    }
+
     public FileWatcherService(DatabaseService databaseService) {
         this.databaseService = databaseService;
         this.memoryService = new MemoryService(databaseService);

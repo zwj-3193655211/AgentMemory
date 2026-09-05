@@ -19,7 +19,7 @@ public class MemoryClassifier {
         ERROR_CORRECTION("错误纠正", "experiences"),
         USER_PROFILE("用户画像", "user_profiles"),
         BEST_PRACTICE("实践经验", "experiences"),
-        PROJECT_CONTEXT("项目上下文", "sessions"),
+        PROJECT_CONTEXT("项目上下文", null),
         SKILL("技能沉淀", "skills"),
         UNKNOWN("未知", null);
         

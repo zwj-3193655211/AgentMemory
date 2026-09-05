@@ -27,7 +27,8 @@ public class HybridClassifierTest {
             EmbeddingClient embeddingClient = new EmbeddingClient();
             
             LLMClient llmClient = new LLMClient();
-            llmClient.setProvider("ollama", "http://localhost:11434", null, "qwen3.5:2b");
+            // llama.cpp llama-server (OpenAI 兼容端点，端口 8080)，替代 Ollama
+            llmClient.setProvider("openai", "http://localhost:8080/v1", null, "Qwen3.5-2B-Q8_0");
             
             HybridMemoryClassifier classifier = new HybridMemoryClassifier(dbService, embeddingClient, llmClient);
 

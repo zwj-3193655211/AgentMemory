@@ -291,43 +291,67 @@ public class DatabaseService {
      * 注册检测到的 Agent
      */
     public void registerAgents(List<AgentInfo> agents) {
-        String sql;
-        if (useSqlite) {
-            sql = """
-                INSERT OR REPLACE INTO agents (name, type, log_base_path, cli_path, version, parser_type, enabled)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """;
-        } else {
-            sql = """
-                INSERT INTO agents (name, type, log_base_path, cli_path, version, parser_type, enabled)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT (name) DO UPDATE SET
-                    log_base_path = EXCLUDED.log_base_path,
-                    cli_path = EXCLUDED.cli_path,
-                    version = EXCLUDED.version,
-                    parser_type = EXCLUDED.parser_type,
-                    updated_at = CURRENT_TIMESTAMP
-                """;
-        }
-        
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            
+        try (Connection conn = dataSource.getConnection()) {
             for (AgentInfo agent : agents) {
-                stmt.setString(1, agent.getName());
-                stmt.setString(2, agent.getType());
-                stmt.setString(3, agent.getLogPath());
-                stmt.setString(4, agent.getCliPath());
-                stmt.setString(5, agent.getVersion());
-                stmt.setString(6, agent.getParserType());
-                stmt.setBoolean(7, agent.isEnabled());
-                stmt.executeUpdate();
+                if (useSqlite) {
+                    registerAgentSqlite(conn, agent);
+                } else {
+                    registerAgentPostgres(conn, agent);
+                }
             }
-            
             log.info("已注册 {} 个 Agent", agents.size());
         } catch (SQLException e) {
             log.error("注册 Agent 失败", e);
         }
+    }
+
+    private void registerAgentSqlite(Connection conn, AgentInfo agent) throws SQLException {
+        try (PreparedStatement stmt = conn.prepareStatement("""
+                INSERT OR REPLACE INTO agents (name, type, log_base_path, cli_path, version, parser_type, enabled)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """)) {
+            bindAgent(stmt, agent);
+            stmt.executeUpdate();
+        }
+    }
+
+    /**
+     * PostgreSQL 注册：name 唯一约束大小写敏感，先按大小写不敏感更新已有记录，
+     * 避免 'hermes' 与 'Hermes' 等大小写变体并存导致 UI 显示空壳记录。
+     */
+    private void registerAgentPostgres(Connection conn, AgentInfo agent) throws SQLException {
+        try (PreparedStatement stmt = conn.prepareStatement("""
+                UPDATE agents SET type = ?, log_base_path = ?, cli_path = ?, version = ?, parser_type = ?, enabled = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE LOWER(name) = LOWER(?)
+                """)) {
+            stmt.setString(1, agent.getType());
+            stmt.setString(2, agent.getLogPath());
+            stmt.setString(3, agent.getCliPath());
+            stmt.setString(4, agent.getVersion());
+            stmt.setString(5, agent.getParserType());
+            stmt.setBoolean(6, agent.isEnabled());
+            stmt.setString(7, agent.getName());
+            if (stmt.executeUpdate() > 0) {
+                return;
+            }
+        }
+        try (PreparedStatement stmt = conn.prepareStatement("""
+                INSERT INTO agents (name, type, log_base_path, cli_path, version, parser_type, enabled)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """)) {
+            bindAgent(stmt, agent);
+            stmt.executeUpdate();
+        }
+    }
+
+    private void bindAgent(PreparedStatement stmt, AgentInfo agent) throws SQLException {
+        stmt.setString(1, agent.getName());
+        stmt.setString(2, agent.getType());
+        stmt.setString(3, agent.getLogPath());
+        stmt.setString(4, agent.getCliPath());
+        stmt.setString(5, agent.getVersion());
+        stmt.setString(6, agent.getParserType());
+        stmt.setBoolean(7, agent.isEnabled());
     }
     
     /**

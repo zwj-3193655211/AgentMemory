@@ -8,7 +8,7 @@
  * - 连接状态管理
  */
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8082/api'
+const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
 export type SseEventType = 'connected' | 'stats_update' | 'heartbeat'
 export type SseEventHandler = (data: any) => void

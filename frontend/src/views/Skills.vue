@@ -305,7 +305,7 @@ const loadData = async () => {
   try {
     dataList.value = await apiService.getSkills()
   } catch (error: any) {
-    ElMessage.error(`加载数据失败: ${error.message}`)
+    ElMessage.error(`加载数据失败: ${error.displayMessage || error.message}`)
   } finally {
     loading.value = false
   }

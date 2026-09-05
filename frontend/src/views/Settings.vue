@@ -271,7 +271,7 @@ import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { Delete, InfoFilled } from '@element-plus/icons-vue'
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8082/api'
+const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
 // ===== LLM 配置 =====
 const llmConfig = ref({

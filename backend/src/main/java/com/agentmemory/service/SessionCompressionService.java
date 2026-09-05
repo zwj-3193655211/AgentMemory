@@ -92,56 +92,10 @@ public class SessionCompressionService extends ScheduledServiceBase {
             }
             
             // 2. 加载 LLM Provider 配置
-            loadLLMConfig(conn);
+            LLMConfigLoader.applyFromDatabase(llmClient, databaseService);
             
         } catch (SQLException e) {
             log.warn("加载压缩配置失败，使用默认配置", e);
-        }
-    }
-    
-    /**
-     * 从数据库加载 LLM 配置
-     */
-    private void loadLLMConfig(Connection conn) {
-        try {
-            // 优先使用默认 Provider，如果没有则查找启用的第一个
-            String sql = "SELECT provider_name, base_url, api_key, model, config FROM llm_providers " +
-                    "WHERE enabled = true ORDER BY is_default DESC, id ASC LIMIT 1";
-            try (PreparedStatement stmt = conn.prepareStatement(sql);
-                 ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    String providerName = rs.getString("provider_name");
-                    String baseUrl = rs.getString("base_url");
-                    String apiKey = rs.getString("api_key");
-                    String model = rs.getString("model");
-                    String configJson = rs.getString("config");
-                    
-                    // 解析 config 中的 thinkMode
-                    boolean thinkMode = false;
-                    if (configJson != null && !configJson.isEmpty()) {
-                        try {
-                            com.fasterxml.jackson.databind.JsonNode configNode = 
-                                new com.fasterxml.jackson.databind.ObjectMapper().readTree(configJson);
-                            thinkMode = configNode.path("thinkMode").asBoolean(false);
-                        } catch (Exception e) {
-                            log.warn("解析 config JSON 失败", e);
-                        }
-                    }
-                    
-                    // 如果是本地模型，baseUrl 可能为 null，使用本地 Ollama
-                    if (baseUrl == null || baseUrl.isEmpty()) {
-                        baseUrl = "http://localhost:11434";
-                        providerName = "ollama";
-                    }
-                    
-                    llmClient.setProvider(providerName, baseUrl, apiKey, model, thinkMode);
-                    log.info("加载 LLM 配置: provider={}, model={}, thinkMode={}", providerName, model, thinkMode);
-                } else {
-                    log.warn("未找到启用的 LLM Provider，使用默认配置");
-                }
-            }
-        } catch (SQLException e) {
-            log.warn("加载 LLM 配置失败，使用默认配置", e);
         }
     }
 

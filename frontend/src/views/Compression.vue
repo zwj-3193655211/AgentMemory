@@ -244,7 +244,7 @@ import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apiService } from '../services/api'
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8082/api'
+const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
 // ===== 压缩统计 =====
 const compressionStats = ref({

@@ -19,8 +19,11 @@ import java.sql.Statement;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 
@@ -63,12 +66,21 @@ public class ApiServer {
     
     /**
      * 获取允许的 CORS 源
+     * 优先返回请求源；若请求源在显式白名单中或为 localhost/127.0.0.1 的开发端口，则允许。
+     * （vite dev 可能因端口占用回退到 5176/5177/...，必须全部放行，否则跨域导致 "Network Error"）
      * @param requestOrigin 请求中的 Origin 头
-     * @return 如果请求源在允许列表中则返回该源，否则返回默认的第一个允许源
+     * @return 允许的源；未知来源回退到第一个允许的源
      */
     private String getAllowedOrigin(String requestOrigin) {
-        if (requestOrigin != null && ALLOWED_ORIGINS.contains(requestOrigin)) {
-            return requestOrigin;
+        if (requestOrigin != null) {
+            // 显式白名单
+            if (ALLOWED_ORIGINS.contains(requestOrigin)) {
+                return requestOrigin;
+            }
+            // 本地开发任意端口（localhost / 127.0.0.1）
+            if (requestOrigin.matches("https?://(localhost|127\\.0\\.0\\.1)(:[0-9]+)?")) {
+                return requestOrigin;
+            }
         }
         return ALLOWED_ORIGINS.split(",")[0]; // 默认返回第一个允许的源
     }
@@ -419,7 +431,7 @@ public class ApiServer {
             try {
                 exchange.sendResponseHeaders(200, -1);
             } catch (IOException e) {
-                log.error("发送 OPTIONS 响应失败", e);
+                log.debug("发送 OPTIONS 响应失败（客户端可能已断开）: {}", e.getMessage());
             }
             return;
         }
@@ -433,7 +445,8 @@ public class ApiServer {
                 log.error("发送错误响应失败", ioException);
             }
         } catch (IOException e) {
-            log.error("IO 错误", e);
+            // 客户端提前断开连接（刷新页面、取消请求、关闭标签页）时写响应会抛 IOException，属正常现象
+            log.debug("IO 异常（客户端可能已断开）: {}", e.getMessage());
         } catch (Exception e) {
             try {
                 sendError(exchange, 500, "服务器错误: " + e.getMessage());
@@ -466,8 +479,11 @@ public class ApiServer {
         exchange.getResponseHeaders().set("Access-Control-Allow-Origin", getAllowedOrigin(requestOrigin));
         exchange.sendResponseHeaders(200, bytes.length);
 
+        // 客户端断开时写流会抛 IOException（含 close 时的 insufficient bytes），属正常现象，不向上抛
         try (OutputStream os = exchange.getResponseBody()) {
             os.write(bytes);
+        } catch (IOException e) {
+            log.debug("sendJson 响应写入中断（客户端可能已断开）: {}", e.getMessage());
         }
     }
 
@@ -506,6 +522,8 @@ public class ApiServer {
 
         try (OutputStream os = exchange.getResponseBody()) {
             os.write(bytes);
+        } catch (IOException e) {
+            log.debug("sendError 响应写入中断（客户端可能已断开）: {}", e.getMessage());
         }
     }
 
@@ -569,6 +587,8 @@ public class ApiServer {
         exchange.sendResponseHeaders(200, bytes.length);
         try (OutputStream os = exchange.getResponseBody()) {
             os.write(bytes);
+        } catch (IOException e) {
+            log.debug("exportAsJson 响应写入中断（客户端可能已断开）: {}", e.getMessage());
         }
     }
     
@@ -638,7 +658,8 @@ public class ApiServer {
                         SELECT id FROM agents a2 
                         WHERE COALESCE(a2.parser_type, a2.name) = COALESCE(a1.parser_type, a1.name)
                         ORDER BY 
-                            CASE WHEN cli_path IS NOT NULL THEN 0 ELSE 1 END,
+                            CASE WHEN cli_path IS NOT NULL AND cli_path <> '' THEN 0 ELSE 1 END,
+                            CASE WHEN log_base_path IS NOT NULL AND log_base_path <> '' THEN 0 ELSE 1 END,
                             id
                         LIMIT 1
                     ) ORDER BY name
@@ -847,10 +868,13 @@ public class ApiServer {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             String path = exchange.getRequestURI().getPath();
-            String sessionId = path.substring("/api/messages/".length());
-            
-            if (sessionId.isEmpty() || sessionId.equals("/api/messages")) {
-                sendError(exchange, 400, "需要提供 sessionId");
+            // 支持 /api/messages/{sessionId} 与 /api/messages?session_id=xxx 两种写法
+            String sessionId = path.startsWith("/api/messages/")
+                    ? path.substring("/api/messages/".length())
+                    : getQueryParam(exchange, "session_id");
+
+            if (sessionId == null || sessionId.isBlank()) {
+                sendError(exchange, 400, "需要提供 sessionId，正确格式：GET /api/messages/{sessionId}");
                 return;
             }
             
@@ -2408,6 +2432,6 @@ public class ApiServer {
             return false;
         }
     }
+
 }
 
-// UNIQUE_MARKER_20260808

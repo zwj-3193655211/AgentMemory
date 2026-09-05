@@ -40,6 +40,7 @@ public class MemoryService {
     private final MemoryExtractor extractor;
     private final ObjectMapper objectMapper;
     private final HybridMemoryClassifier hybridClassifier;
+    private final LLMClient llmClient;
     private volatile boolean useHybridClassifier = true;
 
     // 错误计数器（用于监控）
@@ -72,7 +73,16 @@ public class MemoryService {
         this.objectMapper = new ObjectMapper();
         
         LLMClient llmClient = new LLMClient();
+        this.llmClient = llmClient;
         this.hybridClassifier = new HybridMemoryClassifier(databaseService, embeddingClient, llmClient);
+    }
+
+    /**
+     * 从数据库加载 LLM Provider 配置（ollama 等），需在数据库初始化完成后调用。
+     * 不在此处配置时，默认指向本地 embedding_service，其 /v1 端点会返回 503 "LLM 未启用"。
+     */
+    public void configureLLM() {
+        LLMConfigLoader.applyFromDatabase(llmClient, databaseService);
     }
 
     /**
@@ -396,8 +406,11 @@ public class MemoryService {
                 return false;
             }
             
-            // 获取表名并验证（防止 SQL 注入）
+            // 获取表名并验证（防止 SQL 注入）；PROJECT_CONTEXT 不单独存储，无对应表，跳过去重
             String tableName = type.getTableName();
+            if (tableName == null) {
+                return false;
+            }
             if (!isValidTableName(tableName)) {
                 log.error("非法表名: {}", tableName);
                 return false;
@@ -448,6 +461,11 @@ public class MemoryService {
     private void saveMemory(ExtractedMemory memory, MemoryType type, 
                            String sessionId, String agentType, float[] embedding) {
         String tableName = type.getTableName();
+        
+        // PROJECT_CONTEXT 并入会话管理，不单独存储，直接返回（不记错误日志）
+        if (tableName == null) {
+            return;
+        }
         
         // 验证表名（防止 SQL 注入）
         if (!isValidTableName(tableName)) {
@@ -636,8 +654,11 @@ public class MemoryService {
     public List<String> searchSimilar(String query, MemoryType type, int limit) {
         List<String> results = new ArrayList<>();
         
-        // 验证表名（防止 SQL 注入）
+        // 验证表名（防止 SQL 注入）；PROJECT_CONTEXT 无对应记忆表，返回空结果
         String tableName = type.getTableName();
+        if (tableName == null) {
+            return results;
+        }
         if (!isValidTableName(tableName)) {
             log.error("非法表名: {}", tableName);
             return results;

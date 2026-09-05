@@ -448,7 +448,8 @@ def get_local_llm():
 def call_api_llm(content: str) -> dict:
     """调用外部 API 进行语义提取"""
     if not LLM_API_KEY:
-        raise ValueError("LLM_API_KEY 未配置")
+        raise ValueError("LLM_API_KEY 未配置（llm_api_key 为空。本地推理后端如 llama.cpp 不需要真实 key，"
+                         "请在 embedding_service/config.json 中填任意非空占位符，如 \"llama-local\"）")
     
     # 预处理：过滤无效内容
     cleaned_content, should_skip = preprocess_content(content)
@@ -703,8 +704,20 @@ def extract_with_rules(content):
     return result
 
 
+def strip_think_tags(reply: str) -> str:
+    """剥除 LLM 输出中的思考标签（<think>...</think> 及未闭合的 <think>...），
+    防止推理过程文本混入记忆库内容。"""
+    if not reply:
+        return reply
+    import re
+    cleaned = re.sub(r'(?s)<think[^>]*>.*?</think\s*>', '', reply)
+    cleaned = re.sub(r'(?s)<think[^>]*>.*$', '', cleaned)
+    return cleaned.strip()
+
+
 def parse_llm_response(reply: str) -> dict:
     """解析 LLM 返回的 JSON"""
+    reply = strip_think_tags(reply)
     if not reply or not reply.strip():
         logger.warning("LLM 返回空内容")
         return {'type': 'SKIP', 'reason': 'LLM返回空内容'}
@@ -998,7 +1011,8 @@ def extract_with_context():
 def call_api_llm_with_context(context: str) -> dict:
     """调用外部 API 进行带上下文的语义提取"""
     if not LLM_API_KEY:
-        raise ValueError("LLM_API_KEY 未配置")
+        raise ValueError("LLM_API_KEY 未配置（llm_api_key 为空。本地推理后端如 llama.cpp 不需要真实 key，"
+                         "请在 embedding_service/config.json 中填任意非空占位符，如 \"llama-local\"）")
 
     # 预处理：过滤无效内容
     cleaned_context, should_skip = preprocess_content(context)
@@ -1224,7 +1238,7 @@ def classify_with_llm_api(content: str) -> str:
         )
         resp.raise_for_status()
         result = resp.json()
-        reply = result["choices"][0]["message"]["content"].strip()
+        reply = strip_think_tags(result["choices"][0]["message"]["content"])
         
         # 提取分类名称
         valid_types = ['ERROR_CORRECTION', 'USER_PROFILE', 'BEST_PRACTICE', 'PROJECT_CONTEXT', 'SKILL', 'SKIP']
@@ -1264,7 +1278,7 @@ def classify_with_local_llm(content: str) -> str:
             outputs = model.generate(**inputs, **gen_kwargs)
         
         output_ids = outputs[0][inputs['input_ids'].shape[1]:].tolist()
-        reply = tokenizer.decode(output_ids, skip_special_tokens=True).strip()
+        reply = strip_think_tags(tokenizer.decode(output_ids, skip_special_tokens=True))
         
         valid_types = ['ERROR_CORRECTION', 'USER_PROFILE', 'BEST_PRACTICE', 'PROJECT_CONTEXT', 'SKILL', 'SKIP']
         reply_upper = reply.upper()

@@ -2,8 +2,8 @@ import axios from 'axios'
 import { ElMessage } from 'element-plus'
 
 // 使用 Vite 环境变量，支持运行时配置
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8082/api'
-const EMBED_BASE = import.meta.env.VITE_EMBED_BASE || 'http://localhost:8100'
+const API_BASE = import.meta.env.VITE_API_BASE || '/api'
+const EMBED_BASE = import.meta.env.VITE_EMBED_BASE || '/api'
 
 axios.defaults.timeout = 30000
 
@@ -13,6 +13,32 @@ axios.defaults.timeout = 30000
  */
 export class ApiService {
   /**
+   * 格式化错误信息，方便排查：
+   * - 服务器有响应(4xx/5xx)：显示 HTTP 状态码 + 后端错误消息
+   * - 无响应：区分超时 / 连接失败 / CORS 拦截，并附上完整 URL
+   */
+  private formatError(method: string, endpoint: string, error: any): string {
+    const url = `${API_BASE}${endpoint}`
+    if (error.response) {
+      // 服务器返回了响应（4xx / 5xx / 代理 502）
+      const status = error.response.status
+      const data = error.response.data
+      let detail = ''
+      if (data && typeof data === 'object') {
+        detail = data.message || data.error || ''
+      } else if (typeof data === 'string' && data.trim()) {
+        detail = data.slice(0, 150)
+      }
+      return `[${method} ${endpoint}] HTTP ${status}${detail ? `: ${detail}` : ''}`
+    }
+    if (error.code === 'ECONNABORTED') {
+      return `[${method} ${endpoint}] 请求超时(30s): ${url}`
+    }
+    // 无任何响应：连接被拒 / CORS 拦截 / 代理不可达
+    return `[${method} ${endpoint}] 网络错误: ${error.message || 'Network Error'} | URL=${url} | 排查: 后端8082是否运行 / Vite代理 / CORS`
+  }
+
+  /**
    * 通用 GET 请求
    */
   async get<T = any>(endpoint: string, baseUrl: string = API_BASE): Promise<T> {
@@ -20,9 +46,10 @@ export class ApiService {
       const res = await axios.get<T>(`${baseUrl}${endpoint}`)
       return res.data
     } catch (error: any) {
-      const msg = error.response?.data?.message || error.response?.data?.error || error.message || '请求失败'
+      const msg = this.formatError('GET', endpoint, error)
+      error.displayMessage = msg
+      console.error(`[api] GET ${baseUrl}${endpoint} 失败:`, error)
       ElMessage.error(msg)
-      console.error(`GET ${endpoint} 失败:`, msg)
       throw error
     }
   }
@@ -35,7 +62,9 @@ export class ApiService {
       const res = await axios.post<T>(`${baseUrl}${endpoint}`, data)
       return res.data
     } catch (error: any) {
-      const msg = error.response?.data?.message || error.response?.data?.error || error.message || '请求失败'
+      const msg = this.formatError('POST', endpoint, error)
+      error.displayMessage = msg
+      console.error(`[api] POST ${baseUrl}${endpoint} 失败:`, error)
       ElMessage.error(msg)
       throw error
     }
@@ -49,7 +78,9 @@ export class ApiService {
       const res = await axios.put<T>(`${baseUrl}${endpoint}`, data)
       return res.data
     } catch (error: any) {
-      const msg = error.response?.data?.message || error.response?.data?.error || error.message || '请求失败'
+      const msg = this.formatError('PUT', endpoint, error)
+      error.displayMessage = msg
+      console.error(`[api] PUT ${baseUrl}${endpoint} 失败:`, error)
       ElMessage.error(msg)
       throw error
     }

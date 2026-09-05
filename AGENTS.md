@@ -59,6 +59,30 @@ pip install -r requirements.txt
 python embed_server.py
 ```
 
+### LLM 推理服务 (llama.cpp，替代 Ollama)
+
+```bash
+# 一键启动 llama-server（模型: Qwen3.5-2B-Q8_0, OpenAI 兼容 API）
+D:\llama.cpp\start-llama-server.bat
+
+# 或手动启动
+cd D:\llama.cpp
+llama-server.exe -m models\Qwen3.5-2B-Q8_0.gguf -ngl 99 --port 8080 --host 127.0.0.1 --reasoning off
+
+# 测试
+curl http://localhost:8080/health
+curl http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"Qwen3.5-2B-Q8_0","messages":[{"role":"user","content":"hi"}]}'
+```
+
+**注意**：
+- llama.cpp 安装在 `D:\llama.cpp`（b10333，CUDA 13.3，支持 RTX 5060 Blackwell）
+- 模型 `Qwen3.5-2B-Q8_0.gguf` 来自 unsloth 官方量化（llama.cpp 原生兼容）
+- **不要使用 `D:\llama.cpp\models\qwen3.5-2b.gguf` / `qwen3.5-4b.gguf`**（Ollama 私有 qwen35 导出，权重布局与 llama.cpp 不兼容，推理输出乱码）
+- 端口 8080（避免与后端 API 8080 冲突）
+- Ollama 依赖已移除：LLM 配置指向 `http://localhost:8080/v1`（OpenAI 兼容端点）
+
 ### Testing API
 
 ```bash
@@ -204,7 +228,7 @@ HybridMemoryClassifier classifier = new HybridMemoryClassifier(dbService, embedd
 | OpenClaw | `~/.openclaw/` | Multi-line JSON |
 | Codex CLI | `~/.codex/sessions/` | JSONL Event Stream |
 | Crush CLI | `~/.crush/crush.db` | SQLite Database |
-| WorkBuddy | `~/.workbuddy/projects/` | Markdown |
+| WorkBuddy | `~/.workbuddy/projects/` | JSONL（记忆画像 .md 由 WorkBuddyMemoryWatcher 单独导入） |
 
 ### Crush Database Watcher
 

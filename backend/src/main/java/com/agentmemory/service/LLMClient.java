@@ -214,6 +214,19 @@ public class LLMClient {
         }
     }
 
+    /**
+     * 剥除 LLM 输出中的思考标签（<think>...</think> 及未闭合的 <think>...），
+     * 防止推理过程文本混入记忆库内容。兼容带属性的标签（如 <think> 或 <think type="x">）。
+     */
+    static String stripThinkTags(String text) {
+        if (text == null || text.isEmpty()) {
+            return text;
+        }
+        String cleaned = text.replaceAll("(?s)<think[^>]*>.*?</think\\s*>", "")
+                             .replaceAll("(?s)<think[^>]*>.*$", "");
+        return cleaned.trim();
+    }
+
     // ===== LLM Provider 接口 =====
 
     interface LLMProvider {
@@ -278,7 +291,7 @@ public class LLMClient {
 
             if (response.statusCode() == 200) {
                 JsonNode json = objectMapper.readTree(response.body());
-                return json.path("message").path("content").asText("");
+                return stripThinkTags(json.path("message").path("content").asText(""));
             } else {
                 throw new IOException("Ollama 请求失败: " + response.statusCode() + " - " + response.body());
             }
@@ -357,7 +370,7 @@ public class LLMClient {
 
             if (response.statusCode() == 200) {
                 JsonNode json = objectMapper.readTree(response.body());
-                return json.path("choices").get(0).path("message").path("content").asText("");
+                return stripThinkTags(json.path("choices").get(0).path("message").path("content").asText(""));
             } else {
                 throw new IOException("OpenAI 请求失败: " + response.statusCode() + " - " + response.body());
             }
@@ -426,7 +439,7 @@ public class LLMClient {
 
             if (response.statusCode() == 200) {
                 JsonNode json = objectMapper.readTree(response.body());
-                return json.path("choices").get(0).path("message").path("content").asText("");
+                return stripThinkTags(json.path("choices").get(0).path("message").path("content").asText(""));
             } else {
                 throw new IOException("DeepSeek 请求失败: " + response.statusCode() + " - " + response.body());
             }

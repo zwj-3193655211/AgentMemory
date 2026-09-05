@@ -90,41 +90,13 @@
 
     <!-- 主内容区 -->
     <main class="app-main">
-      <!-- 仪表盘 -->
-      <Dashboard
-        v-if="activeMenu === 'dashboard'"
-        :stats="stats"
+      <!-- 当前页面：用 key 明确切换页面实例，避免旧页面卸载后内容区残留 -->
+      <component
+        :is="currentView"
+        :key="activeMenu"
+        v-bind="currentViewProps"
         @navigate="handleMenuSelect"
       />
-
-      <!-- 实践经验（合并错误纠正 + 最佳实践） -->
-      <Experiences v-if="activeMenu === 'experiences'" ref="experiencesRef" />
-
-      <!-- 用户画像 -->
-      <Profiles v-if="activeMenu === 'profiles'" ref="profilesRef" />
-
-      <!-- 项目会话（按项目分组） -->
-      <ProjectView v-if="activeMenu === 'projects'" ref="projectViewRef" />
-
-      <!-- 技能沉淀 -->
-      <Skills v-if="activeMenu === 'skills'" ref="skillsRef" />
-
-      <!-- Agent 接入 -->
-      <Agents v-if="activeMenu === 'agents'" ref="agentsRef" />
-
-      <!-- 搜索结果 -->
-      <Search
-        v-if="activeMenu === 'search'"
-        :search-query="searchQuery"
-        :search-results="searchResults"
-        :searching="searching"
-      />
-      
-      <!-- 会话摘要页面 -->
-      <Compression v-if="activeMenu === 'compression'" />
-
-      <!-- 设置页面 -->
-      <Settings v-if="activeMenu === 'settings'" />
     </main>
 
     <!-- 添加自定义 Agent 对话框 -->
@@ -162,7 +134,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { sseService } from './services/sse'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
@@ -179,12 +151,13 @@ import Dashboard from './views/Dashboard.vue'
 import Search from './views/Search.vue'
 import Compression from './views/Compression.vue'
 import Settings from './views/Settings.vue'
+import { normalizeMenu, type MenuKey } from './utils/navigation'
 
 // 使用 Vite 环境变量，支持运行时配置
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8082/api'
+const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
 // 数据
-const activeMenu = ref('dashboard')
+const activeMenu = ref<MenuKey>('dashboard')
 const sseConnected = ref(false)
 const showSetup = ref(localStorage.getItem('agentmemory_setup_done') !== 'true')
 const agents = ref<any[]>([])
@@ -209,17 +182,46 @@ const newAgent = ref({
 })
 
 
+// 页面组件映射集中维护，避免多个同级 v-if 在切换时产生不一致
+const viewComponents = {
+  dashboard: Dashboard,
+  experiences: Experiences,
+  profiles: Profiles,
+  projects: ProjectView,
+  skills: Skills,
+  agents: Agents,
+  search: Search,
+  compression: Compression,
+  settings: Settings
+} as const
+
+const currentView = computed(() => viewComponents[activeMenu.value])
+const currentViewProps = computed(() => {
+  if (activeMenu.value === 'dashboard') {
+    return { stats: stats.value }
+  }
+  if (activeMenu.value === 'search') {
+    return {
+      searchQuery: searchQuery.value,
+      searchResults: searchResults.value,
+      searching: searching.value
+    }
+  }
+  return {}
+})
+
 // 方法
 const handleMenuSelect = (index: string) => {
-  activeMenu.value = index
+  const menu = normalizeMenu(index)
+  activeMenu.value = menu
   // 防御性：同步到 localStorage 防止偶发状态丢失
-  try { localStorage.setItem('agentmemory_activeMenu', index) } catch {}
+  try { localStorage.setItem('agentmemory_activeMenu', menu) } catch {}
 }
 
 // 初始化时恢复上次的菜单
 try {
   const saved = localStorage.getItem('agentmemory_activeMenu')
-  if (saved) activeMenu.value = saved
+  if (saved) activeMenu.value = normalizeMenu(saved)
 } catch {}
 
 // 添加自定义 Agent
@@ -275,7 +277,7 @@ const handleSearch = async () => {
   if (!searchQuery.value.trim()) return
   
   searching.value = true
-  activeMenu.value = 'search'
+  activeMenu.value = normalizeMenu('search')
   
   try {
     const res = await axios.post(`${API_BASE}/search`, {
@@ -370,7 +372,10 @@ onUnmounted(() => {
   box-shadow: 0 2px 12px rgba(0,0,0,0.08);
   position: sticky;
   top: 0;
-  z-index: 100;
+  /* 必须高于 Element Plus 模态遮罩(~2000)，否则在任意视图打开 el-dialog 后，
+     全屏遮罩会盖住顶部导航，导致点击菜单切换被拦截、页面卡在旧视图。
+     详见 Profiles.vue 中"防止遮罩残留阻塞菜单点击"的历史问题。 */
+  z-index: 3000;
 }
 
 .app-header-inner {

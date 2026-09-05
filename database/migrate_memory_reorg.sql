@@ -58,10 +58,8 @@ DROP TABLE IF EXISTS best_practices;
 ALTER TABLE agents ADD COLUMN IF NOT EXISTS memory_sources JSONB;   -- [{"path":"...","format":"markdown"|"sqlite"|"jsonl","table":"..."}]
 ALTER TABLE agents ADD COLUMN IF NOT EXISTS session_db_path TEXT;   -- SQLite 会话库路径（hermes/mavis/marvis）
 
--- 7. 注册新 agent（hermes/mavis/marvis/minimax），已有 agent 不重复
-INSERT INTO agents (name, display_name, parser_type, enabled) VALUES
-    ('hermes',  'Hermes',       'sqlite', true),
-    ('mavis',   'Mavis',        'sqlite', true),
-    ('marvis',  'Marvis',       'sqlite', true),
-    ('minimax', 'MiniMax Code', 'jsonl',  true)
-ON CONFLICT (name) DO NOTHING;
+-- 7. hermes/mavis/marvis/minimax：不再插入占位记录。
+--    会话/画像由 AgentMemorySyncService 导入；agent 记录由 AgentDetectorService 实时注册
+--    （name 用显示名如 'Hermes'，parser_type 用 agent 类型如 'hermes'）。
+--    历史占位行曾用 parser_type='sqlite'/'jsonl'（数据格式而非 agent 类型），
+--    与实时检测记录并存导致 UI 显示无 CLI 的空壳记录，已移除。

@@ -182,8 +182,8 @@ const loadSessions = async () => {
       const keep = projects.value.find(p => p.sessions.some(s => s.id === selectedSession.value!.id))
       if (keep) expandedProjects.value = [keep.name]
     }
-  } catch (e) {
-    ElMessage.error('加载会话失败')
+  } catch (e: any) {
+    ElMessage.error(`加载会话失败: ${e.displayMessage || e.message || ''}`)
   } finally {
     loading.value = false
   }

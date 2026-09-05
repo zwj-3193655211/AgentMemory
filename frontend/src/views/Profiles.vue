@@ -113,6 +113,7 @@ import { ref, reactive, computed, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Download, Search, Refresh } from '@element-plus/icons-vue'
 import { apiService, API_BASE_URL } from '../services/api'
+import { parseProfileContent } from '../utils/profileContent'
 
 // 记忆同步状态
 const syncing = ref(false)
@@ -239,30 +240,16 @@ const formatTime = (time: string | Date) => {
   return d.toLocaleString('zh-CN')
 }
 
-// 解析 JSON 内容（从 {content: "..."} 数组中提取 content 文本，返回单字符串）
-const parseContent = (itemsStr: string | any[]): string => {
-  let arr: any[] = []
-  if (Array.isArray(itemsStr)) {
-    arr = itemsStr
-  } else if (typeof itemsStr === 'string' && itemsStr.trim()) {
-    try { arr = JSON.parse(itemsStr) } catch { arr = [] }
-  }
-  return arr
-    .map((it: any) => (typeof it === 'string' ? it : (it?.content || JSON.stringify(it))))
-    .filter((s: string) => s && s.trim())
-    .join('\n')
-}
-
-// 预览：截断为前 200 字（单行显示）
+// 解析画像内容，兼容数组、单个对象和字符串格式
 const getPreview = (itemsStr: string | any[]) => {
-  const full = parseContent(itemsStr)
+  const full = parseProfileContent(itemsStr)
   const single = full.replace(/\s+/g, ' ')
   return single.length > 200 ? single.slice(0, 200) + '…' : single
 }
 
 // 完整内容（用于悬停提示）
 const getFullContent = (itemsStr: string | any[]) => {
-  return parseContent(itemsStr)
+  return parseProfileContent(itemsStr)
 }
 
 // 加载数据
@@ -271,7 +258,7 @@ const loadData = async () => {
   try {
     dataList.value = await apiService.getProfiles()
   } catch (error: any) {
-    ElMessage.error(`加载数据失败: ${error.message}`)
+    ElMessage.error(`加载数据失败: ${error.displayMessage || error.message}`)
   } finally {
     loading.value = false
   }

@@ -35,3 +35,11 @@ Thumbs.db
 # 测试覆盖率报告
 coverage/
 
+
+# WorkBuddy 工作区数据（本仓库内产生的会话/记忆文件）
+.workbuddy/
+
+# 本地调试产物
+probe2*
+*.bak
+backend-runtime.log
