@@ -8,11 +8,14 @@ import com.agentmemory.service.AgentDetectorService;
 import com.agentmemory.service.CleanupService;
 import com.agentmemory.service.CrushDatabaseWatcher;
 import com.agentmemory.service.WorkBuddyWatcher;
+import com.agentmemory.service.DoubaoWorkWatcher;
+import com.agentmemory.service.WorkBuddyMemoryWatcher;
 import com.agentmemory.service.SessionCompressionService;
 import com.agentmemory.service.AgentMemorySyncService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
@@ -43,6 +46,8 @@ public class AgentMemoryApplication {
     private List<AgentInfo> detectedAgents;
     private CrushDatabaseWatcher crushDatabaseWatcher;
     private WorkBuddyWatcher workBuddyWatcher;
+    private DoubaoWorkWatcher doubaoWorkWatcher;
+    private WorkBuddyMemoryWatcher workBuddyMemoryWatcher;
 
     public AgentMemoryApplication(ApplicationConfig config) {
         this.config = config;
@@ -64,6 +69,9 @@ public class AgentMemoryApplication {
         log.info("[1/6] 初始化数据库连接...");
         databaseService.init();
         log.info("      数据库连接成功: {}", config.getJdbcUrl());
+        
+        // 1.5 数据库就绪后加载 LLM Provider 配置（MemoryService 构造时数据库尚未初始化）
+        fileWatcherService.configureMemoryLLM();
         
         // 2. 检测已安装的 Agent
         log.info("[2/6] 检测已安装的 Agent...");
@@ -114,6 +122,14 @@ public class AgentMemoryApplication {
         log.info("[7/8] 启动 WorkBuddy 对话监控服务...");
         startWorkBuddyWatcher();
 
+        // 7.5 启动豆包 Work 产出物监控服务（对话正文为私有二进制，只索引产出文件）
+        log.info("[7.5/9] 启动豆包 Work 产出监控服务...");
+        startDoubaoWorkWatcher();
+
+        // 7.6 启动 WorkBuddy 记忆文件监控服务（补充接入 .workbuddy 下的 .md 记忆资产）
+        log.info("[7.6/9] 启动 WorkBuddy 记忆监控服务...");
+        startWorkBuddyMemoryWatcher();
+
         // 8. 启动 API 服务
         log.info("[8/8] 启动 API 服务...");
         apiServer.setCompressionService(compressionService);
@@ -138,6 +154,9 @@ public class AgentMemoryApplication {
             }
             if (workBuddyWatcher != null) {
                 workBuddyWatcher.stop();
+            }
+            if (workBuddyMemoryWatcher != null) {
+                workBuddyMemoryWatcher.stop();
             }
             apiServer.stop();
             compressionService.stop();
@@ -195,6 +214,42 @@ public class AgentMemoryApplication {
             }
         }
         log.info("      WorkBuddy 未配置，跳过");
+    }
+
+    /**
+     * 启动豆包 Work 产出物监控服务
+     *
+     * 豆包 Work 的对话正文存放在私有二进制 IndexedDB 中，无法稳定解析；
+     * 这里只监控它本地的 Agent 产出目录（%USERPROFILE%\DoubaoWork\chats），
+     * 把产出文件纳入 AgentMemory，供检索与统计使用（只读，不回写）。
+     */
+    private void startDoubaoWorkWatcher() {
+        Path chatsDir = Paths.get(System.getProperty("user.home"), "DoubaoWork", "chats");
+        if (!Files.isDirectory(chatsDir)) {
+            log.info("      豆包 Work 产出目录不存在，跳过: {}", chatsDir);
+            return;
+        }
+        doubaoWorkWatcher = new DoubaoWorkWatcher(databaseService, chatsDir.toString());
+        doubaoWorkWatcher.start();
+        log.info("      豆包 Work 产出监控: {} (每 120 秒检查)", chatsDir);
+    }
+
+    /**
+     * 启动 WorkBuddy 记忆文件监控服务
+     *
+     * WorkBuddy 的对话会话由 WorkBuddyWatcher 从 projects 目录下的 jsonl 导入，
+     * 这里补充接入它的 Markdown 记忆资产（顶层 *.md + memory/*.md + memery/*.md），
+     * 作为消息（role=artifact）纳入 AgentMemory，供检索与统计使用（只读，不回写）。
+     */
+    private void startWorkBuddyMemoryWatcher() {
+        Path wbDir = Paths.get(System.getProperty("user.home"), ".workbuddy");
+        if (!Files.isDirectory(wbDir)) {
+            log.info("      WorkBuddy 记忆目录不存在，跳过: {}", wbDir);
+            return;
+        }
+        workBuddyMemoryWatcher = new WorkBuddyMemoryWatcher(databaseService, wbDir.toString());
+        workBuddyMemoryWatcher.start();
+        log.info("      WorkBuddy 记忆监控: {} (每 120 秒检查)", wbDir);
     }
     
     public static void main(String[] args) {
